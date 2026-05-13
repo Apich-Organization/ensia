@@ -287,7 +287,7 @@ struct ConstantEncryption : public ModulePass {
     if (eligible == 0) return;
     
     uint32_t currentProb = 100;
-    uint32_t maxTargets = 40000;
+    uint32_t maxTargets = 1000000;
     if (eligible * currentProb / 100 > maxTargets) {
       currentProb = (maxTargets * 100) / eligible;
       if (currentProb == 0) currentProb = 1;
@@ -539,7 +539,7 @@ struct ConstantEncryption : public ModulePass {
           M, T, /*isConstant=*/false,
           GlobalValue::PrivateLinkage,
           ConstantInt::get(T, shares[i]),
-          "");
+          "constenc.share");
       usedGlobals.push_back(GV);
       gvs.push_back(GV);
     }

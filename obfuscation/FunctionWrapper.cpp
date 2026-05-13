@@ -113,13 +113,22 @@ struct FunctionWrapper : public ModulePass {
           if (cryptoutils->get_range(100) <= ProbRateTemp)
             callsites.push_back(new CallSite(&Inst));
     }
+    // Collect all created proxy functions and call appendToCompilerUsed ONCE.
+    // The old code called appendToCompilerUsed inside HandleCallSite (once per
+    // call site).  appendToCompilerUsed reads and rewrites llvm.compiler.used
+    // on every call, so N call sites → O(N²) work and O(N²) allocations of
+    // temporary GlobalVariable initialisers that pile up in the LLVMContext.
+    SmallVector<GlobalValue *, 16> newProxies;
     for (CallSite *CS : callsites)
       for (uint32_t i = 0; i < ObfTimes && CS != nullptr; i++)
-        CS = HandleCallSite(CS, M);
+        CS = HandleCallSite(CS, M, newProxies);
+    if (!newProxies.empty())
+      appendToCompilerUsed(M, newProxies);
     return true;
   }
 
-  CallSite *HandleCallSite(CallSite *CS, Module &M) {
+  CallSite *HandleCallSite(CallSite *CS, Module &M,
+                           SmallVectorImpl<GlobalValue *> &newProxies) {
     Value *calledFunction = CS->getCalledFunction();
     if (!calledFunction)
       calledFunction = cast<CallBase>(CS->getInstruction())->getCalledOperand()->stripPointerCasts();
@@ -163,7 +172,7 @@ struct FunctionWrapper : public ModulePass {
     // Prevent inlining / optimisation so the wrapper is not erased
     proxy->addFnAttr(Attribute::NoInline);
     proxy->addFnAttr(Attribute::OptimizeNone);
-    appendToCompilerUsed(M, {proxy});
+    newProxies.push_back(proxy);
 
     BasicBlock *entryBB = BasicBlock::Create(proxy->getContext(), "fw.entry", proxy);
     IRBuilder<> IRB(entryBB);
