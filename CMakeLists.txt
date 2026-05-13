@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 4.3)
 project(ollvm-next)
 
 set(LT_LLVM_INSTALL_DIR  "" CACHE PATH "LLVM install prefix (e.g. /opt/homebrew/opt/llvm@20)")

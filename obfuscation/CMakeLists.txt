@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 4.3)
 project(Ensia LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -10,8 +10,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON FORCE)
 # LTO enabled
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE FORCE)
 # Flags
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DDEBUG" CACHE STRING "Flags used by the CXX compiler for release builds." FORCE)
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -DNDEBUG" CACHE STRING "Flags used by the CXX compiler for debug builds." FORCE)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" CACHE STRING "Flags used by the CXX compiler for release builds." FORCE)
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -DDEBUG -g" CACHE STRING "Flags used by the CXX compiler for debug builds." FORCE)
 
 add_library(Ensia SHARED
         # ── Core infrastructure ──────────────────────────────────────────────
