@@ -92,21 +92,39 @@ struct Substitution : public FunctionPass {
     // Loop for the number of time we run the pass on the function
     uint32_t times = ObfTimesTemp;
     do {
+      uint32_t eligible = 0;
       for (Instruction &inst : instructions(f))
-        if (inst.isBinaryOp() &&
-            cryptoutils->get_range(100) <= ObfProbRateTemp) {
+        if (inst.isBinaryOp() && inst.getType()->isIntegerTy())
+          eligible++;
+
+      if (eligible == 0) break;
+
+      uint32_t currentProb = ObfProbRateTemp;
+      uint32_t maxTargets = 10000;
+      if (eligible * currentProb / 100 > maxTargets) {
+        currentProb = (maxTargets * 100) / eligible;
+        if (currentProb == 0) currentProb = 1;
+      }
+
+      SmallVector<Instruction *, 32> toErase;
+      for (Instruction &inst : instructions(f))
+        if (inst.isBinaryOp() && inst.getType()->isIntegerTy() &&
+            cryptoutils->get_range(100) <= currentProb) {
           switch (inst.getOpcode()) {
           // ── Integer arithmetic ──────────────────────────────────────────
           case BinaryOperator::Add:
             SubstituteImpl::substituteAdd(cast<BinaryOperator>(&inst));
+            toErase.push_back(&inst);
             ++Add;
             break;
           case BinaryOperator::Sub:
             SubstituteImpl::substituteSub(cast<BinaryOperator>(&inst));
+            toErase.push_back(&inst);
             ++Sub;
             break;
           case BinaryOperator::Mul:
             SubstituteImpl::substituteMul(cast<BinaryOperator>(&inst));
+            toErase.push_back(&inst);
             ++Mul;
             break;
 
@@ -140,10 +158,12 @@ struct Substitution : public FunctionPass {
           // implementations themselves.
           case Instruction::Shl:
             SubstituteImpl::substituteShl(cast<BinaryOperator>(&inst));
+            toErase.push_back(&inst);
             ++Shl;
             break;
           case Instruction::LShr:
             SubstituteImpl::substituteLShr(cast<BinaryOperator>(&inst));
+            toErase.push_back(&inst);
             ++LShr;
             break;
           case Instruction::AShr:
@@ -151,20 +171,24 @@ struct Substitution : public FunctionPass {
             //   (a ^ r) >>s k ^ (r >>s k) == a >>s k   for all a, r, k.
             // Only constant-k forms are handled; variable k falls through.
             SubstituteImpl::substituteAShr(cast<BinaryOperator>(&inst));
+            toErase.push_back(&inst);
             ++AShr;
             break;
 
           // ── Bitwise ─────────────────────────────────────────────────────
           case Instruction::And:
             SubstituteImpl::substituteAnd(cast<BinaryOperator>(&inst));
+            toErase.push_back(&inst);
             ++And;
             break;
           case Instruction::Or:
             SubstituteImpl::substituteOr(cast<BinaryOperator>(&inst));
+            toErase.push_back(&inst);
             ++Or;
             break;
           case Instruction::Xor:
             SubstituteImpl::substituteXor(cast<BinaryOperator>(&inst));
+            toErase.push_back(&inst);
             ++Xor;
             break;
 
@@ -172,6 +196,10 @@ struct Substitution : public FunctionPass {
             break;
           } // End switch
         } // End isBinaryOp
+      for (Instruction *I : toErase) {
+        if (I->getNumUses() == 0)
+          I->eraseFromParent();
+      }
     } while (--times); // for times
     return true;
   }

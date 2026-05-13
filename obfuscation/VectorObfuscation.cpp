@@ -140,7 +140,7 @@ static Value *buildNoiseVector(IRBuilder<NoFolder> &IRB, Value *realOp,
   Value *vec = UndefValue::get(vecTy);
   for (unsigned i = 0; i < lanes; i++) {
     Value *elem = (i == K) ? realOp : randomNoise(elemTy, elemBits);
-    vec = IRB.CreateInsertElement(vec, elem, (uint64_t)i, "vobf.ins");
+    vec = IRB.CreateInsertElement(vec, elem, (uint64_t)i, "");
   }
   return vec;
 }
@@ -153,7 +153,7 @@ static Value *buildUniformVector(IRBuilder<NoFolder> &IRB, Value *elem,
   Type *vecTy = FixedVectorType::get(elemTy, lanes);
   Value *vec = UndefValue::get(vecTy);
   for (unsigned i = 0; i < lanes; i++)
-    vec = IRB.CreateInsertElement(vec, elem, (uint64_t)i, "vobf.bcast");
+    vec = IRB.CreateInsertElement(vec, elem, (uint64_t)i, "");
   return vec;
 }
 
@@ -174,7 +174,7 @@ applyShuffleNoise(IRBuilder<NoFolder> &IRB, Value *vec, unsigned K,
   for (unsigned i = 0; i < lanes; i++)
     if ((unsigned)perm[i] == K) { newK = i; break; }
 
-  Value *shuffled = IRB.CreateShuffleVector(vec, perm, "vobf.shuf");
+  Value *shuffled = IRB.CreateShuffleVector(vec, perm, "");
   return {shuffled, newK};
 }
 
@@ -230,7 +230,7 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
 
   // Vector operation (same opcode as original scalar)
   Value *vres = IRB.CreateBinOp(
-      static_cast<Instruction::BinaryOps>(op), va, vb, "vobf.op");
+      static_cast<Instruction::BinaryOps>(op), va, vb, "");
 
   // Optional shuffle noise: permute the result vector before extraction
   unsigned extractLane = K;
@@ -241,8 +241,7 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
   }
 
   // Extract real result from lane K (or shuffled lane)
-  Value *result = IRB.CreateExtractElement(vres, (uint64_t)extractLane,
-                                           "vobf.ext");
+  Value *result = IRB.CreateExtractElement(vres, (uint64_t)extractLane, "");
   bo->replaceAllUsesWith(result);
   return true;
 }
@@ -268,7 +267,7 @@ static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
   Value *vb = buildNoiseVector(IRB, b, K, lanes, scalarTy);
 
   // Vector integer comparison → <N x i1>
-  Value *vcmp = IRB.CreateICmp(ici->getPredicate(), va, vb, "vobf.vcmp");
+  Value *vcmp = IRB.CreateICmp(ici->getPredicate(), va, vb, "");
 
   // Optional shuffle on the i1 vector
   unsigned extractLane = K;
@@ -279,8 +278,7 @@ static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
   }
 
   // Extract the i1 result from lane K
-  Value *result = IRB.CreateExtractElement(vcmp, (uint64_t)extractLane,
-                                           "vobf.cext");
+  Value *result = IRB.CreateExtractElement(vcmp, (uint64_t)extractLane, "");
   ici->replaceAllUsesWith(result);
   return true;
 }
@@ -330,8 +328,24 @@ struct VectorObfuscation : public FunctionPass {
     SmallVector<Instruction *, 64> binTargets;
     SmallVector<ICmpInst *, 32>    cmpTargets;
 
+    uint32_t eligible = 0;
     for (Instruction &I : instructions(F)) {
-      if (cryptoutils->get_range(100) >= VecProbRateTemp)
+      if (BinaryOperator *BO = dyn_cast<BinaryOperator>(&I)) {
+        eligible++;
+      } else if (VecICmpTemp && dyn_cast<ICmpInst>(&I)) {
+        eligible++;
+      }
+    }
+
+    uint32_t currentProb = VecProbRateTemp;
+    uint32_t maxTargets = 10000;
+    if (eligible * currentProb / 100 > maxTargets) {
+      currentProb = (maxTargets * 100) / eligible;
+      if (currentProb == 0) currentProb = 1;
+    }
+
+    for (Instruction &I : instructions(F)) {
+      if (cryptoutils->get_range(100) >= currentProb)
         continue; // skip based on probability
 
       if (BinaryOperator *BO = dyn_cast<BinaryOperator>(&I)) {

@@ -18,7 +18,7 @@
 
 // SubstituteImpl.cpp — instruction substitution primitives.
 //
-// OLLVM-Next enhancements (on top of classic Ensia):
+// OLLVM-Next enhancements (on top of classic Hikari):
 //  ① mulSubstitution3 / mulSubstitution4 — MUL broken into add/shift chains
 //    that IDA's HLIL simplifier cannot re-fold to a single multiply.
 //  ② addChainedMBA — 3-layer MBA chain for ADD, producing 15–25 IR instructions

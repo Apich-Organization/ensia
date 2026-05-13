@@ -85,6 +85,7 @@ struct IndirectBranch : public FunctionPass {
   std::unordered_map<Function *, ConstantInt *> encmap;
   std::unordered_map<Function *, KnuthEncKey> knuthKeys; // OLLVM-Next
   std::unordered_set<Function *> to_obf_funcs;
+  SmallVector<GlobalValue *, 1024> usedGlobals;
   IndirectBranch() : FunctionPass(ID) {
     this->flag = true;
     this->initialized = false;
@@ -94,6 +95,15 @@ struct IndirectBranch : public FunctionPass {
     this->initialized = false;
   }
   StringRef getPassName() const override { return "IndirectBranch"; }
+  
+  bool doFinalization(Module &M) override {
+    if (!usedGlobals.empty()) {
+      appendToCompilerUsed(M, usedGlobals);
+      usedGlobals.clear();
+    }
+    return false;
+  }
+  
   bool initialize(Module &M) {
     // Replace nested PassBuilder/LowerSwitchPass with inline BST lowering.
     // A nested FPM.run(F, FAM) inside an already-running new-PM pass deadlocks
@@ -210,7 +220,7 @@ struct IndirectBranch : public FunctionPass {
         LoadFrom = new GlobalVariable(
             *M, AT, false, GlobalValue::LinkageTypes::PrivateLinkage,
             BlockAddressArray, "EnsiaConditionalLocalIndirectBranchingTable");
-        appendToCompilerUsed(*Func.getParent(), {LoadFrom});
+        usedGlobals.push_back(LoadFrom);
       } else {
         LoadFrom = M->getGlobalVariable("IndirectBranchingGlobalTable", true);
       }
@@ -244,7 +254,7 @@ struct IndirectBranch : public FunctionPass {
                                IndexEncKey->getValue() ^
                                    indexmap[BI->getSuccessor(0)]),
               "IndirectBranchingIndex");
-          appendToCompilerUsed(*M, {indexgv});
+          usedGlobals.push_back(indexgv);
           indexval = (UseStackTemp ? IRBEntry : IRBBI)
                          ->CreateLoad(indexgv->getValueType(), indexgv);
         } else {
@@ -289,7 +299,7 @@ struct IndirectBranch : public FunctionPass {
             ConstantInt::get(Int32Ty,
                              encenckey->getValue() ^ encmap[&Func]->getValue()),
             "IndirectBranchingAddressEncryptKey");
-        appendToCompilerUsed(*M, enckeyGV);
+        usedGlobals.push_back(enckeyGV);
         enckeyLoad = IRBBI->CreateXor(
             IRBBI->CreateLoad(enckeyGV->getValueType(), enckeyGV), encenckey);
         LI =
@@ -335,6 +345,7 @@ struct IndirectBranch : public FunctionPass {
         indirBr->addDestination(BB);
       ReplaceInstWithInst(BI, indirBr);
     }
+      
     shuffleBasicBlocks(Func);
     return true;
   }

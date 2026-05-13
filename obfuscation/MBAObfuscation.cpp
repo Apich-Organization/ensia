@@ -651,10 +651,24 @@ struct MBAObfuscation : public FunctionPass {
     if (ObfVerbose) errs() << "Running MBAObfuscation On " << F.getName() << "\n";
 
     for (uint32_t layer = 0; layer < MBALayersTemp; layer++) {
+      uint32_t eligible = 0;
+      for (Instruction &I : instructions(F))
+        if (I.isBinaryOp() && I.getType()->isIntegerTy())
+          eligible++;
+
+      if (eligible == 0) break;
+
+      uint32_t currentProb = MBAProbRateTemp;
+      uint32_t maxTargets = 10000;
+      if (eligible * currentProb / 100 > maxTargets) {
+        currentProb = (maxTargets * 100) / eligible;
+        if (currentProb == 0) currentProb = 1;
+      }
+
       SmallVector<BinaryOperator *, 32> targets;
       for (Instruction &I : instructions(F))
         if (BinaryOperator *BO = dyn_cast<BinaryOperator>(&I))
-          if (cryptoutils->get_range(100) < MBAProbRateTemp)
+          if (cryptoutils->get_range(100) < currentProb)
             targets.push_back(BO);
 
       for (BinaryOperator *BO : targets) {
@@ -667,6 +681,11 @@ struct MBAObfuscation : public FunctionPass {
         case Instruction::Mul:  MBAImpl::mbaMul(BO);  break;
         default: break;
         }
+      }
+
+      for (BinaryOperator *BO : targets) {
+        if (BO->getNumUses() == 0)
+          BO->eraseFromParent();
       }
     }
     return true;

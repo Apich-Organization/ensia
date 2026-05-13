@@ -67,3 +67,5 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+test/obf_test_max.bc
+test/obf_test.bc

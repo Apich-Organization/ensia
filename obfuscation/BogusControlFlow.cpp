@@ -653,10 +653,10 @@ struct BogusControlFlow : public FunctionPass {
       // because CmpInst is not a BinaryOperator subclass.
       for (BasicBlock::iterator i = alteredBB->begin(), e = alteredBB->end();
            i != e; ++i) {
-        if (i->isBinaryOp()) {
+        if (i->isBinaryOp() && i->getType()->isIntegerTy()) {
           unsigned int opcode = i->getOpcode();
           Instruction *op, *op1 = nullptr;
-          Twine *var = new Twine("_");
+          
           // Integer binary ops
           if (opcode == Instruction::Add || opcode == Instruction::Sub ||
               opcode == Instruction::Mul || opcode == Instruction::UDiv ||
@@ -671,46 +671,46 @@ struct BogusControlFlow : public FunctionPass {
               case 0:
                 break;
               case 1:
-                op = BinaryOperator::CreateNeg(i->getOperand(0), *var, &*i);
+                op = BinaryOperator::CreateNeg(i->getOperand(0), "", &*i);
                 op1 = BinaryOperator::Create(Instruction::Add, op,
-                                             i->getOperand(1), "gen", &*i);
+                                             i->getOperand(1), "", &*i);
                 break;
               case 2:
                 op1 = BinaryOperator::Create(Instruction::Sub, i->getOperand(0),
-                                             i->getOperand(1), *var, &*i);
+                                             i->getOperand(1), "", &*i);
                 op = BinaryOperator::Create(Instruction::Mul, op1,
-                                            i->getOperand(1), "gen", &*i);
+                                            i->getOperand(1), "", &*i);
                 break;
               case 3:
                 op = BinaryOperator::Create(Instruction::Shl, i->getOperand(0),
-                                            i->getOperand(1), *var, &*i);
+                                            i->getOperand(1), "", &*i);
                 break;
               case 4: // XOR operands together, then add to first
                 op = BinaryOperator::Create(Instruction::Xor, i->getOperand(0),
-                                            i->getOperand(1), *var, &*i);
+                                            i->getOperand(1), "", &*i);
                 op1 = BinaryOperator::Create(Instruction::Add, op,
-                                             i->getOperand(0), "gen", &*i);
+                                             i->getOperand(0), "", &*i);
                 break;
               case 5: // AND then OR chain (creates multi-level dependency)
                 op = BinaryOperator::Create(Instruction::And, i->getOperand(0),
-                                            i->getOperand(1), *var, &*i);
+                                            i->getOperand(1), "", &*i);
                 op1 = BinaryOperator::Create(Instruction::Or, op,
-                                             i->getOperand(1), "gen", &*i);
+                                             i->getOperand(1), "", &*i);
                 break;
               case 6: { // Shift left by 1 then right by 1 (lossy round-trip)
                 Type *Ty = i->getOperand(0)->getType();
                 Value *one = ConstantInt::get(Ty, 1);
                 op  = BinaryOperator::Create(Instruction::Shl,  i->getOperand(0),
-                                             one, *var, &*i);
+                                             one, "", &*i);
                 op1 = BinaryOperator::Create(Instruction::LShr, op, one,
-                                             "gen", &*i);
+                                             "", &*i);
                 break;
               }
               case 7: // Mul then Sub (creates diverging dependency tree)
                 op = BinaryOperator::Create(Instruction::Mul, i->getOperand(0),
-                                            i->getOperand(1), *var, &*i);
+                                            i->getOperand(1), "", &*i);
                 op1 = BinaryOperator::Create(Instruction::Sub, op,
-                                             i->getOperand(0), "gen", &*i);
+                                             i->getOperand(0), "", &*i);
                 break;
               }
             }
@@ -725,40 +725,40 @@ struct BogusControlFlow : public FunctionPass {
               case 0:
                 break;
               case 1:
-                op = UnaryOperator::CreateFNeg(i->getOperand(0), *var, &*i);
+                op = UnaryOperator::CreateFNeg(i->getOperand(0), "", &*i);
                 op1 = BinaryOperator::Create(Instruction::FAdd, op,
-                                             i->getOperand(1), "gen", &*i);
+                                             i->getOperand(1), "", &*i);
                 break;
               case 2:
                 op = BinaryOperator::Create(Instruction::FSub, i->getOperand(0),
-                                            i->getOperand(1), *var, &*i);
+                                            i->getOperand(1), "", &*i);
                 op1 = BinaryOperator::Create(Instruction::FMul, op,
-                                             i->getOperand(1), "gen", &*i);
+                                             i->getOperand(1), "", &*i);
                 break;
               case 3: { // FSub 0.0 then FAdd (identity chain)
                 Type *Ty = i->getOperand(0)->getType();
                 Value *zero = ConstantFP::get(Ty, 0.0);
                 op = BinaryOperator::Create(Instruction::FSub, i->getOperand(0),
-                                            zero, *var, &*i);
+                                            zero, "", &*i);
                 op1 = BinaryOperator::Create(Instruction::FAdd, op,
-                                             i->getOperand(1), "gen", &*i);
+                                             i->getOperand(1), "", &*i);
                 break;
               }
               case 4: { // FMul -1.0 then FNeg (double negation, net identity)
                 Type *Ty = i->getOperand(0)->getType();
                 Value *negOne = ConstantFP::get(Ty, -1.0);
                 op  = BinaryOperator::Create(Instruction::FMul, i->getOperand(0),
-                                             negOne, *var, &*i);
-                op1 = UnaryOperator::CreateFNeg(op, "gen", &*i);
+                                             negOne, "", &*i);
+                op1 = UnaryOperator::CreateFNeg(op, "", &*i);
                 break;
               }
               case 5: { // FDiv 1.0 then FMul (scale-by-one dependency)
                 Type *Ty = i->getOperand(0)->getType();
                 Value *one = ConstantFP::get(Ty, 1.0);
                 op  = BinaryOperator::Create(Instruction::FDiv, i->getOperand(0),
-                                             one, *var, &*i);
+                                             one, "", &*i);
                 op1 = BinaryOperator::Create(Instruction::FMul, op,
-                                             i->getOperand(1), "gen", &*i);
+                                             i->getOperand(1), "", &*i);
                 break;
               }
               }
@@ -769,6 +769,7 @@ struct BogusControlFlow : public FunctionPass {
         // This block is intentionally outside isBinaryOp() because ICmpInst
         // inherits from CmpInst, not BinaryOperator.
         if (ICmpInst *currentI = dyn_cast<ICmpInst>(&*i)) {
+          if (!currentI->getOperand(0)->getType()->isIntegerTy()) continue;
           switch (cryptoutils->get_range(6)) {
           case 0:
             break;
@@ -794,15 +795,15 @@ struct BogusControlFlow : public FunctionPass {
             Value *xorZero = BinaryOperator::Create(
                 Instruction::Xor, currentI->getOperand(0),
                 ConstantInt::get(currentI->getOperand(0)->getType(), 0),
-                "_", currentI);
+                "", currentI);
             currentI->setOperand(0, xorZero);
             break;
           }
           case 4: { // Negate both operands and swap (reverses ordering predicate)
             Value *negLHS = BinaryOperator::CreateNeg(
-                currentI->getOperand(0), "_", currentI);
+                currentI->getOperand(0), "", currentI);
             Value *negRHS = BinaryOperator::CreateNeg(
-                currentI->getOperand(1), "gen", currentI);
+                currentI->getOperand(1), "", currentI);
             currentI->setOperand(0, negLHS);
             currentI->setOperand(1, negRHS);
             currentI->swapOperands();
@@ -812,9 +813,9 @@ struct BogusControlFlow : public FunctionPass {
             Type *OpTy = currentI->getOperand(0)->getType();
             Value *c = ConstantInt::get(OpTy, cryptoutils->get_uint32_t());
             Value *lhsNew = BinaryOperator::Create(Instruction::Add,
-                currentI->getOperand(0), c, "_", currentI);
+                currentI->getOperand(0), c, "", currentI);
             Value *rhsNew = BinaryOperator::Create(Instruction::Add,
-                currentI->getOperand(1), c, "gen", currentI);
+                currentI->getOperand(1), c, "", currentI);
             currentI->setOperand(0, lhsNew);
             currentI->setOperand(1, rhsNew);
             break;
@@ -823,6 +824,7 @@ struct BogusControlFlow : public FunctionPass {
         }
         // FCmpInst mutation — same structure as ICmp above.
         if (FCmpInst *currentI = dyn_cast<FCmpInst>(&*i)) {
+          if (!currentI->getOperand(0)->getType()->isFloatingPointTy()) continue;
           switch (cryptoutils->get_range(6)) {
           case 0:
             break;
@@ -846,9 +848,9 @@ struct BogusControlFlow : public FunctionPass {
           }
           case 3: { // FNeg both operands and swap (flip ordering direction)
             Value *negLHS = UnaryOperator::CreateFNeg(
-                currentI->getOperand(0), "_", currentI);
+                currentI->getOperand(0), "", currentI);
             Value *negRHS = UnaryOperator::CreateFNeg(
-                currentI->getOperand(1), "gen", currentI);
+                currentI->getOperand(1), "", currentI);
             currentI->setOperand(0, negLHS);
             currentI->setOperand(1, negRHS);
             currentI->swapOperands();
@@ -858,7 +860,7 @@ struct BogusControlFlow : public FunctionPass {
             Type *Ty = currentI->getOperand(0)->getType();
             Value *one = ConstantFP::get(Ty, 1.0);
             Value *mul = BinaryOperator::Create(Instruction::FMul,
-                currentI->getOperand(0), one, "_", currentI);
+                currentI->getOperand(0), one, "", currentI);
             currentI->setOperand(0, mul);
             break;
           }
@@ -866,7 +868,7 @@ struct BogusControlFlow : public FunctionPass {
             Type *Ty = currentI->getOperand(0)->getType();
             Value *one = ConstantFP::get(Ty, 1.0);
             Value *div = BinaryOperator::Create(Instruction::FDiv,
-                currentI->getOperand(0), one, "_", currentI);
+                currentI->getOperand(0), one, "", currentI);
             currentI->setOperand(0, div);
             break;
           }

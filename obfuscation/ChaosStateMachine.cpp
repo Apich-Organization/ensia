@@ -108,11 +108,23 @@ buildChaosSequence(uint32_t seed, unsigned len) {
   std::unordered_set<uint32_t> seen;
   SmallVector<uint32_t, 32> seq;
   seq.reserve(len);
+  
+  uint32_t stuck_counter = 0;
   while (seq.size() < len) {
     x = chaosMapStep(x);
     if (!seen.count(x)) {
       seen.insert(x);
       seq.push_back(x);
+      stuck_counter = 0;
+    } else {
+      stuck_counter++;
+      // The Q16 discrete logistic map has many short cycles. If we need more
+      // blocks than the cycle length, we will infinite loop. Break out by 
+      // perturbing the state space with fresh PRNG entropy.
+      if (stuck_counter > 5) {
+        x ^= cryptoutils->get_uint16_t();
+        stuck_counter = 0;
+      }
     }
   }
   return seq;

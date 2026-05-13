@@ -113,6 +113,7 @@ struct ConstantEncryption : public ModulePass {
   bool flag;
   bool dispatchonce;
   std::unordered_set<GlobalVariable *> handled_gvs;
+  SmallVector<GlobalValue *, 1024> usedGlobals;
   ConstantEncryption(bool flag) : ModulePass(ID) { this->flag = flag; }
   ConstantEncryption() : ModulePass(ID) { this->flag = true; }
   bool shouldEncryptConstant(Instruction *I) {
@@ -199,6 +200,10 @@ struct ConstantEncryption : public ModulePass {
           times--;
         }
       }
+    if (!usedGlobals.empty()) {
+      appendToCompilerUsed(M, usedGlobals);
+      usedGlobals.clear();
+    }
     return true;
   }
 
@@ -257,6 +262,9 @@ struct ConstantEncryption : public ModulePass {
   }
 
   void EncryptConstants(Function &F) {
+    SmallVector<std::pair<Instruction *, unsigned>, 64> targets;
+    SmallVector<GlobalVariable *, 32> gvTargets;
+    
     for (Instruction &I : instructions(F)) {
       if (!shouldEncryptConstant(&I))
         continue;
@@ -266,13 +274,32 @@ struct ConstantEncryption : public ModulePass {
           continue;
         Value *Op = I.getOperand(i);
         if (isa<ConstantInt>(Op))
-          HandleConstantIntOperand(&I, i);
+          targets.push_back({&I, i});
         if (GlobalVariable *G = dyn_cast<GlobalVariable>(Op))
           if (G->hasInitializer() &&
               (G->hasPrivateLinkage() || G->hasInternalLinkage()) &&
               isa<ConstantInt>(G->getInitializer()))
-            HandleConstantIntInitializerGV(G);
+            gvTargets.push_back(G);
       }
+    }
+    
+    uint32_t eligible = targets.size() + gvTargets.size();
+    if (eligible == 0) return;
+    
+    uint32_t currentProb = 100;
+    uint32_t maxTargets = 40000;
+    if (eligible * currentProb / 100 > maxTargets) {
+      currentProb = (maxTargets * 100) / eligible;
+      if (currentProb == 0) currentProb = 1;
+    }
+
+    for (auto &T : targets) {
+      if (cryptoutils->get_range(100) < currentProb)
+        HandleConstantIntOperand(T.first, T.second);
+    }
+    for (GlobalVariable *G : gvTargets) {
+      if (cryptoutils->get_range(100) < currentProb)
+        HandleConstantIntInitializerGV(G);
     }
   }
 
@@ -296,7 +323,7 @@ struct ConstantEncryption : public ModulePass {
               *F.getParent(), CI->getType(), false,
               GlobalValue::LinkageTypes::PrivateLinkage,
               ConstantInt::get(CI->getType(), CI->getValue()), "CToGV");
-          appendToCompilerUsed(*F.getParent(), GV);
+          usedGlobals.push_back(GV);
           I.setOperand(i, new LoadInst(GV->getValueType(), GV, "", &I));
         }
       }
@@ -453,31 +480,31 @@ struct ConstantEncryption : public ModulePass {
     // Extract halves: L = upper half, R = lower half
     Value *L = BinaryOperator::Create(
         Instruction::And,
-        BinaryOperator::Create(Instruction::LShr, encVal, halfC, "fe.Lraw", I),
-        maskC, "fe.L", I);
-    Value *R = BinaryOperator::Create(Instruction::And, encVal, maskC, "fe.R", I);
+        BinaryOperator::Create(Instruction::LShr, encVal, halfC, "", I),
+        maskC, "", I);
+    Value *R = BinaryOperator::Create(Instruction::And, encVal, maskC, "", I);
 
     // Apply 4 inverse rounds in reverse order (r = 3, 2, 1, 0)
     for (int r = 3; r >= 0; r--) {
       ConstantInt *K0 = cast<ConstantInt>(ConstantInt::get(T, fst.K[r][0]));
       ConstantInt *K1 = cast<ConstantInt>(ConstantInt::get(T, fst.K[r][1]));
       // F_r(L) = ((L * K0) ^ K1) & mask
-      Value *mul = BinaryOperator::Create(Instruction::Mul, L, K0, "fe.mul", I);
-      Value *xorK = BinaryOperator::Create(Instruction::Xor, mul, K1, "fe.xk", I);
-      Value *F = BinaryOperator::Create(Instruction::And, xorK, maskC, "fe.F", I);
+      Value *mul = BinaryOperator::Create(Instruction::Mul, L, K0, "", I);
+      Value *xorK = BinaryOperator::Create(Instruction::Xor, mul, K1, "", I);
+      Value *F = BinaryOperator::Create(Instruction::And, xorK, maskC, "", I);
       // Inverse: newL = R ^ F(L),  newR = L
       Value *newL = BinaryOperator::Create(
           Instruction::And,
-          BinaryOperator::Create(Instruction::Xor, R, F, "fe.Lx", I),
-          maskC, "fe.newL", I);
+          BinaryOperator::Create(Instruction::Xor, R, F, "", I),
+          maskC, "", I);
       Value *newR = L;
       L = newL;
       R = newR;
     }
 
     // Recombine: (L << half) | R
-    Value *Lsh = BinaryOperator::Create(Instruction::Shl, L, halfC, "fe.Lsh", I);
-    return BinaryOperator::Create(Instruction::Or, Lsh, R, "fe.plain", I);
+    Value *Lsh = BinaryOperator::Create(Instruction::Shl, L, halfC, "", I);
+    return BinaryOperator::Create(Instruction::Or, Lsh, R, "", I);
   }
 
   // ── k-share ensemble secret sharing ─────────────────────────────────────
@@ -512,17 +539,17 @@ struct ConstantEncryption : public ModulePass {
           M, T, /*isConstant=*/false,
           GlobalValue::PrivateLinkage,
           ConstantInt::get(T, shares[i]),
-          "ce.share" + std::to_string(i));
-      appendToCompilerUsed(M, {GV});
+          "");
+      usedGlobals.push_back(GV);
       gvs.push_back(GV);
     }
 
     // Emit XOR chain: load g0, load g1, ... XOR all together
-    Value *acc = new LoadInst(T, gvs[0], "ce.s0", I);
+    Value *acc = new LoadInst(T, gvs[0], "", I);
     for (unsigned i = 1; i < k; i++) {
-      Value *ld = new LoadInst(T, gvs[i], "ce.s" + std::to_string(i), I);
+      Value *ld = new LoadInst(T, gvs[i], "", I);
       acc = BinaryOperator::Create(Instruction::Xor, acc, ld,
-                                   "ce.xor" + std::to_string(i), I);
+                                   "", I);
       // Optionally substitute the XOR for additional depth
       if (SubstituteXorTemp &&
           cryptoutils->get_range(100) <= SubstituteXorProbTemp)
