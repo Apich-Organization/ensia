@@ -52,6 +52,7 @@
 
 #include "include/FunctionWrapper.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "include/compat/CallSite.h"
 #include "llvm/IR/Constants.h"
@@ -97,13 +98,19 @@ struct FunctionWrapper : public ModulePass {
   StringRef getPassName() const override { return "FunctionWrapper"; }
 
   bool runOnModule(Module &M) override {
+    // Resolve config once for the module (per-function overrides applied per-F below)
+    auto modec = GObfConfig.resolve(M.getSourceFileName(), "");
+    uint32_t effectiveTimes = modec.func_wrap.times.value_or((uint32_t)ObfTimes);
+
     SmallVector<CallSite *, 16> callsites;
     for (Function &F : M) {
       if (!toObfuscate(flag, &F, "fw"))
         continue;
       if (ObfVerbose) errs() << "Running FunctionWrapper On " << F.getName() << "\n";
-      if (!toObfuscateUint32Option(&F, "fw_prob", &ProbRateTemp))
-        ProbRateTemp = ProbRate;
+      if (!toObfuscateUint32Option(&F, "fw_prob", &ProbRateTemp)) {
+        auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
+        ProbRateTemp = ec.func_wrap.probability.value_or((uint32_t)ProbRate);
+      }
       if (ProbRateTemp > 100) {
         errs() << "FunctionWrapper: -fw_prob must be 0-100\n";
         return false;
@@ -120,7 +127,7 @@ struct FunctionWrapper : public ModulePass {
     // temporary GlobalVariable initialisers that pile up in the LLVMContext.
     SmallVector<GlobalValue *, 16> newProxies;
     for (CallSite *CS : callsites)
-      for (uint32_t i = 0; i < ObfTimes && CS != nullptr; i++)
+      for (uint32_t i = 0; i < effectiveTimes && CS != nullptr; i++)
         CS = HandleCallSite(CS, M, newProxies);
     if (!newProxies.empty())
       appendToCompilerUsed(M, newProxies);

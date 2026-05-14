@@ -1,0 +1,131 @@
+# rust.toml — Ensia config example for Rust binaries
+#
+# ── How Rust function names work in LLVM IR ──────────────────────────────────
+#
+# The Rust compiler mangles function names before handing the IR to LLVM.
+# Two mangling schemes are in use:
+#
+#  Legacy (Itanium-based):  _ZN8my_crate6crypto7encrypt17h1a2b3c4d5e6f7g8hE
+#  v0 (RFC 2603):           _RNvMs_Cs1a2b3c4d5e6f_8my_crate6crypto7encrypt
+#
+# With `demangle_names = true` (the default), Ensia demangles each function
+# name before matching your policy regexes.  The demangled forms look like:
+#
+#  Legacy → my_crate::crypto::encrypt::h1a2b3c4d5e6f7g8h
+#  v0     → my_crate::crypto::encrypt
+#
+# You can write your policies against the demangled (human-readable) name.
+# Patterns are matched with std::regex ECMAScript; both the raw mangled name
+# AND the demangled name are tried, so you can also write patterns against the
+# hash suffix if needed.
+#
+# ── Rust-specific limitations ────────────────────────────────────────────────
+#
+# • Rust does not support __attribute__((annotate(...))); per-function source
+#   annotations do NOT work.  TOML policy rules are the only per-function
+#   control mechanism when obfuscating Rust code.
+#
+# • Closures appear as: "my_crate::module::outer_fn::{closure#0}"
+#   Match them with:  function = "\\{closure#"
+#
+# • Generic monomorphisations appear as: "my_crate::util::sort::<i32>"
+#   Match them with:  function = "sort::<i32>"  or  "sort"
+#
+# • Trait impls appear as: "<my_crate::Foo as my_crate::Bar>::method"
+#   Match them with:  function = "as my_crate::Bar"  or  "::method$"
+#
+# ── Usage ────────────────────────────────────────────────────────────────────
+#
+#   rustc --emit=llvm-bc -C opt-level=0 src/main.rs -o out.bc
+#   opt -load ./build/obfuscation/libEnsia.so -obfuscation -ensia-config=test/configs/rust.toml \
+#       out.bc -o out_obf.bc
+#   llc out_obf.bc -o out_obf.s && clang out_obf.s -o out_obf
+
+[global]
+preset = "mid"
+demangle_names = true # enabled by default; explicit here for clarity
+verbose = true
+
+[passes.string_encryption]
+enabled = true
+probability = 100
+# Force-encrypt strings that look like secrets (common in Rust crypto crates)
+force_content = ["secret", "key", "passphrase", "token", "password", "api_key"]
+# Skip Rust panic/debug messages (they don't need encryption and inflate binary)
+skip_content = [
+    "panicked at",
+    "called `Option::unwrap()`",
+    "called `Result::unwrap()`",
+    "index out of bounds",
+    "attempt to ",
+    "src/",
+    ".rs:",
+]
+
+[passes.constant_encryption]
+enabled = true
+share_count = 3
+substitute_xor = true
+substitute_xor_prob = 40
+# Rust common hash constants — force-encrypt
+force_value = ["0x9E3779B9", "0x517CC1B727220A95"]
+# Skip trivial discriminant values used by Rust enum matching (0, 1, 2...)
+skip_value = ["^0x0$", "^0x1$", "^0x2$", "^0x3$"]
+
+# ── Per-function rules ────────────────────────────────────────────────────────
+
+# Crypto / sensitive module: maximum protection
+# Matches demangled names like: my_crate::crypto::encrypt
+[[policy]]
+module = ".*"
+function = "::crypto::|::cipher::|::hash::|::hmac::|::sign"
+preset = "high"
+passes.constant_encryption.feistel = true
+passes.constant_encryption.share_count = 4
+passes.bcf.entropy_chain = true
+
+# Key derivation functions: high BCF, no flattening (may be recursive)
+[[policy]]
+module = ".*"
+function = "::kdf::|::pbkdf|::scrypt|::argon"
+passes.bcf.probability = 80
+passes.bcf.iterations = 2
+passes.flattening.enabled = false
+passes.chaos_state_machine.enabled = false
+
+# Closures: keep BCF light (closures are often inlined anyway)
+[[policy]]
+module = ".*"
+function = "\\{closure#"
+passes.bcf.probability = 20
+passes.bcf.iterations = 1
+passes.flattening.enabled = false
+
+# Trait impl methods (detected by "<...> as ...>" in demangled name)
+[[policy]]
+module = ".*"
+function = " as "
+passes.bcf.probability = 40
+
+# main / entry point: no obfuscation
+[[policy]]
+module = ".*"
+function = "::main$|^main$"
+passes.bcf.enabled = false
+passes.substitution.enabled = false
+passes.mba.enabled = false
+passes.flattening.enabled = false
+passes.chaos_state_machine.enabled = false
+passes.function_wrapper.enabled = false
+passes.constant_encryption.enabled = false
+
+# Rust runtime / std internals: skip entirely (fragile, not worth obfuscating)
+[[policy]]
+module = ".*"
+function = "^core::|^std::|^alloc::|^compiler_builtins::"
+passes.bcf.enabled = false
+passes.substitution.enabled = false
+passes.mba.enabled = false
+passes.flattening.enabled = false
+passes.constant_encryption.enabled = false
+passes.string_encryption.enabled = false

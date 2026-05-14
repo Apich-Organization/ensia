@@ -57,6 +57,7 @@
 
 #include "include/ChaosStateMachine.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -98,11 +99,13 @@ uint32_t llvm::chaosMapStep(uint32_t x) {
 }
 
 // Build a warmup + unique chaos sequence of length `len`.
+// warmupOverride=0 → use the ChaosWarmup cl::opt value.
 static SmallVector<uint32_t, 32>
-buildChaosSequence(uint32_t seed, unsigned len) {
+buildChaosSequence(uint32_t seed, unsigned len, uint32_t warmupOverride = 0) {
   // Warm up to escape the initial transient of the logistic map
   uint32_t x = (seed != 0) ? seed : 0x4B1D;
-  for (uint32_t i = 0; i < ChaosWarmup; i++)
+  uint32_t warmupSteps = warmupOverride ? warmupOverride : (uint32_t)ChaosWarmup;
+  for (uint32_t i = 0; i < warmupSteps; i++)
     x = chaosMapStep(x);
 
   std::unordered_set<uint32_t> seen;
@@ -163,15 +166,23 @@ struct ChaosStateMachine : public FunctionPass {
   ChaosStateMachine() : FunctionPass(ID) { this->flag = true; }
   ChaosStateMachine(bool flag) : FunctionPass(ID) { this->flag = flag; }
 
+  uint32_t warmupOverride = 0; // per-invocation warmup resolved from config
+
   bool runOnFunction(Function &F) override {
     if (!toObfuscate(flag, &F, "csm") || F.isPresplitCoroutine())
       return false;
-    if (!toObfuscateBoolOption(&F, "csm_nested", &ChaosNestedDispatchTemp))
-      ChaosNestedDispatchTemp = ChaosNestedDispatch;
+    {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      if (!toObfuscateBoolOption(&F, "csm_nested", &ChaosNestedDispatchTemp))
+        ChaosNestedDispatchTemp = ec.csm.nested_dispatch.value_or((bool)ChaosNestedDispatch);
+      warmupOverride = ec.csm.warmup.value_or(0);
+    }
     // MaxObf: enable nested dispatch (doubles CFG nodes, defeats analyzer
     // path-enumeration without adding basic block count to the function body).
-    if (ObfuscationMaxMode)
+    if (ObfuscationMaxMode) {
       ChaosNestedDispatchTemp = true;
+      if (warmupOverride < 256) warmupOverride = 256;
+    }
 
     if (ObfVerbose) errs() << "Running ChaosStateMachine On " << F.getName() << "\n";
     flatten(&F);
@@ -233,7 +244,7 @@ struct ChaosStateMachine : public FunctionPass {
     // ── Phase 3: build chaos sequence ────────────────────────────────────────
     uint32_t seed = cryptoutils->get_uint32_t();
     unsigned numBBs = origBBs.size();
-    SmallVector<uint32_t, 32> caseVals = buildChaosSequence(seed, numBBs);
+    SmallVector<uint32_t, 32> caseVals = buildChaosSequence(seed, numBBs, warmupOverride);
 
     // Feistel mask: XOR'd into every case value so the switch uses
     // (state XOR feistelK) as the discriminant instead of state directly.

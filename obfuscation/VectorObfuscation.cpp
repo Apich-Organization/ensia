@@ -58,6 +58,7 @@
 
 #include "include/VectorObfuscation.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -296,14 +297,17 @@ struct VectorObfuscation : public FunctionPass {
     if (!toObfuscate(flag, &F, "vobf"))
       return false;
 
-    if (!toObfuscateUint32Option(&F, "vec_prob", &VecProbRateTemp))
-      VecProbRateTemp = VecProbRate;
-    if (!toObfuscateUint32Option(&F, "vec_width", &VecWidthTemp))
-      VecWidthTemp = VecWidth;
-    if (!toObfuscateBoolOption(&F, "vec_shuffle", &VecShuffleTemp))
-      VecShuffleTemp = VecShuffle;
-    if (!toObfuscateBoolOption(&F, "vec_icmp", &VecICmpTemp))
-      VecICmpTemp = VecICmp;
+    {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      if (!toObfuscateUint32Option(&F, "vec_prob", &VecProbRateTemp))
+        VecProbRateTemp = ec.vec.probability.value_or((uint32_t)VecProbRate);
+      if (!toObfuscateUint32Option(&F, "vec_width", &VecWidthTemp))
+        VecWidthTemp = ec.vec.width.value_or((uint32_t)VecWidth);
+      if (!toObfuscateBoolOption(&F, "vec_shuffle", &VecShuffleTemp))
+        VecShuffleTemp = ec.vec.shuffle.value_or((bool)VecShuffle);
+      if (!toObfuscateBoolOption(&F, "vec_icmp", &VecICmpTemp))
+        VecICmpTemp = ec.vec.lift_comparisons.value_or((bool)VecICmp);
+    }
 
     if (ObfuscationMaxMode) {
       VecProbRateTemp = 80;

@@ -72,6 +72,7 @@
 #include "include/Obfuscation.h"
 #include "include/ChaosStateMachine.h"
 #include "include/MBAObfuscation.h"
+#include "include/ObfConfig.h"
 #include "include/VectorObfuscation.h"
 #include "include/Utils.h"
 #include "llvm/IR/DebugInfo.h"
@@ -80,6 +81,7 @@
 #include "llvm/Plugins/PassPlugin.h"
 #endif
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
@@ -186,6 +188,19 @@ static cl::opt<bool> EnableMedObfuscation(
     cl::desc("[OLLVM-Next] Medium-intensity obfuscation: Sub+MBA+ConstEnc+StrEnc+"
              "Flatten. Good for production builds."));
 
+// ── Structured preset and TOML config ─────────────────────────────────────────
+
+static cl::opt<std::string> ObfPreset(
+    "ensia-preset", cl::init(""), cl::NotHidden,
+    cl::desc("[OLLVM-Next] Obfuscation preset: low | mid | high  "
+             "(max remains -enable-maxobf for backward compat). "
+             "Can be combined with -ensia-config for parameter fine-tuning."));
+
+static cl::opt<std::string> ObfConfigFile(
+    "ensia-config", cl::init(""), cl::NotHidden,
+    cl::desc("[OLLVM-Next] Path to TOML configuration file. "
+             "Searched in order: this flag > ENSIA_CONFIG env var > ./ensia.toml"));
+
 // ── Environment variable loader ───────────────────────────────────────────────
 
 static void LoadEnv() {
@@ -210,6 +225,92 @@ static void LoadEnv() {
   if (getenv("MEDOBF"))     EnableMedObfuscation     = true;
   if (getenv("VERBOSE"))    EnableObfVerbose         = true;
   if (getenv("TRACE"))      EnableObfTrace           = true;
+}
+
+// ── Config loading ────────────────────────────────────────────────────────────
+//
+// Final priority (highest → lowest) for per-pass parameters:
+//   source annotation  >  TOML [passes.*]  >  -ensia-preset  >  [global] preset  >  cl::opt default
+//
+// Config file is searched:  -ensia-config flag  >  ENSIA_CONFIG env  >  ./ensia.toml
+static void loadObfConfig() {
+  std::string path = ObfConfigFile;
+  if (path.empty()) {
+    if (const char *env = getenv("ENSIA_CONFIG"))
+      path = env;
+  }
+  if (path.empty()) {
+    if (llvm::sys::fs::exists("ensia.toml"))
+      path = "ensia.toml";
+  }
+
+  // Step 1: load file (this applies the file's [global] preset internally,
+  // then overlays [passes.*] sections on top of it).
+  if (!path.empty())
+    GObfConfig = ObfGlobalConfig::loadFromFile(path);
+  else
+    GObfConfig = ObfGlobalConfig::defaults();
+
+  // Step 2: if -ensia-preset is given on the command line, it overrides
+  // the file's [global] preset while preserving explicit [passes.*] settings.
+  // We rebuild as: preset_base merged with the file's explicit [passes.*] overrides.
+  if (!ObfPreset.empty()) {
+    std::string cliPreset = (std::string)ObfPreset;
+    GObfConfig.preset = cliPreset;
+    // Extract the file's explicit [passes.*] overrides by comparing to the
+    // file-preset's base (approximation: just keep GObfConfig.passes as
+    // user-supplied delta and re-merge onto the CLI preset base).
+    ObfPassConfig cli_preset_base = ObfGlobalConfig::presetConfig(cliPreset);
+    ObfGlobalConfig::merge(cli_preset_base, GObfConfig.passes); // file settings win
+    GObfConfig.passes = cli_preset_base;
+  }
+}
+
+// ── Apply TOML policy metadata injection ──────────────────────────────────────
+// For each function, resolve its effective config (global + matching policies)
+// and inject enable/disable annotations as function metadata so the existing
+// toObfuscate() mechanism can honour TOML-defined per-function enables.
+// Parameter overrides are handled at runtime inside each pass via GObfConfig.resolve().
+static void applyTomlPolicies(Module &M) {
+  if (GObfConfig.policies.empty())
+    return;
+
+  StringRef modName = M.getSourceFileName();
+
+  for (Function &F : M) {
+    if (F.isDeclaration())
+      continue;
+
+    StringRef fnName = F.getName();
+    ObfPassConfig eff = GObfConfig.resolve(modName, fnName);
+
+    // Helper: write enable/disable annotation only when the policy differs from
+    // the cl::opt global flag (to avoid redundant metadata).
+    auto injectEnable = [&](std::optional<bool> enabled,
+                            const char *attr, const char *noattr) {
+      if (!enabled.has_value())
+        return;
+      if (*enabled)
+        writeAnnotationMetadata(&F, attr);
+      else
+        writeAnnotationMetadata(&F, noattr);
+    };
+
+    injectEnable(eff.bcf.enabled,         "bcf",      "nobcf");
+    injectEnable(eff.sub.enabled,         "sub",      "nosub");
+    injectEnable(eff.mba.enabled,         "mba",      "nomb");
+    injectEnable(eff.split.enabled,       "split",    "nosplit");
+    injectEnable(eff.str_enc.enabled,     "strcry",   "nostrcry");
+    injectEnable(eff.const_enc.enabled,   "constenc", "noconstenc");
+    injectEnable(eff.vec.enabled,         "vobf",     "novobf");
+    injectEnable(eff.csm.enabled,         "csm",      "nocsm");
+    injectEnable(eff.flatten.enabled,     "fla",      "nofla");
+    injectEnable(eff.indir_branch.enabled,"indibran", "noindibran");
+    injectEnable(eff.func_wrap.enabled,   "fw",       "nofw");
+    injectEnable(eff.fco.enabled,         "fco",      "nofco");
+    injectEnable(eff.anti_hook.enabled,   "antihook", "noantihook");
+    injectEnable(eff.anti_dbg.enabled,    "adb",      "noadb");
+  }
 }
 
 // ── Feature Elimination ───────────────────────────────────────────────────────
@@ -353,6 +454,35 @@ struct Obfuscation : public ModulePass {
                 "StrEnc+Flatten\n";
     }
 
+    // ── Structured preset / TOML config ───────────────────────────────────
+    // Apply verbose/trace from config (cl::opt already took effect above, but
+    // config file can also set them).
+    if (GObfConfig.verbose) ObfVerbose = true;
+    if (GObfConfig.trace)   ObfTrace   = true;
+
+    // Apply preset/config enables (only if not already forced by max/med mode).
+    if (!EnableMaxObfuscation && !EnableMedObfuscation) {
+      auto &pc = GObfConfig.passes;
+      if (pc.bcf.enabled.value_or(false))           EnableBogusControlFlow      = true;
+      if (pc.sub.enabled.value_or(false))           EnableSubstitution          = true;
+      if (pc.mba.enabled.value_or(false))           EnableMBAObfuscation        = true;
+      if (pc.split.enabled.value_or(false))         EnableBasicBlockSplit       = true;
+      if (pc.str_enc.enabled.value_or(false))       EnableStringEncryption      = true;
+      if (pc.const_enc.enabled.value_or(false))     EnableConstantEncryption    = true;
+      if (pc.vec.enabled.value_or(false))           EnableVectorObfuscation     = true;
+      if (pc.csm.enabled.value_or(false))           EnableChaosStateMachine     = true;
+      if (pc.flatten.enabled.value_or(false))       EnableFlattening            = true;
+      if (pc.indir_branch.enabled.value_or(false))  EnableIndirectBranching     = true;
+      if (pc.func_wrap.enabled.value_or(false))     EnableFunctionWrapper       = true;
+      if (pc.fco.enabled.value_or(false))           EnableFunctionCallObfuscate = true;
+      if (pc.anti_hook.enabled.value_or(false))     EnableAntiHooking           = true;
+      if (pc.anti_dbg.enabled.value_or(false))      EnableAntiDebugging         = true;
+      if (pc.anti_class_dump.enabled.value_or(false)) EnableAntiClassDump       = true;
+
+      if (!GObfConfig.preset.empty())
+        errs() << "[OLLVM-Next] Preset '" << GObfConfig.preset << "' active\n";
+    }
+
     TimerGroup *tg = new TimerGroup("Obfuscation", "Obfuscation");
     Timer *timer = new Timer("Total", "Total", *tg);
     timer->startTimer();
@@ -362,6 +492,7 @@ struct Obfuscation : public ModulePass {
            << ", commit " << GIT_COMMIT_HASH << "]\n";
 
     annotation2Metadata(M);
+    applyTomlPolicies(M);   // inject per-function enables from TOML policies
 
     // ── 1. AntiHooking ─────────────────────────────────────────────────────
     {
@@ -554,8 +685,12 @@ struct Obfuscation : public ModulePass {
 
 ModulePass *createObfuscationLegacyPass() {
   LoadEnv();
-  if (AesSeed != 0x1337)
-    cryptoutils->prng_seed(AesSeed);
+  loadObfConfig();
+  // Config file may specify a seed; cl::opt -aesSeed overrides it.
+  uint64_t seed = (AesSeed != 0x1337) ? (uint64_t)AesSeed
+                : (GObfConfig.seed != 0 ? GObfConfig.seed : 0x1337);
+  if (seed != 0x1337)
+    cryptoutils->prng_seed(seed);
   else
     cryptoutils->prng_seed();
   errs() << "Initializing OLLVM-Next with commit:" << GIT_COMMIT_HASH << "\n";

@@ -71,3 +71,9 @@ test/obf_test_max.bc
 test/obf_test.bc
 test/obf_test_lite_max.bc
 test/obf_test_lite.bc
+obf_test_full_high_obf
+obf_test_full_high_obf_1
+obf_test_full_low_obf
+obf_test_lite_obf
+obf_test_full_high_obf_0
+obf_test_full_mid_obf

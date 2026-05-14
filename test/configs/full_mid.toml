@@ -1,0 +1,90 @@
+# full_mid.toml — Ensia config for obf_test.cpp (mid preset with targeted upgrades)
+#
+# Uses mid as the global baseline.  The string_test / const_test functions
+# are upgraded to a high-equivalent policy because they exercise the very
+# encryption passes we want to stress.  The recursive fibonacci is kept safe
+# with no flattening.
+#
+# Usage:
+#   clang++ -Xclang -load -Xclang ./build/obfuscation/libEnsia.so -mllvm -ensia-config=test/configs/full_mid.toml \
+#         test/obf_test.cpp -o obf_test_mid
+
+[global]
+preset = "mid"
+verbose = true
+
+[passes.string_encryption]
+enabled = true
+probability = 100
+# Force-encrypt strings that look like key material or hash values
+force_content = ["SHA256", "SuperSecret", "Key"]
+# Leave benign format strings alone
+skip_content = ["%s", "%d", "PASS", "FAIL", "Running"]
+
+[passes.constant_encryption]
+enabled = true
+share_count = 3
+substitute_xor = true
+substitute_xor_prob = 40
+# The golden-ratio hash constant is a well-known value — force-encrypt it
+force_value = ["0x9E3779B9", "0xDEADBEEF", "0xCAFEBABE"]
+# Skip zero and one (not worth encrypting; very common in loop bounds)
+skip_value = ["^0x0$", "^0x1$"]
+
+# ── Per-function rules ────────────────────────────────────────────────────────
+
+# string_test / const_test: bump to high-tier encryption to stress the passes
+[[policy]]
+module = ".*obf_test.*"
+function = "string_test|const_test.*"
+preset = "high"
+passes.constant_encryption.share_count = 4
+passes.constant_encryption.feistel = true
+passes.string_encryption.force_content = [
+    "SHA256",
+    "SuperSecret",
+    "Key",
+    "Hello",
+    "Unicode",
+]
+
+# collatz / dispatch: control-flow heavy — enable CSM for dispatch, flatten collatz
+[[policy]]
+module = ".*obf_test.*"
+function = "^collatz$"
+passes.flattening.enabled = true
+passes.bcf.probability = 70
+
+[[policy]]
+module = ".*obf_test.*"
+function = "^dispatch$"
+passes.chaos_state_machine.enabled = true
+passes.chaos_state_machine.warmup = 64
+passes.flattening.enabled = false         # CSM subsumes flatten
+
+# fibonacci: recursive — disable all control-flow transforms
+[[policy]]
+module = ".*obf_test.*"
+function = "fibonacci"
+passes.flattening.enabled = false
+passes.chaos_state_machine.enabled = false
+passes.bcf.probability = 25
+passes.bcf.iterations = 1
+
+# float_arith / mixed_pipeline: vector obfuscation showcase
+[[policy]]
+module = ".*obf_test.*"
+function = "float_arith.*|mixed_pipeline"
+passes.vector_obfuscation.enabled = true
+passes.vector_obfuscation.width = 128
+passes.vector_obfuscation.shuffle = false
+
+# main: no obfuscation
+[[policy]]
+module = ".*obf_test.*"
+function = "^main$"
+passes.bcf.enabled = false
+passes.substitution.enabled = false
+passes.mba.enabled = false
+passes.flattening.enabled = false
+passes.constant_encryption.enabled = false

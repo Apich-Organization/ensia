@@ -1,0 +1,133 @@
+# full_high.toml — Ensia config for obf_test.cpp (high preset, maximum stress test)
+#
+# Uses high as the global baseline.  Specific downgrades are applied to
+# recursive and float functions to keep the binary size bounded.
+# This config is designed to maximally exercise all passes simultaneously
+# and catch correctness regressions under aggressive obfuscation.
+#
+# Usage:
+#   clang++ -Xclang -load -Xclang ./build/obfuscation/libEnsia.so -mllvm -ensia-config=test/configs/full_high.toml \
+#         test/obf_test.cpp -o obf_test_high
+
+[global]
+preset = "high"
+seed = 0xDEADBEEF1337 # deterministic run for reproducible CI
+verbose = true
+
+[passes.string_encryption]
+enabled = true
+probability = 100
+# These strings contain security-sensitive content — guaranteed encryption
+force_content = ["SHA256", "SuperSecret", "Key", "Hello", "Unicode"]
+
+[passes.constant_encryption]
+enabled = true
+iterations = 2
+share_count = 4
+feistel = true
+substitute_xor = true
+substitute_xor_prob = 60
+# Force-encrypt all the magic constants used in the test (golden ratio, FNV, etc.)
+force_value = [
+    "0x9E3779B9",
+    "0xDEADBEEF",
+    "0xCAFEBABE",
+    "0xCBF29CE484222325",
+    "0x100000001B3",
+    "0x6364136223846793",
+    "0x123456789ABCDEF0",
+]
+# Skip trivial small constants that would waste share GV space
+skip_value = [
+    "^0x0$",
+    "^0x1$",
+    "^0x2$",
+    "^0x3$",
+    "^0x4$",
+    "^0x5$",
+    "^0x6$",
+    "^0x7$",
+    "^0x8$",
+]
+
+[passes.bcf]
+enabled = true
+probability = 75
+iterations = 2
+complexity = 6
+entropy_chain = true
+junk_asm = true
+junk_asm_min = 2
+junk_asm_max = 6
+
+[passes.chaos_state_machine]
+enabled = true
+nested_dispatch = false
+warmup = 128
+
+[passes.vector_obfuscation]
+enabled = true
+probability = 65
+width = 256
+shuffle = true
+lift_comparisons = true
+
+[passes.function_wrapper]
+enabled = true
+probability = 50
+times = 1
+
+# ── Per-function rules ────────────────────────────────────────────────────────
+
+# const_test / string_test: maximum crypto-grade protection
+[[policy]]
+module = ".*obf_test.*"
+function = "const_test.*|string_test"
+passes.constant_encryption.share_count = 6
+passes.constant_encryption.iterations = 2
+passes.bcf.probability = 90
+passes.bcf.complexity = 8
+
+# fibonacci: recursive — strip all control-flow transforms
+[[policy]]
+module = ".*obf_test.*"
+function = "fibonacci"
+passes.chaos_state_machine.enabled = false
+passes.flattening.enabled = false
+passes.indirect_branch.enabled = false
+passes.function_wrapper.enabled = false
+passes.bcf.probability = 20
+passes.bcf.iterations = 1
+
+# dispatch: has a switch — CSM already handles it; no nested dispatch
+[[policy]]
+module = ".*obf_test.*"
+function = "^dispatch$"
+passes.chaos_state_machine.nested_dispatch = false
+passes.chaos_state_machine.warmup = 256
+
+# float_arith / mixed_pipeline: float heavy — no BCF (float BCF unsupported)
+[[policy]]
+module = ".*obf_test.*"
+function = "float_arith.*|mixed_pipeline"
+passes.bcf.enabled = false
+
+# array_hash: tight loop — keep BCF light to avoid excessive code growth
+[[policy]]
+module = ".*obf_test.*"
+function = "^array_hash$"
+passes.bcf.probability = 40
+passes.bcf.iterations = 1
+passes.bcf.entropy_chain = false
+
+# main: no obfuscation (correctness canary — if main crashes, it's a bug)
+[[policy]]
+module = ".*obf_test.*"
+function = "^main$"
+passes.bcf.enabled = false
+passes.substitution.enabled = false
+passes.mba.enabled = false
+passes.chaos_state_machine.enabled = false
+passes.flattening.enabled = false
+passes.function_wrapper.enabled = false
+passes.constant_encryption.enabled = false

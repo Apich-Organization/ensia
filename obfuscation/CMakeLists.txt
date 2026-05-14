@@ -17,6 +17,7 @@ add_library(Ensia SHARED
         # ── Core infrastructure ──────────────────────────────────────────────
         CryptoUtils.cpp
         Utils.cpp
+        ObfConfig.cpp
         # ── Original passes ──────────────────────────────────────────────────
         FunctionCallObfuscate.cpp
         BogusControlFlow.cpp

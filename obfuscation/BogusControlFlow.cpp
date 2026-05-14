@@ -18,6 +18,7 @@
 
 #include "include/BogusControlFlow.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
@@ -338,8 +339,10 @@ struct BogusControlFlow : public FunctionPass {
    * to the function. See header for more details.
    */
   bool runOnFunction(Function &F) override {
-    if (!toObfuscateUint32Option(&F, "bcf_loop", &ObfTimesTemp))
-      ObfTimesTemp = ObfTimes;
+    if (!toObfuscateUint32Option(&F, "bcf_loop", &ObfTimesTemp)) {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      ObfTimesTemp = ec.bcf.iterations.value_or((uint32_t)ObfTimes);
+    }
 
     // Check if the percentage is correct
     if (ObfTimesTemp <= 0) {
@@ -347,8 +350,10 @@ struct BogusControlFlow : public FunctionPass {
       return false;
     }
 
-    if (!toObfuscateUint32Option(&F, "bcf_prob", &ObfProbRateTemp))
-      ObfProbRateTemp = ObfProbRate;
+    if (!toObfuscateUint32Option(&F, "bcf_prob", &ObfProbRateTemp)) {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      ObfProbRateTemp = ec.bcf.probability.value_or((uint32_t)ObfProbRate);
+    }
     // MaxObf: prob=100, times=3.
     if (ObfuscationMaxMode) {
       ObfProbRateTemp = 100;
@@ -363,11 +368,15 @@ struct BogusControlFlow : public FunctionPass {
     }
 
     if (!toObfuscateUint32Option(&F, "bcf_junkasm_maxnum",
-                                 &MaxNumberOfJunkAssemblyTemp))
-      MaxNumberOfJunkAssemblyTemp = MaxNumberOfJunkAssembly;
+                                 &MaxNumberOfJunkAssemblyTemp)) {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      MaxNumberOfJunkAssemblyTemp = ec.bcf.junk_asm_max.value_or((uint32_t)MaxNumberOfJunkAssembly);
+    }
     if (!toObfuscateUint32Option(&F, "bcf_junkasm_minnum",
-                                 &MinNumberOfJunkAssemblyTemp))
-      MinNumberOfJunkAssemblyTemp = MinNumberOfJunkAssembly;
+                                 &MinNumberOfJunkAssemblyTemp)) {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      MinNumberOfJunkAssemblyTemp = ec.bcf.junk_asm_min.value_or((uint32_t)MinNumberOfJunkAssembly);
+    }
 
     // Check if the number of applications is correct
     if (MaxNumberOfJunkAssemblyTemp < MinNumberOfJunkAssemblyTemp) {
@@ -388,14 +397,17 @@ struct BogusControlFlow : public FunctionPass {
   } // end of runOnFunction()
 
   void bogus(Function &F) {
-    if (!toObfuscateBoolOption(&F, "bcf_junkasm", &JunkAssemblyTemp))
-      JunkAssemblyTemp = JunkAssembly;
-    if (!toObfuscateBoolOption(&F, "bcf_onlyjunkasm", &OnlyJunkAssemblyTemp))
-      OnlyJunkAssemblyTemp = OnlyJunkAssembly;
-    if (!toObfuscateBoolOption(&F, "bcf_nested", &BCFNestedTemp))
-      BCFNestedTemp = BCFNested;
-    if (!toObfuscateBoolOption(&F, "bcf_entropy_chain", &BCFEntropyChainTemp))
-      BCFEntropyChainTemp = BCFEntropyChain;
+    {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      if (!toObfuscateBoolOption(&F, "bcf_junkasm", &JunkAssemblyTemp))
+        JunkAssemblyTemp = ec.bcf.junk_asm.value_or((bool)JunkAssembly);
+      if (!toObfuscateBoolOption(&F, "bcf_onlyjunkasm", &OnlyJunkAssemblyTemp))
+        OnlyJunkAssemblyTemp = OnlyJunkAssembly;
+      if (!toObfuscateBoolOption(&F, "bcf_nested", &BCFNestedTemp))
+        BCFNestedTemp = BCFNested;
+      if (!toObfuscateBoolOption(&F, "bcf_entropy_chain", &BCFEntropyChainTemp))
+        BCFEntropyChainTemp = ec.bcf.entropy_chain.value_or((bool)BCFEntropyChain);
+    }
     // MaxObf: override to extremes.
     // NOTE: BCFNestedTemp is intentionally NOT forced true in MaxObf mode.
     // With times=3 and prob=100, nested expansion causes exponential BB growth
@@ -945,8 +957,11 @@ struct BogusControlFlow : public FunctionPass {
                                &CreateFunctionForOpaquePredicateTemp))
       CreateFunctionForOpaquePredicateTemp = CreateFunctionForOpaquePredicate;
     if (!toObfuscateUint32Option(&F, "bcf_cond_compl",
-                                 &ConditionExpressionComplexityTemp))
-      ConditionExpressionComplexityTemp = ConditionExpressionComplexity;
+                                 &ConditionExpressionComplexityTemp)) {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      ConditionExpressionComplexityTemp =
+          ec.bcf.complexity.value_or((uint32_t)ConditionExpressionComplexity);
+    }
     // MaxObf: crank up complexity
     if (ObfuscationMaxMode) {
       if (ConditionExpressionComplexityTemp < 6)

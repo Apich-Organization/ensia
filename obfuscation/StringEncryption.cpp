@@ -63,6 +63,7 @@
 #include "include/StringEncryption.h"
 #include "include/ChaosStateMachine.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -71,6 +72,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include <regex>
 #include <unordered_set>
 #include <vector>
 #include <algorithm>
@@ -144,8 +146,10 @@ struct StringEncryption : public ModulePass {
         if (ObfVerbose) errs() << "Running StringEncryption On " << F.getName() << "\n";
 
         if (!toObfuscateUint32Option(&F, "strcry_prob",
-                                     &ElementEncryptProbTemp))
-          ElementEncryptProbTemp = ElementEncryptProb;
+                                     &ElementEncryptProbTemp)) {
+          auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
+          ElementEncryptProbTemp = ec.str_enc.probability.value_or((uint32_t)ElementEncryptProb);
+        }
 
         // Check if the number of applications is correct
         if (!((ElementEncryptProbTemp > 0) &&
@@ -223,7 +227,41 @@ struct StringEncryption : public ModulePass {
     }
   }
 
+  // Returns the effective encryption probability for a string GlobalVariable:
+  //   0   — skip (matches skip_content)
+  //   100 — force (matches force_content)
+  //   base — unchanged
+  // Only examines i8 (char) arrays; other element widths are returned as-is.
+  static uint32_t contentProb(GlobalVariable *GV, const ObfStrEncConfig &cfg,
+                               uint32_t base) {
+    if (cfg.skip_content.empty() && cfg.force_content.empty())
+      return base;
+    auto *CDS = dyn_cast<ConstantDataSequential>(GV->getInitializer());
+    if (!CDS || !CDS->getElementType()->isIntegerTy(8))
+      return base;
+    std::string content = CDS->getRawDataValues().str();
+    for (const auto &pat : cfg.skip_content) {
+      try {
+        if (std::regex_search(content,
+              std::regex(pat, std::regex::ECMAScript | std::regex::optimize)))
+          return 0;
+      } catch (const std::regex_error &) {}
+    }
+    for (const auto &pat : cfg.force_content) {
+      try {
+        if (std::regex_search(content,
+              std::regex(pat, std::regex::ECMAScript | std::regex::optimize)))
+          return 100;
+      } catch (const std::regex_error &) {}
+    }
+    return base;
+  }
+
   void HandleFunction(Function *Func) {
+    // Resolve content-pattern config once for this function.
+    Module *Mptr = Func->getParent();
+    auto ec = GObfConfig.resolve(Mptr->getSourceFileName(), Func->getName());
+
     FixFunctionConstantExpr(Func);
     SmallVector<GlobalVariable *, 32> Globals;
     std::unordered_set<User *> Users;
@@ -322,6 +360,13 @@ struct StringEncryption : public ModulePass {
         mgv2keys[globalIt->second.second] = GV2Keys[globalIt->second.second];
         continue; // 跳过生成新变量步骤
       }
+      // Per-GV content filter: skip or force-encrypt based on string content.
+      uint32_t gvProb = contentProb(GV, ec.str_enc, ElementEncryptProbTemp);
+      if (gvProb == 0)
+        continue;  // skip_content matched — leave this string unencrypted
+      uint32_t savedProb = ElementEncryptProbTemp;
+      ElementEncryptProbTemp = gvProb;  // may be 100 if force_content matched
+
       ConstantDataSequential *CDS =
           dyn_cast<ConstantDataSequential>(GV->getInitializer());
       bool rust_string = !CDS;
@@ -490,6 +535,7 @@ struct StringEncryption : public ModulePass {
       globalOld2New[GV] = std::make_pair(EncryptedRawGV, DecryptSpaceGV);
       globalProcessedGVs.insert(GV);
       old2new[GV] = globalOld2New[GV];
+      ElementEncryptProbTemp = savedProb;  // restore after processing this GV
     }
     // Now prepare ObjC new GV
     for (GlobalVariable *GV : objCStrings) {

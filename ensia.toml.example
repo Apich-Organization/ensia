@@ -1,0 +1,132 @@
+# ensia.toml — OLLVM-Next (Ensia) obfuscator configuration file
+#
+# Place as ./ensia.toml next to your build invocation, set ENSIA_CONFIG=/path/to/this,
+# or pass -ensia-config=/path/to/this to opt/clang.
+#
+# Priority chain (highest wins):
+#   source annotation  >  [[policy]] override  >  [passes.*]  >  -ensia-preset  >  [global] preset  >  cl::opt default
+#
+# Preset sizes (rough binary growth over baseline):
+#   low   — +5–15%  : Sub, MBA (shallow), BCF (sparse), ConstEnc (2-share), StrEnc (partial)
+#   mid   — +40–80% : all of the above + Vec (128-bit), Flatten, IndirBranch, stronger params
+#   high  — +2–5x   : all of the above + CSM, Vec (256-bit+shuffle), Feistel, FuncWrapper, FCO
+#   max   — +10–50x : maximum intensity — for red-team / stress testing only (-enable-maxobf)
+
+# ── Global settings ────────────────────────────────────────────────────────────
+
+[global]
+preset  = "mid"      # "low" | "mid" | "high" | "none"  (max is -enable-maxobf)
+seed    = 0x1337     # PRNG seed — change for reproducible but unique obfuscation
+verbose = false      # print "Running X on Y" per function (can flood stderr)
+trace   = false      # print step markers for hang diagnosis
+
+# ── Pass-level overrides ────────────────────────────────────────────────────────
+# All fields are optional — absent fields inherit from the preset above.
+# These override the preset values globally (all functions, all modules).
+
+[passes.bcf]
+enabled       = true
+probability   = 60      # % of basic blocks to obfuscate [0-100]
+iterations    = 1       # times to loop over each function (higher = slower compile)
+complexity    = 4       # predicate expression depth [1-10] (higher = harder to analyze)
+entropy_chain = false   # 3-way AND: CPUID & RDTSC & global-var (defeats 3 analyzer classes)
+junk_asm      = false   # inject no-op push/pop junk assembly at alteration sites
+junk_asm_min  = 2       # min junk instructions per site
+junk_asm_max  = 4       # max junk instructions per site
+
+[passes.substitution]
+enabled     = true
+probability = 60        # % of eligible integer ops to substitute
+iterations  = 1         # substitution layers (higher layers stack on previous output)
+
+[passes.mba]
+enabled     = true
+probability = 50        # % of eligible binary ops to MBA-substitute
+layers      = 2         # substitution depth [1-3] (3 is very slow to decompile)
+heuristic   = true      # inject random zero-value noise terms (harder to simplify)
+
+[passes.split_blocks]
+enabled         = true
+splits          = 3     # splits per basic block [2-10]
+stack_confusion = true  # inject balanced push/pop sequences to confuse stack analysis
+
+[passes.string_encryption]
+enabled     = true
+probability = 100       # % of string bytes to encrypt [1-100]
+
+[passes.constant_encryption]
+enabled             = true
+iterations          = 1     # encryption passes per function
+share_count         = 3     # XOR key shares [2-8] — higher = more XOR chains
+feistel             = false # add 4-round Feistel nonlinear layer (26 IR instrs/constant)
+substitute_xor      = true  # substitute XOR operators in the share-chain
+substitute_xor_prob = 40    # % of XOR ops to substitute [0-100]
+globalize           = false # replace ConstantInts with GlobalVariables
+globalize_prob      = 50    # % of ConstantInts to globalize [0-100]
+
+[passes.vector_obfuscation]
+enabled          = true
+probability      = 40       # % of eligible instructions to lift into SIMD vectors [0-100]
+width            = 128      # SIMD width in bits: 128 | 256 | 512
+shuffle          = false    # apply random shufflevector after op (breaks insert/extract patterns)
+lift_comparisons = true     # lift integer comparisons to <N x i1> vector comparisons
+
+[passes.chaos_state_machine]
+enabled         = false     # logistic-map CFF (strongest CFF, use instead of flattening)
+nested_dispatch = false     # two-level switch dispatch (more CFG explosion, slower compile)
+warmup          = 64        # logistic map warmup iterations (higher = harder to predict)
+
+[passes.flattening]
+enabled = true              # classic CFF (fallback for functions CSM couldn't handle)
+
+[passes.indirect_branch]
+enabled = true              # Knuth-hash encrypted branch targets
+
+[passes.function_wrapper]
+enabled     = false         # polymorphic proxy generation
+probability = 50            # % of call sites to wrap [0-100]
+times       = 1             # wrapper layers
+
+[passes.function_call_obfuscate]
+enabled = false             # dlopen/dlsym indirection for library calls
+
+[passes.anti_hooking]
+enabled = false             # inline-hook detection + fast-fail (environment-specific)
+
+[passes.anti_debugging]
+enabled = false             # ptrace/sysctl/timing anti-debug checks (environment-specific)
+
+[passes.anti_class_dump]
+enabled = false             # ObjC metadata scrambling (Darwin only)
+
+
+# ── Per-module / per-function policy rules ──────────────────────────────────────
+#
+# Rules are matched in order; all matching rules are merged (later rules override
+# earlier ones for each field).  'function' is optional — omit it to match at the
+# module level.  Both 'module' and 'function' are ECMAScript regular expressions
+# matched against the LLVM module source file path and function name respectively.
+#
+# Tip: run with -obf-verbose to see exact module/function names as they are processed.
+
+# Example 1: apply "high" preset to all crypto functions
+[[policy]]
+module   = ".*"
+function = ".*(?:encrypt|decrypt|cipher|hmac|hash).*"
+preset   = "high"
+
+# Example 2: don't obfuscate the main entry point (useful during debugging)
+# [[policy]]
+# module   = ".*"
+# function = "^main$"
+# passes.bcf.enabled = false
+# passes.csm.enabled = false
+# passes.flatten.enabled = false
+
+# Example 3: apply maximum BCF to a security-critical module with less MBA overhead
+# [[policy]]
+# module   = ".*auth.*"
+# passes.bcf.probability   = 90
+# passes.bcf.iterations    = 2
+# passes.bcf.entropy_chain = true
+# passes.mba.layers        = 1    # keep MBA lightweight for this module

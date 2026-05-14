@@ -17,6 +17,7 @@
  */
 
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Split.h"
 #include "include/Utils.h"
 #include "llvm/IR/InlineAsm.h"
@@ -137,10 +138,13 @@ struct SplitBasicBlock : public FunctionPass {
   SplitBasicBlock(bool flag) : FunctionPass(ID) { this->flag = flag; }
 
   bool runOnFunction(Function &F) override {
-    if (!toObfuscateUint32Option(&F, "split_num", &SplitNumTemp))
-      SplitNumTemp = SplitNum;
-    if (!toObfuscateBoolOption(&F, "split_stackconf", &StackConfusionTemp))
-      StackConfusionTemp = StackConfusion;
+    {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      if (!toObfuscateUint32Option(&F, "split_num", &SplitNumTemp))
+        SplitNumTemp = ec.split.splits.value_or((uint32_t)SplitNum);
+      if (!toObfuscateBoolOption(&F, "split_stackconf", &StackConfusionTemp))
+        StackConfusionTemp = ec.split.stack_confusion.value_or((bool)StackConfusion);
+    }
 
     // Check if the number of applications is correct
     if (!((SplitNumTemp > 1) && (SplitNumTemp <= 10))) {

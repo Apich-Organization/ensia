@@ -1,0 +1,54 @@
+# lite.toml — Ensia config for obf_test_lite.cpp
+#
+# This file targets the minimal test binary (core_logic + main).
+# Goal: demonstrate per-function policy rules on a simple codebase.
+#
+# Usage:
+#   clang++ -Xclang -load -Xclang ./build/obfuscation/libEnsia.so -mllvm -ensia-config=test/configs/lite.toml \
+#         test/obf_test_lite.cpp -o obf_test_lite_obf
+
+[global]
+preset = "low"
+verbose = true
+
+# Override the global defaults for string encryption:
+# skip the usage/help message (not security-sensitive).
+[passes.string_encryption]
+enabled = true
+probability = 100
+skip_content = ["Usage:"] # "Usage: %s <number>\n" is benign
+
+[passes.bcf]
+enabled = true
+probability = 45
+
+[passes.substitution]
+enabled = true
+probability = 50
+
+[passes.mba]
+enabled = true
+layers = 1
+heuristic = false
+
+# ── Per-function rules ────────────────────────────────────────────────────────
+
+# core_logic: the interesting function — apply heavier obfuscation
+[[policy]]
+module = ".*obf_test_lite.*"
+function = "^core_logic$"
+preset = "mid"               # upgrade to mid for this function
+
+[passes.constant_encryption]
+enabled = true
+share_count = 3
+
+# main: argument parsing only — strip heavy passes to keep startup fast
+[[policy]]
+module = ".*obf_test_lite.*"
+function = "^main$"
+passes.bcf.enabled = false
+passes.substitution.enabled = false
+passes.mba.enabled = false
+passes.constant_encryption.enabled = false
+passes.string_encryption.skip_content = ["Usage:"]

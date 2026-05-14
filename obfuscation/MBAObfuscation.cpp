@@ -96,6 +96,7 @@
 
 #include "include/MBAObfuscation.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -639,12 +640,15 @@ struct MBAObfuscation : public FunctionPass {
   bool runOnFunction(Function &F) override {
     if (!toObfuscate(flag, &F, "mba"))
       return false;
-    if (!toObfuscateUint32Option(&F, "mba_prob", &MBAProbRateTemp))
-      MBAProbRateTemp = MBAProbRate;
-    if (!toObfuscateUint32Option(&F, "mba_layers", &MBALayersTemp))
-      MBALayersTemp = MBALayers;
-    if (!toObfuscateBoolOption(&F, "mba_heuristic", &MBAHeuristicTemp))
-      MBAHeuristicTemp = MBAHeuristic;
+    {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      if (!toObfuscateUint32Option(&F, "mba_prob", &MBAProbRateTemp))
+        MBAProbRateTemp = ec.mba.probability.value_or((uint32_t)MBAProbRate);
+      if (!toObfuscateUint32Option(&F, "mba_layers", &MBALayersTemp))
+        MBALayersTemp = ec.mba.layers.value_or((uint32_t)MBALayers);
+      if (!toObfuscateBoolOption(&F, "mba_heuristic", &MBAHeuristicTemp))
+        MBAHeuristicTemp = ec.mba.heuristic.value_or((bool)MBAHeuristic);
+    }
     MBAProbRateTemp = std::min(MBAProbRateTemp, (uint32_t)100);
     MBALayersTemp   = std::clamp(MBALayersTemp, (uint32_t)1, (uint32_t)3);
 

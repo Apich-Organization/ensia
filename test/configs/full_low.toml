@@ -1,0 +1,49 @@
+# full_low.toml — Ensia config for obf_test.cpp (low preset baseline)
+#
+# Exercises the low preset across the full test suite.
+# Notable policy: lighten BCF on the recursive fibonacci to avoid stack blowup.
+#
+# Usage:
+#   clang++ -Xclang -load -Xclang ./build/obfuscation/libEnsia.so -mllvm -ensia-config=test/configs/full_low.toml \
+#         test/obf_test.cpp -o obf_test_low
+
+[global]
+preset = "low"
+verbose = true
+
+# Encrypt all strings globally, but skip the printf format strings (not secrets)
+[passes.string_encryption]
+enabled = true
+probability = 80
+skip_content = ["%s", "%d", "PASS", "FAIL", "Running"]
+
+# Use a 2-share XOR for the few constants in int_arith / shift_ops
+[passes.constant_encryption]
+enabled = true
+share_count = 2
+
+# ── Per-function rules ────────────────────────────────────────────────────────
+
+# fibonacci: annotated nofla in source; also lighten BCF and disable CSM
+# to keep the recursive call overhead bounded.
+[[policy]]
+module = ".*obf_test.*"
+function = "fibonacci"
+passes.bcf.probability = 20
+passes.bcf.iterations = 1
+passes.chaos_state_machine.enabled = false
+passes.flattening.enabled = false
+
+# dispatch: switch-based — BCF is fine but skip MBA (switch arms stay clean)
+[[policy]]
+module = ".*obf_test.*"
+function = "^dispatch$"
+passes.mba.enabled = false
+
+# main: entry point — no obfuscation (correctness canary)
+[[policy]]
+module = ".*obf_test.*"
+function = "^main$"
+passes.bcf.enabled = false
+passes.substitution.enabled = false
+passes.mba.enabled = false

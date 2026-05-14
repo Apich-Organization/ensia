@@ -18,9 +18,11 @@
 
 #include "include/ConstantEncryption.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/SubstituteImpl.h"
 #include "include/Utils.h"
 #include "include/compat/CallSite.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -29,6 +31,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/NoFolder.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include <regex>
 #include <unordered_set>
 
 using namespace llvm;
@@ -163,37 +166,42 @@ struct ConstantEncryption : public ModulePass {
       if (toObfuscate(flag, &F, "constenc") && !F.isPresplitCoroutine()) {
         if (ObfVerbose) errs() << "Running ConstantEncryption On " << F.getName() << "\n";
         FixFunctionConstantExpr(&F);
-        if (!toObfuscateUint32Option(&F, "constenc_times", &ObfTimesTemp))
-          ObfTimesTemp = ObfTimes;
-        if (!toObfuscateBoolOption(&F, "constenc_togv", &ConstToGVTemp))
-          ConstToGVTemp = ConstToGV;
-        if (!toObfuscateBoolOption(&F, "constenc_subxor", &SubstituteXorTemp))
-          SubstituteXorTemp = SubstituteXor;
-        if (!toObfuscateUint32Option(&F, "constenc_subxor_prob",
-                                     &SubstituteXorProbTemp))
-          SubstituteXorProbTemp = SubstituteXorProb;
-        if (!toObfuscateUint32Option(&F, "constenc_kshare", &KShareCountTemp))
-          KShareCountTemp = KShareCount;
-        if (KShareCountTemp < 2) KShareCountTemp = 2;
-        if (KShareCountTemp > 8) KShareCountTemp = 8;
-        if (ObfuscationMaxMode) KShareCountTemp = 4;
-        if (!toObfuscateBoolOption(&F, "constenc_feistel", &FeistelTierTemp))
-          FeistelTierTemp = FeistelTier;
-        if (ObfuscationMaxMode) FeistelTierTemp = true;
+        std::vector<std::string> skipVal, forceVal;
+        {
+          auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+          if (!toObfuscateUint32Option(&F, "constenc_times", &ObfTimesTemp))
+            ObfTimesTemp = ec.const_enc.iterations.value_or((uint32_t)ObfTimes);
+          if (!toObfuscateBoolOption(&F, "constenc_togv", &ConstToGVTemp))
+            ConstToGVTemp = ec.const_enc.globalize.value_or((bool)ConstToGV);
+          if (!toObfuscateBoolOption(&F, "constenc_subxor", &SubstituteXorTemp))
+            SubstituteXorTemp = ec.const_enc.substitute_xor.value_or((bool)SubstituteXor);
+          if (!toObfuscateUint32Option(&F, "constenc_subxor_prob",
+                                       &SubstituteXorProbTemp))
+            SubstituteXorProbTemp = ec.const_enc.substitute_xor_prob.value_or((uint32_t)SubstituteXorProb);
+          if (!toObfuscateUint32Option(&F, "constenc_kshare", &KShareCountTemp))
+            KShareCountTemp = ec.const_enc.share_count.value_or((uint32_t)KShareCount);
+          if (KShareCountTemp < 2) KShareCountTemp = 2;
+          if (KShareCountTemp > 8) KShareCountTemp = 8;
+          if (ObfuscationMaxMode) KShareCountTemp = 4;
+          if (!toObfuscateBoolOption(&F, "constenc_feistel", &FeistelTierTemp))
+            FeistelTierTemp = ec.const_enc.feistel.value_or((bool)FeistelTier);
+          if (ObfuscationMaxMode) FeistelTierTemp = true;
+          if (!toObfuscateUint32Option(&F, "constenc_togv_prob", &ConstToGVProbTemp))
+            ConstToGVProbTemp = ec.const_enc.globalize_prob.value_or((uint32_t)ConstToGVProb);
+          skipVal  = ec.const_enc.skip_value;
+          forceVal = ec.const_enc.force_value;
+        }
         if (SubstituteXorProbTemp > 100) {
           errs() << "-constenc_subxor_prob=x must be 0 < x <= 100";
           return false;
         }
-        if (!toObfuscateUint32Option(&F, "constenc_togv_prob",
-                                     &ConstToGVProbTemp))
-          ConstToGVProbTemp = ConstToGVProb;
         if (ConstToGVProbTemp > 100) {
           errs() << "-constenc_togv_prob=x must be 0 < x <= 100";
           return false;
         }
         uint32_t times = ObfTimesTemp;
         while (times) {
-          EncryptConstants(F);
+          EncryptConstants(F, skipVal, forceVal);
           if (ConstToGVTemp) {
             Constant2GlobalVariable(F);
           }
@@ -261,7 +269,43 @@ struct ConstantEncryption : public ModulePass {
     return false;
   }
 
-  void EncryptConstants(Function &F) {
+  // Returns the hex string "0x<UPPER_HEX>" for a ConstantInt (used for
+  // skip_value / force_value pattern matching).
+  static std::string ciHex(const ConstantInt *CI) {
+    llvm::SmallString<32> buf;
+    CI->getValue().toString(buf, 16, /*Signed=*/false);
+    return "0x" + buf.str().upper();  // StringRef::upper() returns std::string
+  }
+
+  // Checks ci's value against skip/force patterns (case-insensitive hex match).
+  // Returns: -1 = skip, +1 = force, 0 = normal probability.
+  static int valueGate(const ConstantInt *CI,
+                       const std::vector<std::string> &skipPats,
+                       const std::vector<std::string> &forcePats) {
+    if (skipPats.empty() && forcePats.empty()) return 0;
+    std::string hex = ciHex(CI);
+    for (const auto &pat : skipPats) {
+      try {
+        if (std::regex_search(hex,
+              std::regex(pat, std::regex::ECMAScript |
+                              std::regex::icase | std::regex::optimize)))
+          return -1;
+      } catch (const std::regex_error &) {}
+    }
+    for (const auto &pat : forcePats) {
+      try {
+        if (std::regex_search(hex,
+              std::regex(pat, std::regex::ECMAScript |
+                              std::regex::icase | std::regex::optimize)))
+          return +1;
+      } catch (const std::regex_error &) {}
+    }
+    return 0;
+  }
+
+  void EncryptConstants(Function &F,
+                        const std::vector<std::string> &skipVal = {},
+                        const std::vector<std::string> &forceVal = {}) {
     SmallVector<std::pair<Instruction *, unsigned>, 64> targets;
     SmallVector<GlobalVariable *, 32> gvTargets;
     
@@ -294,11 +338,17 @@ struct ConstantEncryption : public ModulePass {
     }
 
     for (auto &T : targets) {
-      if (cryptoutils->get_range(100) < currentProb)
+      const ConstantInt *CI = cast<ConstantInt>(T.first->getOperand(T.second));
+      int gate = valueGate(CI, skipVal, forceVal);
+      if (gate < 0) continue;                            // skip_value matched
+      if (gate > 0 || cryptoutils->get_range(100) < currentProb)
         HandleConstantIntOperand(T.first, T.second);
     }
     for (GlobalVariable *G : gvTargets) {
-      if (cryptoutils->get_range(100) < currentProb)
+      const ConstantInt *CI = cast<ConstantInt>(G->getInitializer());
+      int gate = valueGate(CI, skipVal, forceVal);
+      if (gate < 0) continue;                            // skip_value matched
+      if (gate > 0 || cryptoutils->get_range(100) < currentProb)
         HandleConstantIntInitializerGV(G);
     }
   }

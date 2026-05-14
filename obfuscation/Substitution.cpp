@@ -18,6 +18,7 @@
 
 #include "include/Substitution.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/SubstituteImpl.h"
 #include "include/Utils.h"
 #include "llvm/ADT/Statistic.h"
@@ -62,10 +63,14 @@ struct Substitution : public FunctionPass {
   Substitution() : FunctionPass(ID) { this->flag = true; }
 
   bool runOnFunction(Function &F) override {
-    if (!toObfuscateUint32Option(&F, "sub_loop", &ObfTimesTemp))
-      ObfTimesTemp = ObfTimes;
-    if (!toObfuscateUint32Option(&F, "sub_prob", &ObfProbRateTemp))
-      ObfProbRateTemp = ObfProbRate;
+    if (!toObfuscateUint32Option(&F, "sub_loop", &ObfTimesTemp)) {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      ObfTimesTemp = ec.sub.iterations.value_or((uint32_t)ObfTimes);
+    }
+    if (!toObfuscateUint32Option(&F, "sub_prob", &ObfProbRateTemp)) {
+      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      ObfProbRateTemp = ec.sub.probability.value_or((uint32_t)ObfProbRate);
+    }
 
     // Check if the percentage is correct
     if (ObfTimesTemp <= 0) {
