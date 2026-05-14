@@ -52,6 +52,7 @@ Copyright © 2026 Xinyu Yang (<Xinyu.Yang@apich.org>)
 
 **Third Party Copyrights:**
 * Copyright © 2013-2026 Niels Lohmann (nlohmann/json)
+* Copyright © 2020-2026 Mark Gillard <mark.gillard@outlook.com.au> (marzer/tomlplusplus)
 
 ---
 
