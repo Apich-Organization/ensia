@@ -69,3 +69,5 @@ Testing/
 .cache/
 test/obf_test_max.bc
 test/obf_test.bc
+test/obf_test_lite_max.bc
+test/obf_test_lite.bc
