@@ -1,0 +1,55 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  Ensia (OLLVM-Next): A Chaos-Based High-Entropy Obfuscation
+  Framework for LLVM IR with Dual-Use Security Protocols
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Xinyu
+    family-names: Yang
+    email: Xinyu.Yang@apich.org
+    orcid: 'https://orcid.org/0009-0007-2600-0948'
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.20149843
+repository-code: 'https://github.com/Apich-Organization/ensia'
+url: 'https://ensia.apich.org'
+repository-artifact: 'https://github.com/Apich-Organization/ensia/releases'
+abstract: >-
+  This work introduces Ensia (OLLVM-Next), an experimental
+  LLVM-based (v18+) obfuscation framework designed for
+  advanced software protection and cybersecurity research.
+  To counter automated de-obfuscation via symbolic
+  execution, Ensia implements a Chaos-based State Machine
+  (CSM) that utilizes quadratic Logistic Maps to generate
+  non-linear, high-entropy control-flow trajectories. The
+  framework integrates a multi-tier deterministic scheduler
+  comprising Vector-Space Obfuscation (SIMD-Lifting) for
+  scalar-to-vector instruction mapping, multi-term Mixed
+  Boolean-Arithmetic (MBA) for logic-layer concealment, and
+  a constant encryption engine utilizing k-share XOR
+  ensembles and Feistel networks. Given the dual-use nature
+  of code obfuscation, this project is published under the
+  AGPL-3.0 license for legitimate defensive research and
+  intellectual property protection; the author explicitly
+  disclaims liability for misuse in malicious contexts and
+  mandates adherence to international dual-use technology
+  regulations and ethical computing standards.
+keywords:
+  - LLVM Obfuscation
+  - Chaos-based State Machine (CSM)
+  - Vector-Space Lifting (SIMD)
+  - Mixed Boolean-Arithmetic (MBA)
+  - Control-Flow Flattening (CFF)
+  - Software Protection
+  - Dual-Use Technology
+  - Reverse Engineering Countermeasures
+license: AGPL-3.0-only
+commit: dc782c1596eb9a5c8a19338a3b3918a6b76943d7
+version: v0.1.0
+date-released: '2026-05-14'
