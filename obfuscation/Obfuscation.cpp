@@ -46,15 +46,17 @@
 //                                        EH pads, coroutines, ≤1 block, etc.)
 //     g. VectorObfuscation            — SIMD scalar→vector lifting
 //                                       (runs last so even CFF dispatch gets lifted)
-//  7. FeatureElimination   (module)   — strip debug/ident/names, scramble privates
-//  8. ConstantEncryption   (module)   — k-share XOR ensemble + Feistel nonlinear layer
+//  7. ConstantEncryption   (module)   — k-share XOR ensemble + Feistel nonlinear layer
 //                                       (runs after Sub/MBA so it also encrypts their
 //                                        injected constants; Feistel adds 26 IR instrs
 //                                        per constant on top of the XOR share chain)
-//  9. IndirectBranch       (function) — Knuth-hash encrypted branch targets
+//  8. IndirectBranch       (function) — Knuth-hash encrypted branch targets
 //                                       (sees the Flatten/CSM switch tables)
-// 10. FunctionWrapper      (module)   — polymorphic proxy generation
+//  9. FunctionWrapper      (module)   — polymorphic proxy generation
 //                                       (wraps fully-obfuscated functions)
+// 10. FeatureElimination   (module)   — strip debug/ident/names, scramble privates
+//                                       MUST run last so TOML policy name-matching
+//                                       works correctly in all preceding passes.
 // 11. Cleanup: remove ensia_* marker declarations
 //
 // ── Ordering rationale ────────────────────────────────────────────────────────
@@ -235,21 +237,31 @@ static void LoadEnv() {
 // Config file is searched:  -ensia-config flag  >  ENSIA_CONFIG env  >  ./ensia.toml
 static void loadObfConfig() {
   std::string path = ObfConfigFile;
+  bool explicitConfig = !path.empty(); // -ensia-config was given explicitly
   if (path.empty()) {
-    if (const char *env = getenv("ENSIA_CONFIG"))
+    if (const char *env = getenv("ENSIA_CONFIG")) {
       path = env;
+      explicitConfig = true; // env var also counts as explicit intent
+    }
   }
   if (path.empty()) {
     if (llvm::sys::fs::exists("ensia.toml"))
       path = "ensia.toml";
+    // auto-discovered ensia.toml does NOT auto-enable — it's just a parameter
+    // file, not an obfuscation request.
   }
 
   // Step 1: load file (this applies the file's [global] preset internally,
   // then overlays [passes.*] sections on top of it).
-  if (!path.empty())
+  if (!path.empty()) {
     GObfConfig = ObfGlobalConfig::loadFromFile(path);
-  else
+    // An explicit config file signals intent to obfuscate — auto-enable the
+    // master gate so the user doesn't also need to pass -mllvm -ensia.
+    if (explicitConfig)
+      EnableIRObfusaction = true;
+  } else {
     GObfConfig = ObfGlobalConfig::defaults();
+  }
 
   // Step 2: if -ensia-preset is given on the command line, it overrides
   // the file's [global] preset while preserving explicit [passes.*] settings.
@@ -614,28 +626,24 @@ struct Obfuscation : public ModulePass {
     }
     if (ObfTrace) errs() << "[OLLVM-Next][6] per-function loop: done\n";
 
-    // ── 7. Feature Elimination ─────────────────────────────────────────────
-    // Strip debug info, source filenames, compiler fingerprints, and rename
-    // private symbols so no diagnostic artifact leaks into the final binary.
-    if (ObfTrace) errs() << "[OLLVM-Next][7] FeatureElimination\n";
-    runFeatureElimination(M);
-    if (ObfTrace) errs() << "[OLLVM-Next][7] FeatureElimination: done\n";
-
-    // ── 8. ConstantEncryption ──────────────────────────────────────────────
+    // ── 7. ConstantEncryption ─────────────────────────────────────────────
     // Runs after all per-function passes so it also encrypts constants that
     // were injected by Sub, MBA, BCF, and Vec.  Feistel tier adds a nonlinear
     // layer (26 IR instructions per constant) on top of the k-share XOR chain.
-    if (ObfTrace) errs() << "[OLLVM-Next][8] ConstantEncryption\n";
+    // Must run BEFORE FeatureElimination (step 9) so TOML policy module/function
+    // name regexes can still match the original source file and function names.
+    if (ObfTrace) errs() << "[OLLVM-Next][7] ConstantEncryption\n";
     {
       ModulePass *MP = createConstantEncryptionPass(
           EnableAllObfuscation || EnableConstantEncryption);
       MP->runOnModule(M);
       delete MP;
     }
-    if (ObfTrace) errs() << "[OLLVM-Next][8] ConstantEncryption: done\n";
+    if (ObfTrace) errs() << "[OLLVM-Next][7] ConstantEncryption: done\n";
 
-    // ── 9. IndirectBranch (Knuth-hash encrypted targets) ──────────────────
-    if (ObfTrace) errs() << "[OLLVM-Next][9] IndirectBranch\n";
+    // ── 8. IndirectBranch (Knuth-hash encrypted targets) ─────────────────
+    // Also before FeatureElimination for the same naming reason.
+    if (ObfTrace) errs() << "[OLLVM-Next][8] IndirectBranch\n";
     {
       FunctionPass *P = createIndirectBranchPass(
           EnableAllObfuscation || EnableIndirectBranching);
@@ -644,17 +652,28 @@ struct Obfuscation : public ModulePass {
           P->runOnFunction(F);
       delete P;
     }
-    if (ObfTrace) errs() << "[OLLVM-Next][9] IndirectBranch: done\n";
+    if (ObfTrace) errs() << "[OLLVM-Next][8] IndirectBranch: done\n";
 
-    // ── 10. FunctionWrapper (polymorphic proxies) ─────────────────────────
-    if (ObfTrace) errs() << "[OLLVM-Next][10] FunctionWrapper\n";
+    // ── 9. FunctionWrapper (polymorphic proxies) ──────────────────────────
+    // Also before FeatureElimination for the same naming reason.
+    if (ObfTrace) errs() << "[OLLVM-Next][9] FunctionWrapper\n";
     {
       ModulePass *MP = createFunctionWrapperPass(
           EnableAllObfuscation || EnableFunctionWrapper);
       MP->runOnModule(M);
       delete MP;
     }
-    if (ObfTrace) errs() << "[OLLVM-Next][10] FunctionWrapper: done\n";
+    if (ObfTrace) errs() << "[OLLVM-Next][9] FunctionWrapper: done\n";
+
+    // ── 10. Feature Elimination ────────────────────────────────────────────
+    // Runs LAST — after all obfuscation passes have finished — so that:
+    //   • TOML policy module/function regexes can match original names in all
+    //     passes above (ConstantEncryption, IndirectBranch, FunctionWrapper).
+    //   • Renamed private functions (_f<hex>) and the "a" source filename don't
+    //     interfere with policy resolution in any pass.
+    if (ObfTrace) errs() << "[OLLVM-Next][10] FeatureElimination\n";
+    runFeatureElimination(M);
+    if (ObfTrace) errs() << "[OLLVM-Next][10] FeatureElimination: done\n";
 
     // ── 11. Cleanup marker declarations ───────────────────────────────────
     SmallVector<Function *, 8> toDelete;
@@ -686,6 +705,9 @@ struct Obfuscation : public ModulePass {
 ModulePass *createObfuscationLegacyPass() {
   LoadEnv();
   loadObfConfig();
+  if (!EnableIRObfusaction)
+    return new Obfuscation(); // gate off — runOnModule will return false immediately
+
   // Config file may specify a seed; cl::opt -aesSeed overrides it.
   uint64_t seed = (AesSeed != 0x1337) ? (uint64_t)AesSeed
                 : (GObfConfig.seed != 0 ? GObfConfig.seed : 0x1337);
@@ -730,11 +752,30 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
   return {
       LLVM_PLUGIN_API_VERSION, "OLLVM-Next", LLVM_VERSION_STRING,
       [](PassBuilder &PB) {
+        // ── Auto-inject via optimizer-last EP ─────────────────────────────────
+        // Fires during pipeline construction (including O0) so -Xclang -load is
+        // enough — the user doesn't need to also spell out -passes=ensia.
+        // LoadEnv()/loadObfConfig() are called here so the TOML file and env
+        // vars are honoured before the pass checks EnableIRObfusaction.
+        PB.registerOptimizerLastEPCallback(
+            [](ModulePassManager &MPM, OptimizationLevel, ThinOrFullLTOPhase) {
+              static bool s_ep_added = false;
+              if (s_ep_added) return;
+              LoadEnv();
+              loadObfConfig();
+              if (!EnableIRObfusaction) return;
+              s_ep_added = true;
+              MPM.addPass(ObfuscationPass());
+            });
+
+        // ── Explicit -passes=ensia[<inner-opts>] ─────────────────────────────
+        // Also supports the classic explicit form so both invocation styles work.
         PB.registerPipelineParsingCallback(
             [](StringRef Name, ModulePassManager &MPM,
                ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
               if (Name != EnableIRObfusaction.ArgStr)
                 return false;
+              static bool s_pp_added = false;
               EnableIRObfusaction = true;
               for (const auto &E : InnerPipeline) {
                 auto n = E.Name;
@@ -758,7 +799,10 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
                 else if (n == EnableMaxObfuscation.ArgStr)    EnableMaxObfuscation = true;
                 else if (n == EnableMedObfuscation.ArgStr)    EnableMedObfuscation = true;
               }
-              MPM.addPass(ObfuscationPass());
+              if (!s_pp_added) {
+                s_pp_added = true;
+                MPM.addPass(ObfuscationPass());
+              }
               return true;
             });
       }};
