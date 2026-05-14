@@ -17,7 +17,7 @@
  */
 
 #include "include/FunctionCallObfuscate.h"
-#include "json.hpp"
+#include "include/json.hpp"
 #if LLVM_VERSION_MAJOR >= 17
 #include "llvm/ADT/SmallString.h"
 #include "llvm/TargetParser/Triple.h"
