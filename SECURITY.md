@@ -4,8 +4,8 @@
 
 | Branch | Support Status |
 | :--- | :--- |
-| 1.0.x | Active Support |
-| < 1.0.0 | End of Life (Unsupported) |
+| 0.1.x | Active Support |
+| < 0.1.0 | End of Life (Unsupported) |
 
 ## Reporting a Vulnerability
 
