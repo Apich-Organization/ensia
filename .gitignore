@@ -81,3 +81,5 @@ obf_test_full_high_obf_2
 obf_test_full_high_obf_3
 obf_test_full_high_obf_5
 obf_test_full_high_obf_6
+web/target/
+web/dist/

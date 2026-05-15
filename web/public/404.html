@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Ensia</title></head>
+<script>
+  // Redirect deep links back to the SPA root, preserving hash navigation.
+  var seg = window.location.pathname.split('/').slice(0, 2).join('/');
+  var rest = window.location.pathname.slice(seg.length);
+  window.location.replace(
+    window.location.protocol + '//' + window.location.host + seg +
+    '/#' + (rest || '/') + window.location.search
+  );
+</script>
+</html>

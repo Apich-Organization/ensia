@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mist">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Ensia — Next-generation LLVM IR obfuscation. Open-source, principled, precise." />
+  <title>Ensia — LLVM Obfuscation</title>
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    crossorigin="anonymous"
+    onload="document.addEventListener('katex-ready', renderKatex)"></script>
+
+  <!-- Trunk asset pipeline -->
+  <link data-trunk rel="css" href="style.css" />
+  <link data-trunk rel="copy-file" href="../logo.svg" />
+  <link data-trunk rel="rust" />
+
+  <!-- Favicon using project logo -->
+  <link rel="icon" type="image/svg+xml" href="logo.svg" />
+
+  <script>
+    window.renderKatex = function () {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$',   display: false },
+          ],
+          throwOnError: false,
+        });
+      }
+    };
+
+    // Called from WASM after each page navigation
+    window.triggerKatex = function () {
+      if (window.renderMathInElement) {
+        renderKatex();
+      } else {
+        // KaTeX not ready yet; it will auto-render on 'katex-ready'
+      }
+    };
+
+    window.copyText = async function (text) {
+      try { await navigator.clipboard.writeText(text); return true; }
+      catch (_) { return false; }
+    };
+
+    window.downloadText = function (filename, text) {
+      var blob = new Blob([text], { type: 'text/plain' });
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a');
+      a.href     = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+  </script>
+</head>
+<body>
+  <!-- Leptos mounts here -->
+</body>
+</html>
