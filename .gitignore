@@ -83,3 +83,6 @@ obf_test_full_high_obf_5
 obf_test_full_high_obf_6
 web/target/
 web/dist/
+anti.patch
+obf_test_high_anti
+obf_test_high_anti_1

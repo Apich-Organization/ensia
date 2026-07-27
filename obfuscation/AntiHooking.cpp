@@ -45,6 +45,7 @@
 #include "llvm/Support/raw_ostream.h"
 #if LLVM_VERSION_MAJOR >= 17
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/TargetParser/Triple.h"
 #else
 #include "llvm/ADT/Triple.h"
@@ -72,6 +73,11 @@
 #define X86_64_JMP_SHORT   0xEBu   // jmp rel8 — Detours compact trampoline
 #define X86_64_MOV_EDI_EDI_B0 0x8Bu // MOV EDI, EDI = 8B FF (Detours 2.x marker)
 #define X86_64_MOV_EDI_EDI_B1 0xFFu
+// FF 25 xx xx xx xx — JMP [RIP+disp32], the canonical Frida/ELF-PLT stub on Linux.
+// This is the most prevalent hook pattern on Linux x86_64 because the dynamic linker
+// resolves PLT entries using exactly this encoding in the .plt.sec section.
+#define X86_64_JMP_INDIR      0xFFu
+#define X86_64_JMP_INDIR_B1   0x25u
 
 // AArch64 Windows Detours-style hook opcodes (16-byte trampoline)
 // byte[0:3] can be B rel26 (same as Darwin/Linux) or LDR x17, [pc,#8]
@@ -229,6 +235,9 @@ struct AntiHook : public ModulePass {
              triple.getArch() == Triple::x86_64) &&
             !triple.isOSWindows() && CheckInlineHookX86Temp) {
           HandleInlineHookX86_64(&F);
+          // Scatter additional hook checks throughout the function body so a
+          // patcher cannot defeat detection by patching just the prologue check.
+          InjectScatteredHookChecks(&F);
         }
         // Windows inline hook detection (x86_64 and AArch64)
         if (!toObfuscateBoolOption(&F, "ah_inline_win", &CheckInlineHookWinTemp))
@@ -392,14 +401,30 @@ struct AntiHook : public ModulePass {
     CreateCallbackAndJumpBack(&IRBB, C);
   }
 
-  // ── x86_64 inline hook detection (OLLVM-Next new) ───────────────────────────
+  // ── x86_64 inline hook detection (OLLVM-Next) ──────────────────────────────
   //
-  // Detects prologue patches of the form:
-  //   E9 xx xx xx xx           jmp rel32       (Substrate/DYLD_INSERT classic)
-  //   48 B8 xx..xx FF E0       movabs rax+jmp  (Frida-style long stub)
+  // Three-stage prologue scanner covering the most common hook encodings:
   //
-  // Reads byte[0] and byte[1] of the function prologue via GEP on i8.
-  // Branch: if hook detected → HookDetectedHandler; else → original BB.
+  //  Stage 1 — E9 xx xx xx xx        jmp rel32
+  //    Classic 5-byte trampoline used by Substrate, Frida (macOS), MS Detours.
+  //    byte[0] == 0xE9 is unambiguous: no legitimate x86_64 prologue starts
+  //    with a forward unconditional jump.
+  //
+  //  Stage 2 — 48 B8 <imm64> FF E0   movabs rax, imm64 + jmp rax
+  //    10-byte absolute stub used by Frida (macOS/Windows) and frida-gum.
+  //    Both bytes must match: 0x48 is the REX.W prefix for _many_ prologue
+  //    instructions (push rbp = 55, sub rsp = 48 83 EC …), so we MUST verify
+  //    byte[1] == 0xB8 before flagging.
+  //
+  //  Stage 3 — FF 25 <disp32>        jmp [RIP+disp32]
+  //    6-byte indirect jump through the GOT/PLT, the canonical Frida-Linux hook
+  //    pattern and standard ELF PLT stub form.  byte[0]==0xFF and byte[1]==0x25
+  //    together are conclusive.
+  //
+  // CFG after transformation:
+  //   A (empty entry) → Detect → Detect2 → Detect3 → C (original body)
+  //                         ↘        ↘         ↘
+  //                          B        B          B   (handler → 3-layer exit)
   void HandleInlineHookX86_64(Function *F) {
     BasicBlock *A = &(F->getEntryBlock());
     BasicBlock *C = A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
@@ -409,39 +434,58 @@ struct AntiHook : public ModulePass {
         BasicBlock::Create(F->getContext(), "HookDetect.x86", F);
     BasicBlock *Detect2 =
         BasicBlock::Create(F->getContext(), "HookDetect2.x86", F);
+    BasicBlock *Detect3 =
+        BasicBlock::Create(F->getContext(), "HookDetect3.x86", F);
     A->getTerminator()->eraseFromParent();
     BranchInst::Create(Detect, A);
 
-    IRBuilder<> IRBDetect(Detect);
-    IRBuilder<> IRBDetect2(Detect2);
-    IRBuilder<> IRBB(B);
-
     LLVMContext &Ctx = F->getContext();
-    Type *Int8Ty = Type::getInt8Ty(Ctx);
+    Type *Int8Ty  = Type::getInt8Ty(Ctx);
     Type *Int64Ty = Type::getInt64Ty(Ctx);
-    Type *PtrTy = getOpaquePtrTy(Ctx);
+    Type *PtrTy   = getOpaquePtrTy(Ctx);
 
-    // byte[0] of function
-    Value *FPtr = IRBDetect.CreateBitCast(F, PtrTy);
-    Value *Byte0 = IRBDetect.CreateLoad(Int8Ty, FPtr, "ah.x86.b0");
-    // Check for 0xE9 (jmp rel32)
-    Value *IsJmpRel32 = IRBDetect.CreateICmpEQ(
-        Byte0, ConstantInt::get(Int8Ty, X86_64_JMP_REL32), "ah.x86.jmp");
-    // Check for 0x48 (REX.W prefix, likely movabs rax, imm64)
-    Value *IsREXW = IRBDetect.CreateICmpEQ(
-        Byte0, ConstantInt::get(Int8Ty, X86_64_MOVABS_RAX), "ah.x86.rex");
-    Value *IsSuspect = IRBDetect.CreateOr(IsJmpRel32, IsREXW, "ah.x86.susp");
-    IRBDetect.CreateCondBr(IsSuspect, B, Detect2);
+    // ── Stage 1: byte[0] == 0xE9 (jmp rel32) ──────────────────────────────
+    IRBuilder<> IRBDet1(Detect);
+    Value *FPtr1  = IRBDet1.CreateBitCast(F, PtrTy);
+    Value *Byte0  = IRBDet1.CreateLoad(Int8Ty, FPtr1, "ah.b0");
+    Value *IsE9   = IRBDet1.CreateICmpEQ(
+        Byte0, ConstantInt::get(Int8Ty, X86_64_JMP_REL32), "ah.e9");
+    IRBDet1.CreateCondBr(IsE9, B, Detect2);
 
-    // If REX.W: verify byte[1] == 0xB8 (movabs rax encoding)
-    Value *FPtrInt = IRBDetect2.CreatePtrToInt(F, Int64Ty);
-    Value *Byte1Ptr = IRBDetect2.CreateIntToPtr(
-        IRBDetect2.CreateAdd(FPtrInt, ConstantInt::get(Int64Ty, 1)), PtrTy);
-    Value *Byte1 = IRBDetect2.CreateLoad(Int8Ty, Byte1Ptr, "ah.x86.b1");
-    Value *IsMovabsRax = IRBDetect2.CreateICmpEQ(
-        Byte1, ConstantInt::get(Int8Ty, 0xB8u), "ah.x86.movabs");
-    IRBDetect2.CreateCondBr(IsMovabsRax, B, C);
+    // ── Stage 2: byte[0]==0x48 AND byte[1]==0xB8 (movabs rax, imm64) ──────
+    IRBuilder<> IRBDet2(Detect2);
+    Value *FPtrI2  = IRBDet2.CreatePtrToInt(F, Int64Ty);
+    Value *B0D2    = IRBDet2.CreateLoad(Int8Ty,
+        IRBDet2.CreateIntToPtr(FPtrI2, PtrTy), "ah.b0d2");
+    Value *B1D2    = IRBDet2.CreateLoad(Int8Ty,
+        IRBDet2.CreateIntToPtr(
+            IRBDet2.CreateAdd(FPtrI2, ConstantInt::get(Int64Ty, 1)), PtrTy),
+        "ah.b1d2");
+    Value *IsREXW  = IRBDet2.CreateICmpEQ(
+        B0D2, ConstantInt::get(Int8Ty, X86_64_MOVABS_RAX), "ah.rex");
+    Value *IsB8    = IRBDet2.CreateICmpEQ(
+        B1D2, ConstantInt::get(Int8Ty, 0xB8u), "ah.b8");
+    Value *IsMovAbs = IRBDet2.CreateAnd(IsREXW, IsB8, "ah.movabs");
+    IRBDet2.CreateCondBr(IsMovAbs, B, Detect3);
 
+    // ── Stage 3: byte[0]==0xFF AND byte[1]==0x25 (jmp [RIP+disp32]) ────────
+    IRBuilder<> IRBDet3(Detect3);
+    Value *FPtrI3  = IRBDet3.CreatePtrToInt(F, Int64Ty);
+    Value *B0D3    = IRBDet3.CreateLoad(Int8Ty,
+        IRBDet3.CreateIntToPtr(FPtrI3, PtrTy), "ah.b0d3");
+    Value *B1D3    = IRBDet3.CreateLoad(Int8Ty,
+        IRBDet3.CreateIntToPtr(
+            IRBDet3.CreateAdd(FPtrI3, ConstantInt::get(Int64Ty, 1)), PtrTy),
+        "ah.b1d3");
+    Value *IsFF    = IRBDet3.CreateICmpEQ(
+        B0D3, ConstantInt::get(Int8Ty, X86_64_JMP_INDIR),   "ah.ff");
+    Value *Is25    = IRBDet3.CreateICmpEQ(
+        B1D3, ConstantInt::get(Int8Ty, X86_64_JMP_INDIR_B1), "ah.25");
+    Value *IsIndir = IRBDet3.CreateAnd(IsFF, Is25, "ah.indir");
+    IRBDet3.CreateCondBr(IsIndir, B, C);
+
+    // Handler
+    IRBuilder<> IRBB(B);
     CreateCallbackAndJumpBack(&IRBB, C);
   }
 
@@ -667,23 +711,40 @@ struct AntiHook : public ModulePass {
       // Noise: eor x9, x9, x9 + add/sub round-trip (net zero, confuses LLIL).
       uint32_t noiseImm = cryptoutils->get_range(1, 0x1000);
       uint32_t exitCode = cryptoutils->get_range(256);
+      uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
+                    | 0x8000000000000000ull;
       std::string asmStr;
-      // Layer 1: noise to confuse dynamic analysis
       asmStr += "eor x9, x9, x9\n\t";
       asmStr += "add x9, x9, #" + std::to_string(noiseImm) + "\n\t";
       asmStr += "sub x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      // Layer 2: set exit code (randomised for per-compilation uniqueness)
+      // ── LAYER 1: SYS_exit via BSD syscall gate (x16=1, svc #0x80) ─────────
       asmStr += "mov x0, #" + std::to_string(exitCode) + "\n\t";
-      // Layer 3: primary syscall — always x16=1 (SYS_exit on Darwin)
       asmStr += "mov x16, #1\n\t";
       asmStr += "svc #0x80\n\t";
-      // Layer 4: secondary path with varied immediate (unreachable on success,
-      // acts as fallback in emulators that don't model svc correctly)
-      asmStr += "mov x16, #1\n\t";
-      asmStr += "svc #" + std::to_string(cryptoutils->get_range(0x80, 0x1000)) + "\n\t";
+      // ── LAYER 2: br to non-canonical address → MMU translation fault ───────
+      asmStr += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
+      asmStr += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
+      asmStr += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
+      asmStr += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+      asmStr += "br x15\n\t";
+      // Final barrier: randomized undefined opcode
+      uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
+      asmStr += ".inst 0x" + utohexstr(rndInst) + "\n\t";
+      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
+      uint32_t aa64seed = cryptoutils->get_range(1, 0xBEFF);
+      asmStr += "mov x14, #" + std::to_string(aa64seed) + "\n\t";
+      asmStr += "91:\n\t";
+      asmStr += "mov x0, #65536\n\t";
+      asmStr += "sub x0, x0, x14\n\t";
+      asmStr += "mul x0, x14, x0\n\t";
+      asmStr += "lsl x0, x0, #2\n\t";
+      asmStr += "lsr x0, x0, #16\n\t";
+      asmStr += "mov x14, x0\n\t";
+      asmStr += "b 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
           FunctionType::get(IRBB->getVoidTy(), false),
-          asmStr, "~{x0},~{x9},~{x16},~{dirflag},~{fpsr},~{flags}",
+          asmStr,
+          "~{x0},~{x9},~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false);
       IRBB->CreateCall(IA);
     } else if (DirectSyscallExitTemp && triple.isOSDarwin() &&
@@ -701,25 +762,41 @@ struct AntiHook : public ModulePass {
       // the `and` zeroes out eax (affects flags but not program logic).
       uint64_t exitCode = cryptoutils->get_range(256);
       uint64_t noiseConst = cryptoutils->get_uint32_t() & 0xFFFF;
+      uint64_t nc2 = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
+                    | 0x8000000000000000ull;
+      std::ostringstream nc2oss;
+      nc2oss << std::hex << nc2;
       std::string asmStr;
-      // RDTSC noise — execution time jitter confuses timing-based detectors
       asmStr += "rdtsc\n\t";
-      asmStr += "andl $$0xFFFF, %eax\n\t"; // consume rdtsc without branching
+      asmStr += "andl $$0xFFFF, %eax\n\t";
       asmStr += "addl $$" + std::to_string(noiseConst) + ", %eax\n\t";
       asmStr += "subl $$" + std::to_string(noiseConst) + ", %eax\n\t";
-      // Primary syscall: exit(exitCode)
+      // ── LAYER 1: BSD SYS_exit via direct syscall ─────────────────────────
       asmStr += "movq $$0x2000001, %rax\n\t";
       asmStr += "movq $$" + std::to_string(exitCode) + ", %rdi\n\t";
       asmStr += "syscall\n\t";
-      // Fallback path (unreachable after successful syscall — present to
-      // confuse CFG reconstruction tools that model `syscall` as non-fatal)
-      asmStr += "movq $$0x2000001, %rax\n\t";
-      asmStr += "xorq %rdi, %rdi\n\t";
-      asmStr += "syscall\n\t";
+      // randomized illegal opcode
+      uint8_t rndOp = (uint8_t)cryptoutils->get_range(0x06, 0x08);
+      asmStr += ".byte 0x0f, 0x0b, 0x" + utohexstr(rndOp) + "\n\t";
+      // ── LAYER 2: non-canonical address jump → CPU #GP ─────────────────────
+      asmStr += "movabsq $$0x" + nc2oss.str() + ", %r15\n\t";
+      asmStr += "jmpq *%r15\n\t";
+      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
+      uint32_t cs2 = cryptoutils->get_range(1, 0xBEFF);
+      asmStr += "movq $$" + std::to_string(cs2) + ", %r14\n\t";
+      asmStr += "91:\n\t";
+      asmStr += "movq %r14, %rax\n\t";
+      asmStr += "movq $$0x10000, %rcx\n\t";
+      asmStr += "subq %rax, %rcx\n\t";
+      asmStr += "mulq %rcx\n\t";
+      asmStr += "shlq $$2, %rax\n\t";
+      asmStr += "shrq $$16, %rax\n\t";
+      asmStr += "movq %rax, %r14\n\t";
+      asmStr += "jmp 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
           FunctionType::get(IRBB->getVoidTy(), false),
           asmStr,
-          "~{rax},~{rdi},~{rcx},~{rdx},~{dirflag},~{fpsr},~{flags}",
+          "~{rax},~{rcx},~{rdx},~{rdi},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
       IRBB->CreateCall(IA);
     } else if (DirectSyscallExitTemp &&
@@ -740,6 +817,12 @@ struct AntiHook : public ModulePass {
       //
       // Noise: RDTSC-based junk between prctl and ud2 to break timing tracers.
       uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
+      uint64_t nonCanon = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
+                         | 0x8000000000000000ull;
+      uint32_t chaosSeed = cryptoutils->get_range(1, 0xBEFF);
+      std::ostringstream ncoss;
+      ncoss << std::hex << nonCanon;
+
       std::string asmStr;
       // RDTSC noise burst
       asmStr += "rdtsc\n\t";
@@ -749,23 +832,33 @@ struct AntiHook : public ModulePass {
       // prctl(PR_SET_DUMPABLE=4, 0) — prevents core dump
       asmStr += "movq $$157, %rax\n\t";  // SYS_prctl
       asmStr += "movq $$4, %rdi\n\t";    // PR_SET_DUMPABLE
-      asmStr += "xorq %rsi, %rsi\n\t";   // 0 = not dumpable
+      asmStr += "xorq %rsi, %rsi\n\t";
       asmStr += "xorq %rdx, %rdx\n\t";
       asmStr += "xorq %r10, %r10\n\t";
       asmStr += "syscall\n\t";
-      // Hardware trap: #UD → SIGILL (not interceptable via libc hooks)
+      // ── LAYER 1: ud2 → #UD → SIGILL ───────────────────────────────────────
       asmStr += "ud2\n\t";
-      // Unreachable fallback: SIGKILL via kill(getpid(), SIGKILL)
-      asmStr += "movq $$39, %rax\n\t";   // SYS_getpid
-      asmStr += "syscall\n\t";
-      asmStr += "movq %rax, %rdi\n\t";   // pid
-      asmStr += "movq $$9, %rsi\n\t";    // SIGKILL
-      asmStr += "movq $$62, %rax\n\t";   // SYS_kill
-      asmStr += "syscall\n\t";
+      // randomized illegal opcode
+      uint8_t rndOp = (uint8_t)cryptoutils->get_range(0x06, 0x08);
+      asmStr += ".byte 0x0f, 0x0b, 0x" + utohexstr(rndOp) + "\n\t";
+      // ── LAYER 2: non-canonical jump → #GP ─────────────────────────────────
+      asmStr += "movabsq $$0x" + ncoss.str() + ", %r15\n\t";
+      asmStr += "jmpq *%r15\n\t";
+      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
+      asmStr += "movq $$" + std::to_string(chaosSeed) + ", %r14\n\t";
+      asmStr += "91:\n\t";
+      asmStr += "movq %r14, %rax\n\t";
+      asmStr += "movq $$0x10000, %rcx\n\t";
+      asmStr += "subq %rax, %rcx\n\t";
+      asmStr += "mulq %rcx\n\t";
+      asmStr += "shlq $$2, %rax\n\t";
+      asmStr += "shrq $$16, %rax\n\t";
+      asmStr += "movq %rax, %r14\n\t";
+      asmStr += "jmp 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
           FunctionType::get(IRBB->getVoidTy(), false),
           asmStr,
-          "~{rax},~{rdi},~{rsi},~{rdx},~{r10},~{rcx},~{dirflag},~{fpsr},~{flags}",
+          "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
       IRBB->CreateCall(IA);
 
@@ -786,24 +879,48 @@ struct AntiHook : public ModulePass {
       //     so pattern scanners won't flag it.
       //   • The RDTSC noise before the int 0x29 confuses timing-based tracers.
       uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
-      uint64_t fastFailCode = 7; // FAST_FAIL_FATAL_APP_EXIT
+      uint64_t fastFailCode = 7;
+      uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
+                   | 0x8000000000000000ull;
+      uint64_t privAddr = 0xFFFFF80000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
+      uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
+      std::ostringstream ncoss, privoss;
+      ncoss << std::hex << nc;
+      privoss << std::hex << privAddr;
+
       std::string asmStr;
       // RDTSC jitter
       asmStr += "rdtsc\n\t";
       asmStr += "andl $$0xFFFF, %eax\n\t";
       asmStr += "addl $$" + std::to_string(noiseK) + ", %eax\n\t";
       asmStr += "subl $$" + std::to_string(noiseK) + ", %eax\n\t";
-      // __fastfail: load fail-fast code into ECX, then int 0x29
+      // ── LAYER 1: __fastfail(7) via int 0x29 ──────────────────────────────
       asmStr += "movl $$" + std::to_string(fastFailCode) + ", %ecx\n\t";
       asmStr += "int $$0x29\n\t";
-      // Unreachable fallback — makes CFG reconstruction harder
-      asmStr += "movl $$" +
-                std::to_string(cryptoutils->get_range(1, 15)) + ", %ecx\n\t";
-      asmStr += "int $$0x29\n\t";
+      // randomized illegal opcode
+      uint8_t rndOp = (uint8_t)cryptoutils->get_range(0x06, 0x08);
+      asmStr += ".byte 0x0f, 0x0b, 0x" + utohexstr(rndOp) + "\n\t";
+      // ── LAYER 2: privileged address jump → trigger system safety (KPP/PG) ──
+      asmStr += "movabsq $$0x" + privoss.str() + ", %r15\n\t";
+      asmStr += "jmpq *%r15\n\t";
+      // ── LAYER 2b: non-canonical address jump → CPU #GP ────────────────────
+      asmStr += "movabsq $$0x" + ncoss.str() + ", %r15\n\t";
+      asmStr += "jmpq *%r15\n\t";
+      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
+      asmStr += "movq $$" + std::to_string(cs) + ", %r14\n\t";
+      asmStr += "91:\n\t";
+      asmStr += "movq %r14, %rax\n\t";
+      asmStr += "movq $$0x10000, %rcx\n\t";
+      asmStr += "subq %rax, %rcx\n\t";
+      asmStr += "mulq %rcx\n\t";
+      asmStr += "shlq $$2, %rax\n\t";
+      asmStr += "shrq $$16, %rax\n\t";
+      asmStr += "movq %rax, %r14\n\t";
+      asmStr += "jmp 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
           FunctionType::get(IRBB->getVoidTy(), false),
           asmStr,
-          "~{rax},~{rcx},~{rdx},~{dirflag},~{fpsr},~{flags}",
+          "~{rax},~{rcx},~{rdx},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
       IRBB->CreateCall(IA);
 
@@ -820,21 +937,46 @@ struct AntiHook : public ModulePass {
       // Like int 0x29 on x86_64, this bypasses all user-space exception
       // handling including VEH and C++ catch handlers.
       uint32_t noiseImm = cryptoutils->get_range(1, 0x100);
+      uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
+                    | 0x8000000000000000ull;
+      uint64_t privAddr = 0xFFFF000000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
+      uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
       std::string asmStr;
-      // Timer-counter noise: always accessible in EL0 on Windows ARM64
       asmStr += "mrs x9, cntvct_el0\n\t";
       asmStr += "add x9, x9, #" + std::to_string(noiseImm) + "\n\t";
       asmStr += "sub x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      // __fastfail(FAST_FAIL_FATAL_APP_EXIT=7)
+      // ── LAYER 1: __fastfail via BRK #0xF003 ────────────────────────────────
       asmStr += "mov w16, #7\n\t";
       asmStr += "brk #0xF003\n\t";
-      // Unreachable secondary: different fail-fast code for CFG noise
-      asmStr += "mov w16, #" + std::to_string(cryptoutils->get_range(1,15)) + "\n\t";
-      asmStr += "brk #0xF003\n\t";
+      // ── LAYER 2: br to privileged address ──────────────────────────────────
+      asmStr += "movz x15, #" + std::to_string(privAddr & 0xFFFF) + "\n\t";
+      asmStr += "movk x15, #" + std::to_string((privAddr >> 16) & 0xFFFF) + ", lsl #16\n\t";
+      asmStr += "movk x15, #" + std::to_string((privAddr >> 32) & 0xFFFF) + ", lsl #32\n\t";
+      asmStr += "movk x15, #" + std::to_string((privAddr >> 48) & 0xFFFF) + ", lsl #48\n\t";
+      asmStr += "br x15\n\t";
+      // ── LAYER 2b: br to non-canonical address → MMU fault ──────────────────
+      asmStr += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
+      asmStr += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
+      asmStr += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
+      asmStr += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+      asmStr += "br x15\n\t";
+      // Final barrier: randomized undefined opcode
+      uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
+      asmStr += ".inst 0x" + utohexstr(rndInst) + "\n\t";
+      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
+      asmStr += "mov x14, #" + std::to_string(cs) + "\n\t";
+      asmStr += "91:\n\t";
+      asmStr += "mov x0, #65536\n\t";
+      asmStr += "sub x0, x0, x14\n\t";
+      asmStr += "mul x0, x14, x0\n\t";
+      asmStr += "lsl x0, x0, #2\n\t";
+      asmStr += "lsr x0, x0, #16\n\t";
+      asmStr += "mov x14, x0\n\t";
+      asmStr += "b 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
           FunctionType::get(IRBB->getVoidTy(), false),
           asmStr,
-          "~{x9},~{x16},~{dirflag},~{fpsr},~{flags}",
+          "~{x0},~{x9},~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false);
       IRBB->CreateCall(IA);
 
@@ -853,31 +995,47 @@ struct AntiHook : public ModulePass {
       //
       // Noise: counter register read (mrs x9, cntvct_el0) as timing junk.
       uint32_t noiseImm = cryptoutils->get_range(1, 0x200);
+      uint32_t brkImm = cryptoutils->get_range(0x100, 0xFFFF);
+      uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
+                    | 0x8000000000000000ull;
+      uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
       std::string asmStr;
-      // Timer-register noise
       asmStr += "mrs x9, cntvct_el0\n\t";
       asmStr += "add x9, x9, #" + std::to_string(noiseImm) + "\n\t";
       asmStr += "sub x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      // prctl(PR_SET_DUMPABLE, 0)
-      asmStr += "mov x8, #167\n\t";   // SYS_prctl (arm64 Linux)
-      asmStr += "mov x0, #4\n\t";     // PR_SET_DUMPABLE
-      asmStr += "mov x1, #0\n\t";     // not dumpable
+      asmStr += "mov x8, #167\n\t";
+      asmStr += "mov x0, #4\n\t";
+      asmStr += "mov x1, #0\n\t";
       asmStr += "mov x2, #0\n\t";
       asmStr += "mov x3, #0\n\t";
       asmStr += "mov x4, #0\n\t";
       asmStr += "svc #0\n\t";
-      // Hardware trap: BRK → SIGTRAP via kernel exception handler
-      asmStr += "brk #0xDEAD\n\t";
-      // Unreachable: SIGKILL via kill(getpid(), 9)
-      asmStr += "mov x8, #172\n\t";   // SYS_getpid (arm64)
-      asmStr += "svc #0\n\t";
-      asmStr += "mov x1, #9\n\t";     // SIGKILL
-      asmStr += "mov x8, #129\n\t";   // SYS_kill (arm64)
-      asmStr += "svc #0\n\t";
+      // ── LAYER 1: randomized brk → SIGTRAP ─────────────────────────────────
+      asmStr += "brk #" + std::to_string(brkImm) + "\n\t";
+      // ── LAYER 2: br to non-canonical address → MMU translation fault ───────
+      asmStr += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
+      asmStr += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
+      asmStr += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
+      asmStr += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+      asmStr += "br x15\n\t";
+      // Final barrier: randomized undefined opcode
+      uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
+      asmStr += ".inst 0x" + utohexstr(rndInst) + "\n\t";
+      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
+      asmStr += "mov x14, #" + std::to_string(cs) + "\n\t";
+      asmStr += "91:\n\t";
+      asmStr += "mov x0, #65536\n\t";
+      asmStr += "sub x0, x0, x14\n\t";
+      asmStr += "mul x0, x14, x0\n\t";
+      asmStr += "lsl x0, x0, #2\n\t";
+      asmStr += "lsr x0, x0, #16\n\t";
+      asmStr += "mov x14, x0\n\t";
+      asmStr += "b 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
           FunctionType::get(IRBB->getVoidTy(), false),
           asmStr,
-          "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{dirflag},~{fpsr},~{flags}",
+          "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x14},~{x15},"
+          "~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false);
       IRBB->CreateCall(IA);
 
@@ -891,6 +1049,93 @@ struct AntiHook : public ModulePass {
       IRBB->CreateCall(abort_declare);
     }
     IRBB->CreateBr(C);
+  }
+
+  // ── Scattered hook checks ────────────────────────────────────────────────
+  //
+  // Picks up to 2 non-entry basic blocks throughout the function body and
+  // inserts a lightweight inline hook check at each.  This prevents an
+  // attacker from defeating detection by simply patching the function prologue
+  // check.
+  //
+  // Per scattered injection point:
+  //   • Load prologue bytes of the current function's machine code.
+  //   • If a hook pattern is detected (jmp/br/brk):
+  //       → 3-layer hardened exit unique per site.
+  //   • Otherwise: fall through to the rest of the basic block.
+  void InjectScatteredHookChecks(Function *F) {
+    if (!triple.isAArch64() && triple.getArch() != Triple::x86_64)
+      return;
+
+    // Collect candidate BBs: skip entry and any handler/detect BBs we created
+    SmallVector<BasicBlock *, 16> cands;
+    for (BasicBlock &BB : *F) {
+      if (&BB == &F->getEntryBlock()) continue;
+      StringRef nm = BB.getName();
+      if (nm.contains("HookDetect") || nm.contains("Handler") ||
+          nm.contains("scatter"))
+        continue;
+      // Need at least 2 instructions so splitBasicBlock leaves a non-empty top
+      auto it = BB.begin();
+      if (it == BB.end()) continue;
+      ++it;
+      if (it == BB.end()) continue;
+      cands.push_back(&BB);
+    }
+    if (cands.empty()) return;
+
+    // Fisher-Yates shuffle with cryptoutils for per-compilation randomness
+    for (unsigned i = (unsigned)cands.size() - 1; i > 0; --i)
+      std::swap(cands[i], cands[cryptoutils->get_range(i + 1)]);
+
+    unsigned numExtra = std::min(2u, (unsigned)cands.size());
+    LLVMContext &Ctx = F->getContext();
+    Type *Int8Ty  = Type::getInt8Ty(Ctx);
+    Type *Int32Ty = Type::getInt32Ty(Ctx);
+    Type *Int64Ty = Type::getInt64Ty(Ctx);
+    Type *PtrTy   = getOpaquePtrTy(Ctx);
+
+    for (unsigned ci = 0; ci < numExtra; ci++) {
+      BasicBlock *Orig = cands[ci];
+      BasicBlock *Bottom = Orig->splitBasicBlock(
+          Orig->getFirstNonPHIOrDbgOrLifetime(), "scatter.ah.bot");
+      BasicBlock *SHandler =
+          BasicBlock::Create(Ctx, "HookHandler.ah.scatter", F);
+
+      Orig->getTerminator()->eraseFromParent();
+      IRBuilder<> IRB(Orig);
+      Value *IsHooked = nullptr;
+
+      if (triple.getArch() == Triple::x86_64) {
+        // x86_64: check byte[0] for E9 (jmp rel32) or CC (INT3)
+        Value *FPtrI = IRB.CreatePtrToInt(F, Int64Ty);
+        Value *B0    = IRB.CreateLoad(Int8Ty,
+            IRB.CreateIntToPtr(FPtrI, PtrTy), "sc.ah.b0");
+        Value *IsE9  = IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, 0xE9u));
+        Value *IsCC  = IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, 0xCCu));
+        IsHooked = IRB.CreateOr(IsE9, IsCC);
+      } else if (triple.isAArch64()) {
+        // AArch64: check first 4 bytes for B or BRK
+        Value *FPtr = IRB.CreateBitCast(F, PtrTy);
+        Value *Instr0 = IRB.CreateLoad(Int32Ty, FPtr, "sc.ah.i0");
+        Value *LS_B  = IRB.CreateLShr(Instr0, ConstantInt::get(Int32Ty, 26));
+        Value *IsB   = IRB.CreateICmpEQ(
+            LS_B, ConstantInt::get(Int32Ty, AARCH64_SIGNATURE_B));
+        Value *LS_BRK = IRB.CreateLShr(Instr0, ConstantInt::get(Int32Ty, 21));
+        Value *IsBRK  = IRB.CreateICmpEQ(
+            LS_BRK, ConstantInt::get(Int32Ty, AARCH64_SIGNATURE_BRK));
+        IsHooked = IRB.CreateOr(IsB, IsBRK);
+      }
+
+      if (IsHooked) {
+        IRB.CreateCondBr(IsHooked, SHandler, Bottom);
+        IRBuilder<> HB(SHandler);
+        CreateCallbackAndJumpBack(&HB, Bottom);
+      } else {
+        IRB.CreateBr(Bottom);
+        SHandler->eraseFromParent();
+      }
+    }
   }
 };
 } // namespace llvm

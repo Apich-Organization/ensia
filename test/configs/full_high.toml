@@ -77,6 +77,12 @@ enabled = true
 probability = 50
 times = 1
 
+[passes.anti_debugging]
+enabled = true
+
+[passes.anti_hooking]
+enabled = true
+
 # ── Per-function rules ────────────────────────────────────────────────────────
 
 # const_test / string_test: maximum crypto-grade protection
