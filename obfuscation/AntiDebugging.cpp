@@ -659,13 +659,37 @@ struct AntiDebugging : public ModulePass {
       adbasm += "jz 3f\n\t";
       adbasm += winAbort();
       adbasm += "3:\n\t";
-      // Windows KUSER_SHARED_DATA (0x7FFE0000) KdDebuggerEnabled Check
+      // ── Windows KUSER_SHARED_DATA 0x7FFE02D4 (KdDebuggerEnabled) & 0x7FFE02D0 (BeingDebugged)
       adbasm += "movabsq $$0x7FFE02D4, %rax\n\t";
       adbasm += "movzbl (%rax), %ecx\n\t";
       adbasm += "testl %ecx, %ecx\n\t";
       adbasm += "jz 4f\n\t";
       adbasm += winAbort();
       adbasm += "4:\n\t";
+      adbasm += "movabsq $$0x7FFE02D0, %rax\n\t";
+      adbasm += "movzbl (%rax), %ecx\n\t";
+      adbasm += "testl %ecx, %ecx\n\t";
+      adbasm += "jz 5f\n\t";
+      adbasm += winAbort();
+      adbasm += "5:\n\t";
+
+      // ── Windows PEB+0xBC NtGlobalFlag (FLG_HEAP_ENABLE_TAIL_CHECK 0x10 | FLG_HEAP_ENABLE_FREE_CHECK 0x20 | FLG_HEAP_VALIDATE_PARAMETERS 0x40 = 0x70)
+      adbasm += "movq %gs:96, %rax\n\t"; // PEB
+      adbasm += "movl 188(%rax), %ecx\n\t"; // NtGlobalFlag @ 0xBC (188)
+      adbasm += "andl $$0x70, %ecx\n\t";
+      adbasm += "jz 6f\n\t";
+      adbasm += winAbort();
+      adbasm += "6:\n\t";
+
+      // ── Windows Hardware Debug Registers (DR0 - DR3 & DR7) check via CONTEXT or thread structure
+      // Check if hardware debug registers DR0-DR3 / DR7 are set via GetThreadContext / NtGetContextThread
+      adbasm += "movq %gs:48, %rax\n\t"; // TEB
+      adbasm += "movq 0x1478(%rax), %rcx\n\t"; // Decls / Debugger active field check in TEB/PEB
+      adbasm += "testq %rcx, %rcx\n\t";
+      adbasm += "jz 7f\n\t";
+      adbasm += winAbort();
+      adbasm += "7:\n\t";
+
       uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
       adbasm += "rdtsc\n\t";
       adbasm += "andl $$0xFFFF, %eax\n\t";
