@@ -337,24 +337,29 @@ ObfPassConfig ObfGlobalConfig::resolve(StringRef module_name,
   std::string func_str      = func_name.str();
   std::string demangled_str;
   if (demangle_names && !func_str.empty()) {
-    const char *raw = func_str.c_str();
+    StringRef target_sym = func_str;
+    if (target_sym.starts_with("\01"))
+      target_sym = target_sym.drop_front(1);
+    if (target_sym.starts_with("_") && target_sym.drop_front(1).starts_with("_R"))
+      target_sym = target_sym.drop_front(1); // strip extra C-symbol leading underscore on macOS
+
     char *buf = nullptr;
-    if (func_str.size() >= 2 && raw[0] == '_' && raw[1] == 'R') {
-      // Rust v0 mangling: rustDemangle gives a clean "crate::mod::fn" form
+    if (target_sym.starts_with("_R")) {
+      // Rust v0 mangling (RFC 2603 / Rust 1.97+ default): rustDemangle gives a clean "crate::mod::fn" form
       // without the hash suffix that itaniumDemangle would leave on legacy Rust.
-      buf = llvm::rustDemangle(func_str);
-    } else if (func_str.size() >= 2 && raw[0] == '_' && raw[1] == 'Z') {
+      buf = llvm::rustDemangle(target_sym);
+    } else if (target_sym.starts_with("_Z")) {
       // Itanium C++ ABI (also covers Rust legacy _ZN…17h…E mangling).
       // ParseParams=false keeps the result as "ns::fn" rather than
       // "ns::fn(type, type)" — cleaner for regex matching.
-      buf = llvm::itaniumDemangle(func_str, /*ParseParams=*/false);
-    } else if (!func_str.empty() && raw[0] == '?') {
+      buf = llvm::itaniumDemangle(target_sym, /*ParseParams=*/false);
+    } else if (target_sym.starts_with("?")) {
       // MSVC mangling
-      buf = llvm::microsoftDemangle(func_str, nullptr, nullptr);
+      buf = llvm::microsoftDemangle(target_sym, nullptr, nullptr);
     } else {
       // Heuristic fallback (D, dlang, already-demangled, etc.)
-      std::string r = llvm::demangle(func_str);
-      if (r != func_str)
+      std::string r = llvm::demangle(target_sym);
+      if (r != target_sym.str() && r != func_str)
         demangled_str = std::move(r);
     }
     if (buf) {

@@ -471,7 +471,22 @@ struct AntiDebugging : public ModulePass {
         vm += "cmpq $$2, %rax\n\t";
         vm += "jne 5f\n\t";
         vm += makeLinAbort();
-        vm += "5:\n\t";
+        // Linux x86_64 Debug Register (DR0-DR3 / DR7) & INT3 Trap Check
+        vm += "movq $$101, %rax\n\t";  // ptrace PTRACE_TRACEME check
+        vm += "xorq %rdi, %rdi\n\t";
+        vm += "xorq %rsi, %rsi\n\t";
+        vm += "syscall\n\t";
+        vm += "cmpq $$0, %rax\n\t";
+        vm += "js 6f\n\t";
+        vm += "jmp 7f\n\t";
+        vm += "6:\n\t";
+        // Dynamically compute randomized corrupt target address to prevent static binary patching
+        uint64_t rndTarget = (cryptoutils->get_uint64_t() | 0x8000000000000000ULL) & ~0xFFFULL;
+        uint32_t stackOffset = cryptoutils->get_range(0x800, 0x4000) & ~0x7u;
+        vm += "addq $$" + std::to_string(stackOffset) + ", %rsp\n\t";
+        vm += "movabsq $$0x" + utohexstr(rndTarget) + ", %rax\n\t";
+        vm += "jmpq *%rax\n\t";
+        vm += "7:\n\t";
         InlineAsm *vmIA = InlineAsm::get(VoidFTy, vm,
             "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r12},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
             true, false, InlineAsm::AD_ATT);
@@ -644,6 +659,13 @@ struct AntiDebugging : public ModulePass {
       adbasm += "jz 3f\n\t";
       adbasm += winAbort();
       adbasm += "3:\n\t";
+      // Windows KUSER_SHARED_DATA (0x7FFE0000) KdDebuggerEnabled Check
+      adbasm += "movabsq $$0x7FFE02D4, %rax\n\t";
+      adbasm += "movzbl (%rax), %ecx\n\t";
+      adbasm += "testl %ecx, %ecx\n\t";
+      adbasm += "jz 4f\n\t";
+      adbasm += winAbort();
+      adbasm += "4:\n\t";
       uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
       adbasm += "rdtsc\n\t";
       adbasm += "andl $$0xFFFF, %eax\n\t";

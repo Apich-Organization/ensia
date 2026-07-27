@@ -372,7 +372,8 @@ struct ConstantEncryption : public ModulePass {
           GlobalVariable *GV = new GlobalVariable(
               *F.getParent(), CI->getType(), false,
               GlobalValue::LinkageTypes::PrivateLinkage,
-              ConstantInt::get(CI->getType(), CI->getValue()), "CToGV");
+              ConstantInt::get(CI->getType(), CI->getValue()), "CToGV",
+              nullptr, GlobalValue::GeneralDynamicTLSModel);
           usedGlobals.push_back(GV);
           I.setOperand(i, new LoadInst(GV->getValueType(), GV, "", &I));
         }
@@ -400,7 +401,8 @@ struct ConstantEncryption : public ModulePass {
           continue;
         GlobalVariable *GV = new GlobalVariable(
             M, BO->getType(), false, GlobalValue::LinkageTypes::PrivateLinkage,
-            ConstantInt::get(BO->getType(), dummy), "CToGV");
+            ConstantInt::get(BO->getType(), dummy), "CToGV",
+            nullptr, GlobalValue::GeneralDynamicTLSModel);
         StoreInst *SI =
             new StoreInst(BO, GV, false, DL.getABITypeAlign(BO->getType()));
         SI->insertAfter(BO);

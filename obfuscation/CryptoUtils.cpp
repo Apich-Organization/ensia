@@ -46,6 +46,9 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
+
+std::mutex g_crypto_mutex;
 
 #if defined(_MSC_VER)
 #  include <intrin.h>

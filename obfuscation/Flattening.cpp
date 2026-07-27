@@ -226,67 +226,81 @@ void Flattening::flatten(Function *f) {
 
     // If it's a non-conditional jump
     if (i->getTerminator()->getNumSuccessors() == 1) {
-      // Get successor and delete terminator
       BasicBlock *succ = i->getTerminator()->getSuccessor(0);
-      i->getTerminator()->eraseFromParent();
-
-      // Get next case
       numCase = switchI->findCaseDest(succ);
 
-      // If next case == default case (switchDefault)
       if (!numCase) {
-        numCase = cast<ConstantInt>(
-            ConstantInt::get(switchI->getCondition()->getType(),
-                             cryptoutils->scramble32(switchI->getNumCases() - 1,
-                                                     scrambling_key)));
+        if (succ == insert) {
+          numCase = cast<ConstantInt>(
+              ConstantInt::get(switchI->getCondition()->getType(),
+                               cryptoutils->scramble32(0, scrambling_key)));
+        }
       }
 
-      // Update switchVar and jump to the end of loop
-      new StoreInst(
-          numCase,
-          new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
-          i);
-      BranchInst::Create(loopEnd, i);
+      if (numCase) {
+        i->getTerminator()->eraseFromParent();
+        new StoreInst(
+            numCase,
+            new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
+            i);
+        BranchInst::Create(loopEnd, i);
+      } else {
+        // Successor is outside switch — jump directly
+        i->getTerminator()->eraseFromParent();
+        BranchInst::Create(succ, i);
+      }
       continue;
     }
 
     // If it's a conditional jump
     if (i->getTerminator()->getNumSuccessors() == 2) {
-      // Get next cases
-      ConstantInt *numCaseTrue =
-          switchI->findCaseDest(i->getTerminator()->getSuccessor(0));
-      ConstantInt *numCaseFalse =
-          switchI->findCaseDest(i->getTerminator()->getSuccessor(1));
+      BasicBlock *succTrue = i->getTerminator()->getSuccessor(0);
+      BasicBlock *succFalse = i->getTerminator()->getSuccessor(1);
+      ConstantInt *numCaseTrue = switchI->findCaseDest(succTrue);
+      ConstantInt *numCaseFalse = switchI->findCaseDest(succFalse);
 
-      // Check if next case == default case (switchDefault)
-      if (!numCaseTrue) {
+      if (!numCaseTrue && succTrue == insert) {
         numCaseTrue = cast<ConstantInt>(
             ConstantInt::get(switchI->getCondition()->getType(),
-                             cryptoutils->scramble32(switchI->getNumCases() - 1,
-                                                     scrambling_key)));
+                             cryptoutils->scramble32(0, scrambling_key)));
       }
-
-      if (!numCaseFalse) {
+      if (!numCaseFalse && succFalse == insert) {
         numCaseFalse = cast<ConstantInt>(
             ConstantInt::get(switchI->getCondition()->getType(),
-                             cryptoutils->scramble32(switchI->getNumCases() - 1,
-                                                     scrambling_key)));
+                             cryptoutils->scramble32(0, scrambling_key)));
       }
 
-      // Create a SelectInst
       BranchInst *br = cast<BranchInst>(i->getTerminator());
-      SelectInst *sel =
-          SelectInst::Create(br->getCondition(), numCaseTrue, numCaseFalse, "",
-                             i->getTerminator());
+      Value *cond = br->getCondition();
 
-      // Erase terminator
-      i->getTerminator()->eraseFromParent();
-      // Update switchVar and jump to the end of loop
-      new StoreInst(
-          sel,
-          new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
-          i);
-      BranchInst::Create(loopEnd, i);
+      if (numCaseTrue && numCaseFalse) {
+        SelectInst *sel =
+            SelectInst::Create(cond, numCaseTrue, numCaseFalse, "",
+                               i->getTerminator());
+        i->getTerminator()->eraseFromParent();
+        new StoreInst(
+            sel,
+            new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
+            i);
+        BranchInst::Create(loopEnd, i);
+      } else if (numCaseTrue && !numCaseFalse) {
+        i->getTerminator()->eraseFromParent();
+        new StoreInst(
+            numCaseTrue,
+            new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
+            i);
+        BranchInst::Create(loopEnd, succFalse, cond, i);
+      } else if (!numCaseTrue && numCaseFalse) {
+        i->getTerminator()->eraseFromParent();
+        new StoreInst(
+            numCaseFalse,
+            new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
+            i);
+        BranchInst::Create(succTrue, loopEnd, cond, i);
+      } else {
+        i->getTerminator()->eraseFromParent();
+        BranchInst::Create(succTrue, succFalse, cond, i);
+      }
       continue;
     }
   }

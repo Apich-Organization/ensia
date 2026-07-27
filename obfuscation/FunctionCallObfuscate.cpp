@@ -170,11 +170,9 @@ struct FunctionCallObfuscate : public FunctionPass {
           Value *newClassName =
               builder.CreateGlobalStringPtr(StringRef(className));
           CallInst *CI = builder.CreateCall(objc_getClass_Func, {newClassName});
-          // We need to bitcast it back to avoid IRVerifier
-          Value *BCI = builder.CreateBitCast(CI, I->getType());
+          Value *BCI = (CI->getType() == I->getType()) ? cast<Value>(CI) : builder.CreateBitCast(CI, I->getType());
           I->replaceAllUsesWith(BCI);
-          toErase.emplace_back(I); // We cannot erase it directly or we will
-                                   // have problems releasing the IRBuilder.
+          toErase.emplace_back(I);
         }
     }
     for (GlobalVariable *GV : objcselgv) {
@@ -195,8 +193,7 @@ struct FunctionCallObfuscate : public FunctionPass {
           Value *newGlobalSELName = builder.CreateGlobalStringPtr(SELName);
           CallInst *CI =
               builder.CreateCall(sel_registerName_Func, {newGlobalSELName});
-          // We need to bitcast it back to avoid IRVerifier
-          Value *BCI = builder.CreateBitCast(CI, I->getType());
+          Value *BCI = (CI->getType() == I->getType()) ? cast<Value>(CI) : builder.CreateBitCast(CI, I->getType());
           I->replaceAllUsesWith(BCI);
           toErase.emplace_back(I); // We cannot erase it directly or we will
                                    // have problems releasing the IRBuilder.
@@ -366,57 +363,45 @@ struct FunctionCallObfuscate : public FunctionPass {
               calledFunction->isIntrinsic())
             continue;
 
-          if (this->Configuration.find(calledFunction->getName().str()) !=
-              this->Configuration.end()) {
-            std::string sname =
-                this->Configuration[calledFunction->getName().str()]
-                    .get<std::string>();
-            StringRef calledFunctionName = StringRef(sname);
-            BasicBlock *EntryBlock = CS->getParent();
-            IRBuilder<> IRB(EntryBlock, EntryBlock->getFirstInsertionPt());
-
-            Value *Handle = nullptr;
-            Value *fp = nullptr;
-
-            if (isWindows) {
-              // GetModuleHandleA(NULL) — handle to the current process image.
-              // Symbols in DLLs require LoadLibraryA; see comment above.
-              Handle = IRB.CreateCall(resolve_lib_decl,
-                                      {Constant::getNullValue(Int8PtrTy)});
-              fp = IRB.CreateCall(
-                  resolve_sym_decl,
-                  {Handle, IRB.CreateGlobalStringPtr(calledFunctionName)});
-            } else {
-              if (triple.isOSDarwin()) {
-                dlopen_flag = DARWIN_FLAG;
-              } else if (triple.isAndroid()) {
-                if (triple.isArch64Bit())
-                  dlopen_flag = ANDROID64_FLAG;
-                else
-                  dlopen_flag = ANDROID32_FLAG;
-              } else {
-                errs() << "[FunctionCallObfuscate] Unsupported Target Triple:"
-#if LLVM_VERSION_MAJOR >= 20
-                       << M->getTargetTriple().getTriple() << "\n";
-#else
-                       << M->getTargetTriple() << "\n";
-#endif
-                errs() << "[FunctionCallObfuscate] Applying Default Signature:"
-                       << dlopen_flag << "\n";
-              }
-              Handle = IRB.CreateCall(
-                  resolve_lib_decl,
-                  {Constant::getNullValue(Int8PtrTy),
-                   ConstantInt::get(Int32Ty, dlopen_flag)});
-              fp = IRB.CreateCall(
-                  resolve_sym_decl,
-                  {Handle, IRB.CreateGlobalStringPtr(calledFunctionName)});
-            }
-
-            Value *bitCastedFunction =
-                IRB.CreateBitCast(fp, CS.getCalledValue()->getType());
-            CS.setCalledFunction(bitCastedFunction);
+          std::string sname = calledFunction->getName().str();
+          if (this->Configuration.find(sname) != this->Configuration.end()) {
+            sname = this->Configuration[sname].get<std::string>();
           }
+          StringRef calledFunctionName = StringRef(sname);
+          BasicBlock *EntryBlock = CS->getParent();
+          IRBuilder<> IRB(EntryBlock, EntryBlock->getFirstInsertionPt());
+
+          Value *Handle = nullptr;
+          Value *fp = nullptr;
+
+          if (isWindows) {
+            Handle = IRB.CreateCall(resolve_lib_decl,
+                                    {Constant::getNullValue(Int8PtrTy)});
+            fp = IRB.CreateCall(
+                resolve_sym_decl,
+                {Handle, IRB.CreateGlobalStringPtr(calledFunctionName)});
+          } else {
+            if (triple.isOSDarwin()) {
+              dlopen_flag = DARWIN_FLAG;
+            } else if (triple.isAndroid()) {
+              if (triple.isArch64Bit())
+                dlopen_flag = ANDROID64_FLAG;
+              else
+                dlopen_flag = ANDROID32_FLAG;
+            }
+            Handle = IRB.CreateCall(
+                resolve_lib_decl,
+                {Constant::getNullValue(Int8PtrTy),
+                 ConstantInt::get(Int32Ty, dlopen_flag)});
+            fp = IRB.CreateCall(
+                resolve_sym_decl,
+                {Handle, IRB.CreateGlobalStringPtr(calledFunctionName)});
+          }
+
+          Value *bitCastedFunction = (fp->getType() == CS.getCalledValue()->getType())
+              ? fp
+              : IRB.CreateBitCast(fp, CS.getCalledValue()->getType());
+          CS.setCalledFunction(bitCastedFunction);
         }
       }
     }

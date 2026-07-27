@@ -370,9 +370,19 @@ struct StringEncryption : public ModulePass {
       ConstantDataSequential *CDS =
           dyn_cast<ConstantDataSequential>(GV->getInitializer());
       bool rust_string = !CDS;
-      if (rust_string)
-        CDS = cast<ConstantDataSequential>(
-            cast<ConstantAggregate>(GV->getInitializer())->getOperand(0));
+      if (rust_string) {
+        ConstantAggregate *CA = dyn_cast<ConstantAggregate>(GV->getInitializer());
+        if (!CA || CA->getNumOperands() == 0) continue;
+        Constant *Op0 = CA->getOperand(0);
+        if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Op0))
+          Op0 = CE->getOperand(0);
+        GlobalVariable *TargetGV = dyn_cast<GlobalVariable>(Op0);
+        if (TargetGV && TargetGV->hasInitializer())
+          CDS = dyn_cast<ConstantDataSequential>(TargetGV->getInitializer());
+        if (!CDS)
+          CDS = dyn_cast<ConstantDataSequential>(CA->getOperand(0));
+        if (!CDS) continue;
+      }
       Type *ElementTy = CDS->getElementType();
       if (!ElementTy->isIntegerTy()) {
         continue;

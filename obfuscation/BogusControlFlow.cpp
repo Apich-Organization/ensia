@@ -51,14 +51,24 @@ using namespace llvm;
 //
 // Architecture detection uses the LLVM target triple stored in the Module.
 
-static bool targetIsX86(Module &M) {
+static bool targetIsX86_64(Module &M) {
 #if LLVM_VERSION_MAJOR >= 20
   StringRef triple = M.getTargetTriple().getTriple();
 #else
   StringRef triple = M.getTargetTriple();
 #endif
-  return triple.contains("x86") || triple.contains("i686") ||
-         triple.contains("i386");
+  return triple.contains("x86_64") || triple.contains("amd64");
+}
+static bool targetIsX86_32(Module &M) {
+#if LLVM_VERSION_MAJOR >= 20
+  StringRef triple = M.getTargetTriple().getTriple();
+#else
+  StringRef triple = M.getTargetTriple();
+#endif
+  return (triple.contains("i686") || triple.contains("i386") || triple.contains("x86")) && !targetIsX86_64(M);
+}
+static bool targetIsX86(Module &M) {
+  return targetIsX86_64(M) || targetIsX86_32(M);
 }
 static bool targetIsAArch64(Module &M) {
 #if LLVM_VERSION_MAJOR >= 20
@@ -77,17 +87,13 @@ static Value *buildHardwareTruePredicate(Module &M, IRBuilder<> &IRB) {
   Type *I64Ty = Type::getInt64Ty(Ctx);
 
   if (targetIsX86(M)) {
-    // CPUID leaf 1: EDX bit 25 = SSE support — always set on x86_64 Linux/Win/Mac
-    // Clobber: EAX, EBX (push/pop in asm), ECX, EDX, flags
+    // CPUID leaf 1: EDX bit 25 = SSE support — always set on x86_64/modern x86
     FunctionType *AsmTy = FunctionType::get(I32Ty, {}, false);
+    const char *asmCode = targetIsX86_64(M) ?
+        "push %rbx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %rbx" :
+        "push %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %ebx";
     InlineAsm *cpuidAsm = InlineAsm::get(
-        AsmTy,
-        // AT&T syntax; save/restore RBX (required for PIC code)
-        "push %rbx\n\t"
-        "mov $$1, %eax\n\t"
-        "cpuid\n\t"
-        "mov %edx, $0\n\t"
-        "pop %rbx",
+        AsmTy, asmCode,
         "=r,~{eax},~{ecx},~{edx},~{dirflag},~{fpsr},~{flags}",
         /*hasSideEffects=*/true, InlineAsm::AD_ATT);
     Value *edx  = IRB.CreateCall(AsmTy, cpuidAsm, {}, "bcf.cpuid.edx");
@@ -108,8 +114,6 @@ static Value *buildHardwareTruePredicate(Module &M, IRBuilder<> &IRB) {
     return IRB.CreateICmpNE(orOne, ConstantInt::get(I64Ty, 0), "bcf.hw.pred");
 
   } else {
-    // Software fallback: (y < 10 || x * (x+1) % 2 == 0) — classic BCF predicate
-    // Just return a null predicate; caller falls back to global-variable predicate.
     return nullptr;
   }
 }
@@ -136,16 +140,9 @@ static Value *buildTSCNoisePredicate(Module &M, IRBuilder<> &IRB) {
   return IRB.CreateICmpNE(orOne, ConstantInt::get(I64Ty, 0LL), "bcf.tsc.pred");
 }
 
-// Build a 3-way AND entropy-chain predicate (always true, maximally opaque).
-//   Tier 1: CPUID-SSE (hardware)     — opaque to symbolic execution
-//   Tier 2: RDTSC|1 != 0             — opaque to static analysis
-//   Tier 3: loaded global != sentinel — opaque to constant folding
-// Falls back to a 2-way or 1-way combination if the architecture cannot
-// support all three tiers.
 static Value *buildEntropyChainPredicate(Module &M, IRBuilder<> &IRB,
                                          GlobalVariable *sentinelGV) {
   LLVMContext &Ctx = M.getContext();
-  Type *I1Ty  = Type::getInt1Ty(Ctx);
   Type *I32Ty = Type::getInt32Ty(Ctx);
   Type *I64Ty = Type::getInt64Ty(Ctx);
   Value *result = ConstantInt::getTrue(Ctx);
@@ -153,12 +150,10 @@ static Value *buildEntropyChainPredicate(Module &M, IRBuilder<> &IRB,
   if (targetIsX86(M)) {
     // Tier 1: CPUID — EDX bit 25 = SSE (always 1 on x86_64)
     FunctionType *CpuidTy = FunctionType::get(I32Ty, {}, false);
-    InlineAsm *cpuidIA = InlineAsm::get(CpuidTy,
-        "push %rbx\n\t"
-        "mov $$1, %eax\n\t"
-        "cpuid\n\t"
-        "mov %edx, $0\n\t"
-        "pop %rbx",
+    const char *asmCode = targetIsX86_64(M) ?
+        "push %rbx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %rbx" :
+        "push %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %ebx";
+    InlineAsm *cpuidIA = InlineAsm::get(CpuidTy, asmCode,
         "=r,~{eax},~{ecx},~{edx},~{dirflag},~{fpsr},~{flags}",
         true, InlineAsm::AD_ATT);
     Value *edx = IRB.CreateCall(CpuidTy, cpuidIA, {}, "bcf.ec.edx");

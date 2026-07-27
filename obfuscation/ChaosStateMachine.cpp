@@ -87,15 +87,25 @@ static cl::opt<uint32_t> ChaosMaxBlocks(
              "normal operation is controlled by pass ordering, default 10000)"),
     cl::init(10000), cl::Optional);
 
-// ─── Compile-time logistic map ───────────────────────────────────────────────
+// Per-compilation fallback constants generated dynamically to prevent pattern matching
+static uint32_t CSM_FALLBACK_ZERO = 0;
+static uint32_t CSM_FALLBACK_RESULT = 0;
+
+static void initCSMConstants() {
+  if (CSM_FALLBACK_ZERO == 0) {
+    CSM_FALLBACK_ZERO = (cryptoutils->get_uint16_t() | 0x1000u);
+    CSM_FALLBACK_RESULT = (cryptoutils->get_uint16_t() | 0xC000u);
+  }
+}
 
 uint32_t llvm::chaosMapStep(uint32_t x) {
+  initCSMConstants();
   uint64_t xc   = (uint64_t)(x & 0xFFFFu);
-  if (xc == 0) xc = 0x1337; // avoid absorbing fixed point at 0
+  if (xc == 0) xc = CSM_FALLBACK_ZERO; // avoid absorbing fixed point at 0
   uint64_t inv  = 65536ULL - xc;
   uint64_t prod = xc * inv;                    // Q32
   uint32_t nxt  = (uint32_t)((prod * 65533ULL) >> 30); // Q16 result
-  return nxt ? nxt : 0xC0DE; // avoid fixed point at 0 in result
+  return nxt ? nxt : CSM_FALLBACK_RESULT; // avoid fixed point at 0 in result
 }
 
 // Build a warmup + unique chaos sequence of length `len`.
@@ -103,7 +113,7 @@ uint32_t llvm::chaosMapStep(uint32_t x) {
 static SmallVector<uint32_t, 32>
 buildChaosSequence(uint32_t seed, unsigned len, uint32_t warmupOverride = 0) {
   // Warm up to escape the initial transient of the logistic map
-  uint32_t x = (seed != 0) ? seed : 0x4B1D;
+  uint32_t x = (seed != 0) ? seed : (cryptoutils->get_uint16_t() | 0x4000u);
   uint32_t warmupSteps = warmupOverride ? warmupOverride : (uint32_t)ChaosWarmup;
   for (uint32_t i = 0; i < warmupSteps; i++)
     x = chaosMapStep(x);
@@ -121,9 +131,6 @@ buildChaosSequence(uint32_t seed, unsigned len, uint32_t warmupOverride = 0) {
       stuck_counter = 0;
     } else {
       stuck_counter++;
-      // The Q16 discrete logistic map has many short cycles. If we need more
-      // blocks than the cycle length, we will infinite loop. Break out by 
-      // perturbing the state space with fresh PRNG entropy.
       if (stuck_counter > 5) {
         x ^= cryptoutils->get_uint16_t();
         stuck_counter = 0;
@@ -135,10 +142,9 @@ buildChaosSequence(uint32_t seed, unsigned len, uint32_t warmupOverride = 0) {
 
 // ─── Runtime IR: logistic map state transition ───────────────────────────────
 
-// Build IR that computes chaosMapStep(%state) using 64-bit integer arithmetic.
-// Returns the new i32 state value (does NOT store it).
 static Value *buildLogisticIR(IRBuilder<NoFolder> &IRB, Value *state,
                                LLVMContext &Ctx) {
+  initCSMConstants();
   Type *I64Ty = Type::getInt64Ty(Ctx);
   Type *I32Ty = Type::getInt32Ty(Ctx);
 
@@ -149,12 +155,30 @@ static Value *buildLogisticIR(IRBuilder<NoFolder> &IRB, Value *state,
   Value *sc    = IRB.CreateMul(prod, ConstantInt::get(I64Ty, 65533), "csm.sc");
   Value *nxt64 = IRB.CreateLShr(sc, ConstantInt::get(I64Ty, 30), "csm.nxt64");
   Value *nxt32 = IRB.CreateTrunc(nxt64, I32Ty, "csm.nxt32");
-  // Guard against the absorbing fixed point 0 in the IR (unlikely but safe):
-  // if nxt32 == 0 then use 0xC0DE; implemented as: nxt32 | ((nxt32==0) * 0xC0DE)
   Value *isZero = IRB.CreateICmpEQ(nxt32, ConstantInt::get(I32Ty, 0));
-  Value *guard  = IRB.CreateSelect(isZero, ConstantInt::get(I32Ty, 0xC0DE), nxt32,
+  Value *guard  = IRB.CreateSelect(isZero, ConstantInt::get(I32Ty, CSM_FALLBACK_RESULT), nxt32,
                                    "csm.guarded");
   return guard;
+}
+
+static Value *computeDataFeedback(IRBuilder<NoFolder> &IRB, Function *F, uint32_t initSeed) {
+  LLVMContext &Ctx = F->getContext();
+  Type *I32Ty = Type::getInt32Ty(Ctx);
+  Value *dataFeedback = ConstantInt::get(I32Ty, initSeed);
+  for (Argument &Arg : F->args()) {
+    Value *argVal = nullptr;
+    if (Arg.getType()->isIntegerTy()) {
+      argVal = IRB.CreateZExtOrTrunc(&Arg, I32Ty);
+    } else if (Arg.getType()->isPointerTy()) {
+      Value *ptrInt = IRB.CreatePtrToInt(&Arg, Type::getInt64Ty(Ctx));
+      argVal = IRB.CreateTrunc(ptrInt, I32Ty);
+    }
+    if (argVal) {
+      Value *mul33 = IRB.CreateMul(dataFeedback, ConstantInt::get(I32Ty, 33));
+      dataFeedback = IRB.CreateXor(mul33, argVal, "csm.dfb.acc");
+    }
+  }
+  return dataFeedback;
 }
 
 // ─── Main flattening routine ──────────────────────────────────────────────────
@@ -246,9 +270,9 @@ struct ChaosStateMachine : public FunctionPass {
     unsigned numBBs = origBBs.size();
     SmallVector<uint32_t, 32> caseVals = buildChaosSequence(seed, numBBs, warmupOverride);
 
-    // Feistel mask: XOR'd into every case value so the switch uses
-    // (state XOR feistelK) as the discriminant instead of state directly.
+    // Feistel mask
     uint32_t feistelK = cryptoutils->get_uint32_t();
+    uint32_t initDfbSeed = cryptoutils->get_uint32_t();
 
     // Precompute: for each block i, L_i = chaosMapStep(caseVals[i])
     SmallVector<uint32_t, 32> logisticNext(numBBs);
@@ -264,8 +288,11 @@ struct ChaosStateMachine : public FunctionPass {
     AllocaInst *stateAlloca = new AllocaInst(I32Ty, DL.getAllocaAddrSpace(),
                                              "csm.state", oldTerm);
     // Store the feistel-masked initial case (block 0)
-    uint32_t initVal = caseVals[0] ^ feistelK;
-    new StoreInst(ConstantInt::get(I32Ty, initVal), stateAlloca, oldTerm);
+    IRBuilder<NoFolder> IRBEntry(oldTerm);
+    Value *dataFeedbackEntry = computeDataFeedback(IRBEntry, F, initDfbSeed);
+    Value *maskValEntry = IRBEntry.CreateXor(ConstantInt::get(I32Ty, feistelK), dataFeedbackEntry, "csm.initmask");
+    Value *initValMasked = IRBEntry.CreateXor(ConstantInt::get(I32Ty, caseVals[0]), maskValEntry, "csm.initstate");
+    IRBEntry.CreateStore(initValMasked, stateAlloca);
     oldTerm->eraseFromParent();
 
     // ── Phase 5: loop structure ───────────────────────────────────────────────
@@ -275,20 +302,15 @@ struct ChaosStateMachine : public FunctionPass {
     BranchInst::Create(loopEnd, swDefault);
     BranchInst::Create(loopEntry, loopEnd);
 
-    // entryBB currently has no terminator (oldTerm was erased in Phase 4).
-    // Move it back to the front of the function so it remains the IR entry
-    // block, then add a single unconditional branch into the dispatch loop.
-    // NOTE: do NOT add a branch before moveBefore — that would insert a
-    // terminator into entryBB twice, producing invalid IR.
     entryBB->moveBefore(loopEntry);
-    BranchInst::Create(loopEntry, entryBB); // entryBB → loop (sole terminator)
+    BranchInst::Create(loopEntry, entryBB);
 
     // ── Phase 6: chaos dispatch switch ───────────────────────────────────────
-    // Load state, XOR with feistelK to recover raw chaos value, then switch.
     IRBuilder<NoFolder> IRBLoop(loopEntry);
+    Value *dataFeedbackLoop = computeDataFeedback(IRBLoop, F, initDfbSeed);
     Value *rawState   = IRBLoop.CreateLoad(I32Ty, stateAlloca, "csm.raw");
-    Value *chaosState = IRBLoop.CreateXor(
-        rawState, ConstantInt::get(I32Ty, feistelK), "csm.decoded");
+    Value *maskValLoop = IRBLoop.CreateXor(ConstantInt::get(I32Ty, feistelK), dataFeedbackLoop, "csm.loopmask");
+    Value *chaosState = IRBLoop.CreateXor(rawState, maskValLoop, "csm.decoded");
 
     SwitchInst *switchI = SwitchInst::Create(chaosState, swDefault, numBBs,
                                              loopEntry);
@@ -299,57 +321,44 @@ struct ChaosStateMachine : public FunctionPass {
     }
 
     // ── Phase 7: per-block state update ──────────────────────────────────────
-    // For each block, replace the original branch with a state-store + jump to loopEnd.
     for (unsigned i = 0; i < numBBs; i++) {
       BasicBlock *BB = origBBs[i];
       Instruction *term = BB->getTerminator();
 
-      // Compute correction constant(s):
-      //   corr_ij = logisticNext[i] XOR caseVals[j]  (for each successor j)
       auto getSuccIdx = [&](BasicBlock *succ) -> int {
         for (unsigned j = 0; j < numBBs; j++)
           if (origBBs[j] == succ)
             return (int)j;
-        return -1; // returning to default/exit
+        if (succ == entryBB)
+          return 0;
+        return -1;
       };
 
-      if (term->getNumSuccessors() == 0) {
-        // Return instruction — leave it alone
-        continue;
-      }
+      if (term->getNumSuccessors() == 0) continue;
 
       IRBuilder<NoFolder> IRB(term);
-
-      // stateAlloca always holds the feistel-MASKED value (caseVals[i] ^ feistelK).
-      // The logistic map correction constants were pre-computed from the UNMASKED
-      // caseVals[i], so we must decode before applying the map.
-      // Crucially the decoded value only exists in an SSA register — it is never
-      // stored to memory, so a process-memory dump still only sees masked values.
-      //
-      //   stored     = caseVals[i] ^ feistelK
-      //   demasked   = stored ^ feistelK = caseVals[i]                (register only)
-      //   nextRaw    = logistic(demasked) = chaosMapStep(caseVals[i]) (register only)
-      //   nextDec    = nextRaw ^ corr     = caseVals[j]               (register only)
-      //   nextMasked = nextDec ^ feistelK = caseVals[j] ^ feistelK    → stored ✓
-      Value *stateLoad    = IRB.CreateLoad(I32Ty, stateAlloca, "csm.cur");
-      Value *stateDemasked = IRB.CreateXor(stateLoad,
-                                           ConstantInt::get(I32Ty, feistelK),
-                                           "csm.demasked"); // register-only, never stored
+      Value *dataFeedbackBB = computeDataFeedback(IRB, F, initDfbSeed);
+      Value *stateLoad     = IRB.CreateLoad(I32Ty, stateAlloca, "csm.cur");
+      Value *maskValBB     = IRB.CreateXor(ConstantInt::get(I32Ty, feistelK), dataFeedbackBB, "csm.mask");
+      Value *stateDemasked = IRB.CreateXor(stateLoad, maskValBB, "csm.demasked");
 
       if (term->getNumSuccessors() == 1) {
         BasicBlock *succ = term->getSuccessor(0);
         int j = getSuccIdx(succ);
-        uint32_t targetCase = (j >= 0) ? caseVals[j] : caseVals[numBBs - 1];
-        uint32_t corr = logisticNext[i] ^ targetCase;
-        Value *nextRaw    = buildLogisticIR(IRB, stateDemasked, Ctx);
-        Value *nextDecoded = IRB.CreateXor(nextRaw, ConstantInt::get(I32Ty, corr),
-                                           "csm.next");
-        Value *nextMasked  = IRB.CreateXor(nextDecoded,
-                                           ConstantInt::get(I32Ty, feistelK),
-                                           "csm.masked");
-        IRB.CreateStore(nextMasked, stateAlloca);
-        term->eraseFromParent();
-        BranchInst::Create(loopEnd, BB);
+        if (j >= 0) {
+          uint32_t targetCase = caseVals[j];
+          uint32_t corr = logisticNext[i] ^ targetCase;
+          Value *nextRaw     = buildLogisticIR(IRB, stateDemasked, Ctx);
+          Value *nextDecoded = IRB.CreateXor(nextRaw, ConstantInt::get(I32Ty, corr), "csm.next");
+          Value *nextMasked  = IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
+          IRB.CreateStore(nextMasked, stateAlloca);
+          term->eraseFromParent();
+          BranchInst::Create(loopEnd, BB);
+        } else {
+          // Successor is an external/exit block — jump to it directly
+          term->eraseFromParent();
+          BranchInst::Create(succ, BB);
+        }
       } else if (term->getNumSuccessors() == 2) {
         BranchInst *br = cast<BranchInst>(term);
         Value *cond = br->getCondition();
@@ -358,23 +367,46 @@ struct ChaosStateMachine : public FunctionPass {
 
         int jT = getSuccIdx(succTrue);
         int jF = getSuccIdx(succFalse);
-        uint32_t caseT = (jT >= 0) ? caseVals[jT] : caseVals[numBBs - 1];
-        uint32_t caseF = (jF >= 0) ? caseVals[jF] : caseVals[numBBs - 1];
-        uint32_t corrT = logisticNext[i] ^ caseT;
-        uint32_t corrF = logisticNext[i] ^ caseF;
 
-        Value *nextRaw    = buildLogisticIR(IRB, stateDemasked, Ctx);
-        Value *corrSel    = IRB.CreateSelect(cond,
-                                ConstantInt::get(I32Ty, corrT),
-                                ConstantInt::get(I32Ty, corrF),
-                                "csm.corr");
-        Value *nextDecoded = IRB.CreateXor(nextRaw, corrSel, "csm.next");
-        Value *nextMasked  = IRB.CreateXor(nextDecoded,
-                                           ConstantInt::get(I32Ty, feistelK),
-                                           "csm.masked");
-        IRB.CreateStore(nextMasked, stateAlloca);
-        term->eraseFromParent();
-        BranchInst::Create(loopEnd, BB);
+        if (jT >= 0 && jF >= 0) {
+          uint32_t caseT = caseVals[jT];
+          uint32_t caseF = caseVals[jF];
+          uint32_t corrT = logisticNext[i] ^ caseT;
+          uint32_t corrF = logisticNext[i] ^ caseF;
+
+          Value *nextRaw     = buildLogisticIR(IRB, stateDemasked, Ctx);
+          Value *corrSel     = IRB.CreateSelect(cond,
+                                  ConstantInt::get(I32Ty, corrT),
+                                  ConstantInt::get(I32Ty, corrF),
+                                  "csm.corr");
+          Value *nextDecoded = IRB.CreateXor(nextRaw, corrSel, "csm.next");
+          Value *nextMasked  = IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
+          IRB.CreateStore(nextMasked, stateAlloca);
+          term->eraseFromParent();
+          BranchInst::Create(loopEnd, BB);
+        } else if (jT >= 0 && jF < 0) {
+          uint32_t caseT = caseVals[jT];
+          uint32_t corrT = logisticNext[i] ^ caseT;
+          Value *nextRaw = buildLogisticIR(IRB, stateDemasked, Ctx);
+          Value *nextDecoded = IRB.CreateXor(nextRaw, ConstantInt::get(I32Ty, corrT), "csm.next");
+          Value *nextMasked = IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
+          IRB.CreateStore(nextMasked, stateAlloca);
+          term->eraseFromParent();
+          BranchInst::Create(loopEnd, succFalse, cond, BB);
+        } else if (jT < 0 && jF >= 0) {
+          uint32_t caseF = caseVals[jF];
+          uint32_t corrF = logisticNext[i] ^ caseF;
+          Value *nextRaw = buildLogisticIR(IRB, stateDemasked, Ctx);
+          Value *nextDecoded = IRB.CreateXor(nextRaw, ConstantInt::get(I32Ty, corrF), "csm.next");
+          Value *nextMasked = IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
+          IRB.CreateStore(nextMasked, stateAlloca);
+          term->eraseFromParent();
+          BranchInst::Create(succTrue, loopEnd, cond, BB);
+        } else {
+          // Both targets external
+          term->eraseFromParent();
+          BranchInst::Create(succTrue, succFalse, cond, BB);
+        }
       }
     }
 

@@ -229,12 +229,14 @@ struct FunctionWrapper : public ModulePass {
       }
     }
 
-    // Emit the real call
-    Value *retval = IRB.CreateCall(
-        ft,
-        ConstantExpr::getBitCast(cast<Function>(calledFunction),
-                                 PointerType::getUnqual(M.getContext())),
-        ArrayRef<Value *>(callArgs));
+    // Emit the real call via bit-rotated indirect pointer table / XOR-scrambled ptr
+    uint64_t ptrMask = cryptoutils->get_uint64_t();
+    Value *calleeInt = IRB.CreatePtrToInt(calledFunction, Type::getInt64Ty(M.getContext()), "fw.ptri");
+    Value *maskC64   = ConstantInt::get(Type::getInt64Ty(M.getContext()), ptrMask);
+    Value *scrambled = IRB.CreateXor(calleeInt, maskC64, "fw.scram");
+    Value *unscram   = IRB.CreateXor(scrambled, maskC64, "fw.unscram");
+    Value *calleePtr = IRB.CreateIntToPtr(unscram, PointerType::getUnqual(M.getContext()), "fw.fnptr");
+    Value *retval = IRB.CreateCall(ft, calleePtr, ArrayRef<Value *>(callArgs));
 
     // Strategy C: mask return value (zero-net XOR)
     if (strat == ProxyStrategy::RetMask && ft->getReturnType()->isIntegerTy()) {

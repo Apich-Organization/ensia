@@ -38,10 +38,16 @@ namespace MBAImpl {
 // Identities are verifiably correct over all inputs (bitwise ring).
 void mbaAdd(BinaryOperator *bo);
 
+// Apply Bit Permutation Polynomial (BPP) transformation: x -> P^-1(P(x))
+void mbaBPP(BinaryOperator *bo);
+
+// Apply Bivariate Non-Linear MBA with cross-product terms: c1*(a*b) + c2*(a&b) + c3*(a^b)
+void mbaBivariateNonlinear(BinaryOperator *bo);
+
 // Apply a random linear MBA identity for SUB
 void mbaSub(BinaryOperator *bo);
 
-// Apply a random MBA identity for XOR
+// Apply a random linear MBA identity for SUBXOR
 void mbaXor(BinaryOperator *bo);
 
 // Apply a random MBA identity for AND

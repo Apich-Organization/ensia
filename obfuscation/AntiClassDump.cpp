@@ -405,18 +405,18 @@ struct AntiClassDump : public ModulePass {
       appendToCompilerUsed(*M, {newMethodStructGV});
       newMethodStructGV->copyAttributesFrom(methodListGV);
       // OLLVM-Next: use PointerType::getUnqual instead of getPointerTo()
-      Constant *bitcastExpr = ConstantExpr::getBitCast(
-          newMethodStructGV,
-          opaquepointers
-              ? PointerType::getUnqual(newType)
-              : PointerType::getUnqual(StructType::getTypeByName(
-                    M->getContext(), "struct.__method_list_t")));
+      Constant *bitcastExpr = opaquepointers
+          ? cast<Constant>(newMethodStructGV)
+          : ConstantExpr::getBitCast(
+                newMethodStructGV,
+                PointerType::getUnqual(StructType::getTypeByName(
+                      M->getContext(), "struct.__method_list_t")));
       metaclassCS->handleOperandChange(metaclassCS->getAggregateElement(5),
-                                       opaquepointers ? newMethodStructGV
+                                       opaquepointers ? cast<Constant>(newMethodStructGV)
                                                       : bitcastExpr);
       methodListGV->replaceAllUsesWith(
           opaquepointers
-              ? newMethodStructGV
+              ? cast<Constant>(newMethodStructGV)
               : ConstantExpr::getBitCast(newMethodStructGV,
                                          methodListGV->getType()));
       methodListGV->dropAllReferences();

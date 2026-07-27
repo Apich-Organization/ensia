@@ -844,11 +844,9 @@ static void mulSubstitution3(BinaryOperator *bo) {
     return;
   }
   unsigned k = width / 2;
-  ConstantInt *kConst   = (ConstantInt *)ConstantInt::get(bo->getType(), k);
-  // k = width/2 ≤ 32, so 1ULL<<k never overflows; UINT64_MAX was wrong for
-  // width==64 because bL would equal b (full value) instead of lower half.
-  ConstantInt *maskConst = (ConstantInt *)ConstantInt::get(
-      bo->getType(), (1ULL << k) - 1ULL);
+  ConstantInt *kConst = cast<ConstantInt>(ConstantInt::get(bo->getType(), k));
+  ConstantInt *maskConst = cast<ConstantInt>(ConstantInt::get(
+      bo->getType(), APInt::getLowBitsSet(width, k)));
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *bH = BinaryOperator::Create(Instruction::LShr, b, kConst, "", bo);
   BinaryOperator *bL = BinaryOperator::Create(Instruction::And, b, maskConst, "", bo);
@@ -1229,11 +1227,7 @@ static void xorHighLow(BinaryOperator *bo) {
   }
   unsigned k = width / 2;
   ConstantInt *kC   = cast<ConstantInt>(ConstantInt::get(T, k));
-  // k = width/2 ≤ 32, so (1ULL<<k) never overflows; UINT64_MAX was wrong for
-  // width==64 because it left the "low half" mask as the full 64-bit value,
-  // causing the formula to return only the lower k bits of a^b.
-  uint64_t maskV    = (1ULL << k) - 1ULL;
-  ConstantInt *maskC = cast<ConstantInt>(ConstantInt::get(T, maskV));
+  ConstantInt *maskC = cast<ConstantInt>(ConstantInt::get(T, APInt::getLowBitsSet(width, k)));
   // High bits: ((a>>k)^(b>>k))<<k
   BinaryOperator *aH  = BinaryOperator::Create(Instruction::LShr, a, kC, "", bo);
   BinaryOperator *bH  = BinaryOperator::Create(Instruction::LShr, b, kC, "", bo);

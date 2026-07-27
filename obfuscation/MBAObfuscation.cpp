@@ -625,6 +625,85 @@ void mbaMul(BinaryOperator *bo) {
   bo->replaceAllUsesWith(res);
 }
 
+void mbaBPP(BinaryOperator *bo) {
+  IRBuilder<NoFolder> IRB(bo);
+  Value *a = bo->getOperand(0);
+  Type  *T = bo->getType();
+  if (!T->isIntegerTy()) return;
+  unsigned width = T->getIntegerBitWidth();
+  if (width < 8) return;
+
+  uint64_t a1 = cryptoutils->get_uint64_t() | 1ULL; // odd
+  uint64_t b  = cryptoutils->get_uint64_t();
+  uint64_t k  = cryptoutils->get_uint64_t();
+
+  // Compute exact modular inverse of a1 mod 2^64 via Newton steps
+  uint64_t inv = a1;
+  for (int step = 0; step < 5; step++)
+    inv *= 2ULL - a1 * inv;
+
+  Constant *constA1  = ConstantInt::get(T, a1);
+  Constant *constB   = ConstantInt::get(T, b);
+  Constant *constK   = ConstantInt::get(T, k);
+  Constant *constInv = ConstantInt::get(T, inv);
+
+  // Evaluate P(a) = (a1 * a + b) ^ k
+  Value *term1 = IRB.CreateMul(constA1, a);
+  Value *term2 = IRB.CreateAdd(term1, constB);
+  Value *y     = IRB.CreateXor(term2, constK, "bpp.y");
+
+  // Evaluate P^-1(y) = inv * ((y ^ k) - b)
+  Value *unK   = IRB.CreateXor(y, constK);
+  Value *unB   = IRB.CreateSub(unK, constB);
+  Value *invY  = IRB.CreateMul(constInv, unB, "bpp.x");
+
+  bo->setOperand(0, invY);
+}
+
+void mbaBivariateNonlinear(BinaryOperator *bo) {
+  IRBuilder<NoFolder> IRB(bo);
+  Value *a = bo->getOperand(0), *b = bo->getOperand(1);
+  Type  *T = bo->getType();
+  if (!T->isIntegerTy()) return;
+
+  // Bivariate non-linear MBA for binary ops:
+  // Combines non-linear product terms (a*b), bitwise terms (a^b, a&b), and zero-product terms
+  // Example for ADD: a + b = (a ^ b) + 2*(a & b) + (a ^ a)*b^2
+  Value *res = nullptr;
+  switch (bo->getOpcode()) {
+  case Instruction::Add: {
+    Value *xorAB = IRB.CreateXor(a, b);
+    Value *andAB = IRB.CreateAnd(a, b);
+    Value *twoAnd = IRB.CreateMul(andAB, ConstantInt::get(T, 2));
+    Value *base = IRB.CreateAdd(xorAB, twoAnd);
+
+    // Injected non-linear zero term: (a ^ a) * b^2
+    Value *zeroTerm = IRB.CreateXor(a, a);
+    Value *b2 = IRB.CreateMul(b, b);
+    Value *nlNoise = IRB.CreateMul(zeroTerm, b2);
+    res = IRB.CreateAdd(base, nlNoise);
+    break;
+  }
+  case Instruction::Xor: {
+    Value *subAB = IRB.CreateSub(a, b);
+    Value *notA  = IRB.CreateNot(a);
+    Value *andNB = IRB.CreateAnd(notA, b);
+    Value *twoAnd = IRB.CreateMul(andNB, ConstantInt::get(T, 2));
+    Value *base = IRB.CreateAdd(subAB, twoAnd);
+
+    // Injected non-linear zero term: (b & ~b) * a^3
+    Value *zeroTerm = IRB.CreateAnd(b, IRB.CreateNot(b));
+    Value *a3 = IRB.CreateMul(IRB.CreateMul(a, a), a);
+    Value *nlNoise = IRB.CreateMul(zeroTerm, a3);
+    res = IRB.CreateAdd(base, nlNoise);
+    break;
+  }
+  default:
+    return;
+  }
+  bo->replaceAllUsesWith(res);
+}
+
 } // namespace MBAImpl
 } // namespace llvm
 
@@ -676,6 +755,15 @@ struct MBAObfuscation : public FunctionPass {
             targets.push_back(BO);
 
       for (BinaryOperator *BO : targets) {
+        if (cryptoutils->get_range(100) < 30) {
+          MBAImpl::mbaBPP(BO);
+        }
+        if (BO->getOpcode() == Instruction::Add || BO->getOpcode() == Instruction::Xor) {
+          if (cryptoutils->get_range(100) < 25) {
+            MBAImpl::mbaBivariateNonlinear(BO);
+            continue;
+          }
+        }
         switch (BO->getOpcode()) {
         case Instruction::Add:  MBAImpl::mbaAdd(BO);  break;
         case Instruction::Sub:  MBAImpl::mbaSub(BO);  break;

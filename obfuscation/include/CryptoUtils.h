@@ -22,9 +22,12 @@
 #include "llvm/Support/ManagedStatic.h"
 #include <cstdio>
 #include <map>
+#include <mutex>
 #include <stdint.h>
 #include <string>
 #include <unordered_map>
+
+extern std::mutex g_crypto_mutex;
 
 // ─── CryptoUtils — xoshiro256++ PRNG with multi-source entropy seeding ────────
 //
@@ -80,6 +83,7 @@ private:
   }
   // xoshiro256++ step — passes BigCrush, period 2^256-1
   uint64_t next() noexcept {
+    std::lock_guard<std::mutex> lock(g_crypto_mutex);
     const uint64_t result = rotl64(s[0] + s[3], 23) + s[0];
     const uint64_t t      = s[1] << 17;
     s[2] ^= s[0];

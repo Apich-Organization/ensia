@@ -211,22 +211,32 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
   }
 
   unsigned lanes = lanesFor(elemBits, totalBits);
-  unsigned K = cryptoutils->get_range(lanes); // real operand lane
+  unsigned K = cryptoutils->get_range(lanes); // real operand primary lane
 
   IRBuilder<NoFolder> IRB(bo);
   Value *a = bo->getOperand(0);
   Value *b = bo->getOperand(1);
 
-  Value *va = buildNoiseVector(IRB, a, K, lanes, scalarTy);
-  Value *vb;
+  // Multi-lane cross-talk dependency: fill all lanes with a-dependent and b-dependent values
+  Constant *randOffset = scalarTy->isIntegerTy() ? ConstantInt::get(scalarTy, cryptoutils->get_uint64_t()) : nullptr;
+  Type *vecTy = FixedVectorType::get(scalarTy, lanes);
+  Value *va = UndefValue::get(vecTy);
+  Value *vb = UndefValue::get(vecTy);
 
-  if (isShift) {
-    // Broadcast shift amount to all lanes to prevent UB from out-of-range shifts
-    // in noise lanes.  The shift itself is performed on all lanes uniformly;
-    // only lane K's result is used.
-    vb = buildUniformVector(IRB, b, lanes, scalarTy);
-  } else {
-    vb = buildNoiseVector(IRB, b, K, lanes, scalarTy);
+  for (unsigned i = 0; i < lanes; i++) {
+    Value *elemA = a;
+    Value *elemB = b;
+    if (i != K && randOffset && scalarTy->isIntegerTy() && !isShift) {
+      if (i % 2 == 1) {
+        elemA = IRB.CreateAdd(a, randOffset);
+        elemB = IRB.CreateAdd(b, randOffset);
+      } else {
+        elemA = IRB.CreateXor(a, randOffset);
+        elemB = IRB.CreateXor(b, randOffset);
+      }
+    }
+    va = IRB.CreateInsertElement(va, elemA, (uint64_t)i, "");
+    vb = IRB.CreateInsertElement(vb, isShift ? b : elemB, (uint64_t)i, "");
   }
 
   // Vector operation (same opcode as original scalar)
@@ -247,7 +257,7 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
   return true;
 }
 
-// ─── Lift an ICmpInst to a vector comparison ─────────────────────────────────
+// ─── Lift an ICmpInst to a vector comparison with bitmask reduction ─────────
 
 static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
                               bool doShuffle) {
@@ -267,7 +277,7 @@ static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
   Value *va = buildNoiseVector(IRB, a, K, lanes, scalarTy);
   Value *vb = buildNoiseVector(IRB, b, K, lanes, scalarTy);
 
-  // Vector integer comparison → <N x i1>
+  // Vector comparison -> <N x i1>
   Value *vcmp = IRB.CreateICmp(ici->getPredicate(), va, vb, "");
 
   // Optional shuffle on the i1 vector
@@ -278,8 +288,13 @@ static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
     extractLane = shuf.second;
   }
 
-  // Extract the i1 result from lane K
-  Value *result = IRB.CreateExtractElement(vcmp, (uint64_t)extractLane, "");
+  // Bitmask Reduction: Convert <N x i1> to scalar integer mask without naive extract
+  // ZExt <N x i1> -> <N x i32>, then BitCast / Reduce OR to eliminate plain control flow instructions
+  Type *i32Ty = Type::getInt32Ty(ici->getContext());
+  Type *vec32Ty = FixedVectorType::get(i32Ty, lanes);
+  Value *zextVec = IRB.CreateZExt(vcmp, vec32Ty);
+  Value *maskVal = IRB.CreateExtractElement(zextVec, (uint64_t)extractLane, "");
+  Value *result  = IRB.CreateICmpNE(maskVal, ConstantInt::get(i32Ty, 0), "");
   ici->replaceAllUsesWith(result);
   return true;
 }

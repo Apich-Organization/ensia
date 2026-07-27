@@ -76,7 +76,7 @@ struct KnuthEncKey {
   uint64_t xorK;  // final XOR mask
 };
 
-namespace llvm {
+namespace {
 struct IndirectBranch : public FunctionPass {
   static char ID;
   bool flag;
@@ -304,6 +304,12 @@ struct IndirectBranch : public FunctionPass {
       if (BI->isConditional()) {
         Value *condition = BI->getCondition();
         Value *zext = IRBBI->CreateZExt(condition, Int32Ty);
+        if (knuthKeys.count(&Func)) {
+          const KnuthEncKey &kk = knuthKeys[&Func];
+          Value *mulV = IRBBI->CreateMul(zext, ConstantInt::get(Int32Ty, (uint32_t)kk.mult));
+          Value *addV = IRBBI->CreateAdd(mulV, ConstantInt::get(Int32Ty, (uint32_t)kk.delta));
+          zext = IRBBI->CreateXor(addV, ConstantInt::get(Int32Ty, (uint32_t)kk.xorK));
+        }
         if (UseStackTempLocal) {
           AllocaInst *condAI = IRBEntry->CreateAlloca(Int32Ty);
           IRBBI->CreateStore(zext, condAI);
@@ -314,6 +320,11 @@ struct IndirectBranch : public FunctionPass {
         RealIndex = index;
       } else {
         Value *indexval = nullptr;
+        uint32_t targetIdx = indexmap[BI->getSuccessor(0)];
+        if (knuthKeys.count(&Func)) {
+          const KnuthEncKey &kk = knuthKeys[&Func];
+          targetIdx = ((targetIdx * (uint32_t)kk.mult) + (uint32_t)kk.delta) ^ (uint32_t)kk.xorK;
+        }
         ConstantInt *IndexEncKey =
             EncryptJumpTargetTempLocal
                 ? cast<ConstantInt>(ConstantInt::get(
@@ -323,14 +334,13 @@ struct IndirectBranch : public FunctionPass {
           GlobalVariable *indexgv = new GlobalVariable(
               *M, Int32Ty, false, GlobalValue::LinkageTypes::PrivateLinkage,
               ConstantInt::get(IndexEncKey->getType(),
-                               IndexEncKey->getValue() ^
-                                   indexmap[BI->getSuccessor(0)]),
+                               IndexEncKey->getValue() ^ targetIdx),
               "IndirectBranchingIndex");
           usedGlobals.push_back(indexgv);
           indexval = (UseStackTempLocal ? IRBEntry : IRBBI)
                          ->CreateLoad(indexgv->getValueType(), indexgv);
         } else {
-          indexval = ConstantInt::get(Int32Ty, indexmap[BI->getSuccessor(0)]);
+          indexval = ConstantInt::get(Int32Ty, targetIdx);
           if (UseStackTempLocal) {
             AllocaInst *indexAI = IRBEntry->CreateAlloca(Int32Ty);
             IRBEntry->CreateStore(indexval, indexAI);
@@ -343,13 +353,34 @@ struct IndirectBranch : public FunctionPass {
                         : index;
       }
       Value *LI, *enckeyLoad, *gepptr = nullptr;
+      
+      // OLLVM-Next: Knuth multiplicative hash decryption on index.
+      // At compile time, the index is encoded as (index * mult + delta) ^ xorK.
+      // At runtime, we reverse: index = (((encIndex ^ xorK) - delta) * multInv)
+      Value *effectiveIndex = RealIndex;
+      if (knuthKeys.count(&Func)) {
+        const KnuthEncKey &kk = knuthKeys[&Func];
+        uint64_t inv = kk.mult;
+        for (int step = 0; step < 5; step++)
+          inv *= 2ULL - kk.mult * inv;
+        uint64_t multInv = inv;
+
+        Type *I32Ty = Type::getInt32Ty(M->getContext());
+        Value *unxored = IRBBI->CreateXor(effectiveIndex,
+                             ConstantInt::get(I32Ty, (uint32_t)kk.xorK), "indibr.unxor");
+        Value *undelta = IRBBI->CreateSub(unxored,
+                             ConstantInt::get(I32Ty, (uint32_t)kk.delta), "indibr.undelta");
+        effectiveIndex = IRBBI->CreateMul(undelta,
+                             ConstantInt::get(I32Ty, (uint32_t)multInv), "indibr.decidx");
+      }
+
       if (UseStackTempLocal) {
         LoadInst *LILoadFrom =
             IRBBI->CreateLoad(LoadFrom->getType(), LoadFromAI);
         Value *GEP = IRBBI->CreateGEP(
             LoadFrom->getValueType(), LILoadFrom,
-            {zero, BI->isConditional() ? IRBBI->CreateLoad(Int32Ty, RealIndex)
-                                       : RealIndex});
+            {zero, BI->isConditional() ? IRBBI->CreateLoad(Int32Ty, effectiveIndex)
+                                       : effectiveIndex});
         if (!EncryptJumpTargetTempLocal)
           LI = IRBBI->CreateLoad(Int8PtrTy, GEP,
                                  "IndirectBranchingTargetAddress");
@@ -357,7 +388,7 @@ struct IndirectBranch : public FunctionPass {
           gepptr = IRBBI->CreateLoad(Int8PtrTy, GEP);
       } else {
         Value *GEP = IRBBI->CreateGEP(LoadFrom->getValueType(), LoadFrom,
-                                      {zero, RealIndex});
+                                      {zero, effectiveIndex});
         if (!EncryptJumpTargetTempLocal)
           LI = IRBBI->CreateLoad(Int8PtrTy, GEP,
                                  "IndirectBranchingTargetAddress");
@@ -365,8 +396,6 @@ struct IndirectBranch : public FunctionPass {
           gepptr = IRBBI->CreateLoad(Int8PtrTy, GEP);
       }
       if (EncryptJumpTargetTempLocal) {
-        // Reuse the per-function GV created above instead of allocating a new
-        // one for every branch.
         enckeyLoad = IRBBI->CreateXor(
             IRBBI->CreateLoad(funcEnckeyGV->getValueType(), funcEnckeyGV),
             funcEncEncKey);
@@ -374,40 +403,8 @@ struct IndirectBranch : public FunctionPass {
             IRBBI->CreateGEP(Int8Ty, gepptr, IRBBI->CreateSub(zero, enckeyLoad),
                              "IndirectBranchingTargetAddress");
       }
-      // OLLVM-Next: Knuth multiplicative hash decryption chain.
-      // The stored pointer was encrypted as: enc = (raw + delta) * mult XOR xorK
-      // Reverse: xorK XOR enc → divide by mult → subtract delta → raw address
-      // "Dividing" by mult mod 2^64: multiply by modular inverse.
-      // We compute the inverse offline and encode it as a compile-time constant.
+
       Value *finalTarget = LI;
-      if (knuthKeys.count(&Func)) {
-        const KnuthEncKey &kk = knuthKeys[&Func];
-        // Compute modular inverse of kk.mult via extended Euclidean (offline).
-        // For a 64-bit odd multiplier m, m^(-1) mod 2^64 can be computed as:
-        //   inv = m; for (int i=0; i<63; i++) inv *= 2 - m*inv;
-        // We compute this at compile time and embed as a constant.
-        uint64_t inv = kk.mult;
-        for (int step = 0; step < 5; step++) // 5 Newton steps suffice for 64-bit
-          inv *= 2ULL - kk.mult * inv;
-        uint64_t multInv = inv;
-
-        Type *I64Ty = Type::getInt64Ty(M->getContext());
-        Type *PtrTy = getOpaquePtrTy(M->getContext());
-        // Convert pointer to integer for arithmetic
-        Value *ptrInt = IRBBI->CreatePtrToInt(LI, I64Ty, "indibr.pint");
-        // Step 1: XOR with xorK
-        Value *unxored = IRBBI->CreateXor(ptrInt,
-                             ConstantInt::get(I64Ty, kk.xorK), "indibr.unxor");
-        // Step 2: multiply by modular inverse (reverses the mult encryption)
-        Value *unmulted = IRBBI->CreateMul(unxored,
-                              ConstantInt::get(I64Ty, multInv), "indibr.unmul");
-        // Step 3: subtract delta
-        Value *undelta = IRBBI->CreateSub(unmulted,
-                             ConstantInt::get(I64Ty, kk.delta), "indibr.undelta");
-        // Convert back to pointer
-        finalTarget = IRBBI->CreateIntToPtr(undelta, PtrTy, "indibr.target");
-      }
-
       IndirectBrInst *indirBr = IndirectBrInst::Create(finalTarget, BBs.size());
       for (BasicBlock *BB : BBs)
         indirBr->addDestination(BB);
@@ -436,10 +433,11 @@ struct IndirectBranch : public FunctionPass {
     }
   }
 };
-} // namespace llvm
+} // anonymous namespace
+
+char IndirectBranch::ID = 0;
+INITIALIZE_PASS(IndirectBranch, "indibran", "IndirectBranching", false, false)
 
 FunctionPass *llvm::createIndirectBranchPass(bool flag) {
   return new IndirectBranch(flag);
 }
-char IndirectBranch::ID = 0;
-INITIALIZE_PASS(IndirectBranch, "indibran", "IndirectBranching", false, false)
