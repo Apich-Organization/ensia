@@ -27,21 +27,81 @@ struct AlgoMeta {
 }
 
 const ALGOS: &[AlgoMeta] = &[
-    AlgoMeta { key: Algo::Bcf,         icon: "\u{1F500}", label: "Bogus Control Flow" },
-    AlgoMeta { key: Algo::Cff,         icon: "\u{2B1B}",  label: "Control Flow Flattening" },
-    AlgoMeta { key: Algo::Csm,         icon: "\u{1F300}", label: "Chaos State Machine" },
-    AlgoMeta { key: Algo::StrEnc,      icon: "\u{1F512}", label: "String Encryption" },
-    AlgoMeta { key: Algo::ConstEnc,    icon: "\u{1F9EE}", label: "Constant Encryption" },
-    AlgoMeta { key: Algo::Sub,         icon: "+",         label: "Instruction Substitution" },
-    AlgoMeta { key: Algo::Mba,         icon: "\u{03A3}",  label: "Mixed Boolean-Arithmetic" },
-    AlgoMeta { key: Algo::Vec,         icon: "\u{2B21}",  label: "Vector Obfuscation" },
-    AlgoMeta { key: Algo::IndirBranch, icon: "\u{21A9}",  label: "Indirect Branching" },
-    AlgoMeta { key: Algo::FuncWrap,    icon: "\u{1F4E6}", label: "Function Wrapper" },
-    AlgoMeta { key: Algo::AntiDebug,   icon: "\u{1F41B}", label: "Anti-Debugging" },
-    AlgoMeta { key: Algo::AntiHook,    icon: "\u{1F3A3}", label: "Anti-Hooking" },
-    AlgoMeta { key: Algo::AntiClassDump, icon: "\u{1F50D}", label: "Anti-Class Dump" },
-    AlgoMeta { key: Algo::FuncCallObf, icon: "\u{1F4DE}", label: "Call Obfuscation" },
-    AlgoMeta { key: Algo::SplitBlocks, icon: "\u{2702}",  label: "Block Splitting" },
+    AlgoMeta {
+        key: Algo::Bcf,
+        icon: "\u{1F500}",
+        label: "Bogus Control Flow",
+    },
+    AlgoMeta {
+        key: Algo::Cff,
+        icon: "\u{2B1B}",
+        label: "Control Flow Flattening",
+    },
+    AlgoMeta {
+        key: Algo::Csm,
+        icon: "\u{1F300}",
+        label: "Chaos State Machine",
+    },
+    AlgoMeta {
+        key: Algo::StrEnc,
+        icon: "\u{1F512}",
+        label: "String Encryption",
+    },
+    AlgoMeta {
+        key: Algo::ConstEnc,
+        icon: "\u{1F9EE}",
+        label: "Constant Encryption",
+    },
+    AlgoMeta {
+        key: Algo::Sub,
+        icon: "+",
+        label: "Instruction Substitution",
+    },
+    AlgoMeta {
+        key: Algo::Mba,
+        icon: "\u{03A3}",
+        label: "Mixed Boolean-Arithmetic",
+    },
+    AlgoMeta {
+        key: Algo::Vec,
+        icon: "\u{2B21}",
+        label: "Vector Obfuscation",
+    },
+    AlgoMeta {
+        key: Algo::IndirBranch,
+        icon: "\u{21A9}",
+        label: "Indirect Branching",
+    },
+    AlgoMeta {
+        key: Algo::FuncWrap,
+        icon: "\u{1F4E6}",
+        label: "Function Wrapper",
+    },
+    AlgoMeta {
+        key: Algo::AntiDebug,
+        icon: "\u{1F41B}",
+        label: "Anti-Debugging",
+    },
+    AlgoMeta {
+        key: Algo::AntiHook,
+        icon: "\u{1F3A3}",
+        label: "Anti-Hooking",
+    },
+    AlgoMeta {
+        key: Algo::AntiClassDump,
+        icon: "\u{1F50D}",
+        label: "Anti-Class Dump",
+    },
+    AlgoMeta {
+        key: Algo::FuncCallObf,
+        icon: "\u{1F4DE}",
+        label: "Call Obfuscation",
+    },
+    AlgoMeta {
+        key: Algo::SplitBlocks,
+        icon: "\u{2702}",
+        label: "Block Splitting",
+    },
 ];
 
 #[component]
@@ -625,68 +685,38 @@ fn AntiDebugSection() -> impl IntoView {
         <div class="algo-header">
             <h2>"\u{1F41B} Anti-Debugging"</h2>
             <p>
-                "Injects a multi-layered debugger and VM-detection harness at module scope.
-                 Covers: CPUID hypervisor-present bit, RDTSC variance test (512K-cycle
-                 threshold), ptrace self-probe on Linux/macOS, PR_GET_DUMPABLE sysctl,
-                 Windows PEB NtGlobalFlag / BeingDebugged fields, and macOS
-                 KERN_PROC_PID p_flag check. When a debugger or sandbox is detected,
-                 the process terminates or triggers undefined behaviour to corrupt analysis."
+                "Detects interactive debuggers and static analysis environments at runtime
+                 using zero-dependency direct system probes across Windows, macOS, and Linux.
+                 Injects hardware fast-fail abort mechanisms (int 0x29 / brk #0xF003) to prevent
+                 exception handler interception."
             </p>
         </div>
 
         <div class="glass card-pad">
-            <p class="algo-section-title">"Detection techniques"</p>
+            <p class="algo-section-title">"Multi-layered detection mechanisms"</p>
             <div class="vis-frame">
                 <AntiDebugSvg />
             </div>
         </div>
 
         <div class="glass card-pad">
-            <p class="algo-section-title">"VM fingerprinting (CPUID hypervisor bit)"</p>
-            <MathBlock formula=r"$$\texttt{CPUID}(1).\text{ECX}[31] = 1 \;\Rightarrow\; \text{running inside hypervisor}$$" />
-            <p class="text-sm mt-sm">
-                "CPUID leaf 1 bit 31 of ECX is the hypervisor-present flag.
-                 Combined with the RDTSC variance test (if the delta between two
-                 consecutive RDTSC reads exceeds 512,000 cycles, a VM context-switch
-                 is suspected), this identifies sandbox environments with high
-                 confidence."
-            </p>
-        </div>
-
-        <div class="glass card-pad">
-            <p class="algo-section-title">"Platform-specific probes"</p>
+            <p class="algo-section-title">"Platform-specific probes & hardware aborts"</p>
             <p class="text-sm">
-                <strong>"Linux: "</strong>
-                <code class="font-mono">"ptrace(PT_TRACE_ME)"</code>
-                " self-probe (fails with EPERM if already traced) and "
-                <code class="font-mono">"PR_GET_DUMPABLE"</code>
-                " sysctl check."
+                <strong>"Windows (x86_64 / AArch64): "</strong>
+                "Direct memory mapping checks on KUSER_SHARED_DATA at 0x7FFE02D4 (KdDebuggerEnabled) and 0x7FFE02D0 (BeingDebugged). Probes PEB+0xBC for NtGlobalFlag heap validation flags (0x70 mask: FLG_HEAP_ENABLE_TAIL_CHECK | FLG_HEAP_ENABLE_FREE_CHECK | FLG_HEAP_VALIDATE_PARAMETERS). Checks TEB hardware debug registers (DR0-DR3 / DR7). Triggers int 0x29 / non-canonical address `#GP` or brk #0xF003 to bypass VEH/SEH handlers."
             </p>
             <p class="text-sm mt-sm">
-                <strong>"Windows: "</strong>
-                "PEB "
-                <code class="font-mono">"NtGlobalFlag"</code>
-                " field read via inline ASM ("
-                <code class="font-mono">"fs:[0x30]"</code>
-                " / "
-                <code class="font-mono">"gs:[0x60]"</code>
-                "); debugger sets this to "
-                <code class="font-mono">"0x70"</code>
-                ". Also checks "
-                <code class="font-mono">"BeingDebugged"</code>
-                " byte at PEB+2."
+                <strong>"macOS / iOS: "</strong>
+                "Direct ptrace(PT_DENY_ATTACH, 0, 0, 0) via inline assembly (svc #0x80 / syscall). Checks sysctl(CTL_KERN, KERN_PROC_PID) for kp_proc.p_flag & P_TRACED and P_NOATTACH, along with task_for_pid permission probing."
             </p>
             <p class="text-sm mt-sm">
-                <strong>"macOS/iOS: "</strong>
-                <code class="font-mono">"sysctl(CTL_KERN, KERN_PROC, KERN_PROC_PID)"</code>
-                " checks "
-                <code class="font-mono">"kp_proc.p_flag & P_TRACED"</code>
-                "."
+                <strong>"Linux / Android: "</strong>
+                "Direct system calls for ptrace(PTRACE_TRACEME) and prctl(PR_SET_DUMPABLE, 0) to prevent coredump generation. Combined with RDTSC variance testing (512K-cycle threshold) and hardware traps (ud2 / brk #0xDEAD)."
             </p>
         </div>
 
         <AlgoConfigTable pass="anti_debugging" rows=vec![
-            ("enabled", "bool", "false", "Insert debugger-detection checks at function entry points."),
+            ("enabled", "bool", "false", "Insert debugger-detection checks and hardware fast-fail probes at function entry points."),
         ]/>
     }
 }

@@ -1,12 +1,9 @@
-use crate::{
-    app::Page,
-    theme::Theme,
-};
+use crate::{app::Page, theme::Theme};
 use leptos::prelude::*;
 
 #[component]
 pub fn Nav() -> impl IntoView {
-    let page  = expect_context::<RwSignal<Page>>();
+    let page = expect_context::<RwSignal<Page>>();
     let theme = expect_context::<RwSignal<Theme>>();
 
     let go = move |p: Page| move |_: web_sys::MouseEvent| page.set(p);
@@ -42,6 +39,13 @@ pub fn Nav() -> impl IntoView {
                         on:click=go(Page::Config)
                     >
                         "Config Builder"
+                    </button>
+                    <button
+                        class="nav-link"
+                        class:active=move || page.get() == Page::Sponsor
+                        on:click=go(Page::Sponsor)
+                    >
+                        "Sponsor"
                     </button>
                 </div>
 

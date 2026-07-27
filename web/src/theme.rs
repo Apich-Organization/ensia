@@ -1,4 +1,3 @@
-
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub enum Theme {
     #[default]
@@ -32,7 +31,13 @@ pub fn load_theme() -> Theme {
     web_sys::window()
         .and_then(|w| w.local_storage().ok().flatten())
         .and_then(|s| s.get_item("ensia_theme").ok().flatten())
-        .map(|v| if v == "dusk" { Theme::Dusk } else { Theme::Mist })
+        .map(|v| {
+            if v == "dusk" {
+                Theme::Dusk
+            } else {
+                Theme::Mist
+            }
+        })
         .unwrap_or_default()
 }
 
@@ -43,9 +48,7 @@ pub fn apply_theme(theme: Theme) {
             let _ = root.set_attribute("data-theme", theme.attr());
         }
     }
-    if let Some(storage) = web_sys::window()
-        .and_then(|w| w.local_storage().ok().flatten())
-    {
+    if let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
         let _ = storage.set_item("ensia_theme", theme.attr());
     }
 }

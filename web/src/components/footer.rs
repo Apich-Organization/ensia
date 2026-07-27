@@ -1,7 +1,11 @@
+use crate::app::Page;
 use leptos::prelude::*;
 
 #[component]
 pub fn Footer() -> impl IntoView {
+    let page = expect_context::<RwSignal<Page>>();
+    let go_sponsor = move |_| page.set(Page::Sponsor);
+
     view! {
         <footer class="footer page-wrap">
             <span>
@@ -11,6 +15,9 @@ pub fn Footer() -> impl IntoView {
                 </a>
             </span>
             <div class="footer-links">
+                <button class="btn-link" on:click=go_sponsor>
+                    "Sponsor"
+                </button>
                 <a href="https://github.com/Apich-Organization/ensia" target="_blank" rel="noopener">
                     "Source"
                 </a>

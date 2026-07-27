@@ -150,6 +150,40 @@ pub fn HomePage() -> impl IntoView {
             </div>
         </section>
 
+        // ── Core Design Philosophy ──────────────────────────────────────────
+        <section class="section page-wrap">
+            <div class="glass card-pad-lg policy-section">
+                <span class="section-chip">"Architecture & Design Philosophy"</span>
+                <h2>"SMT State-Space Explosion vs. VM Single Point of Failure"</h2>
+                <p class="mt-sm">
+                    "Traditional " <strong>"VM-based Obfuscators (Virtualizers)"</strong>
+                    " translate native code into custom bytecode executed by an interpreter runtime loop. While effective at hiding control flow, virtualizers carry an inherent "
+                    <strong style="color: var(--c-danger);">"Single Point of Failure (SPOF)"</strong>
+                    ": once an analyst devirtualizes the core handler table or dispatches the central loop, the entire protection layer collapses at once."
+                </p>
+                <div class="grid-3 mt-md">
+                    <div class="glass-alt card-pad">
+                        <h4>"\u{2B21} Vector-Space Lifting (SIMD)"</h4>
+                        <p class="text-sm mt-xs">
+                            "Lifts scalar logic into multi-lane SIMD vector operations (<4 x i32>, <8 x float>), forcing symbolic execution tools (Angr/KLEE) to model complex vector registers."
+                        </p>
+                    </div>
+                    <div class="glass-alt card-pad">
+                        <h4>"\u{1F500} Interlocked Data & Control Flow"</h4>
+                        <p class="text-sm mt-xs">
+                            "Data encryption and MBA expressions are embedded inside CFF/CSM dispatch blocks, while decryption stubs are themselves flattened and bogus-branched."
+                        </p>
+                    </div>
+                    <div class="glass-alt card-pad">
+                        <h4>"\u{03A3} Multi-Term MBA & Opaque Predicates"</h4>
+                        <p class="text-sm mt-xs">
+                            "Injects non-linear polynomial MBAs and hardware-bound opaque predicates (CPUID, RDTSC/CNTVCT), triggering exponential SMT solver path explosion."
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         // ── Obfuscation pipeline ─────────────────────────────────────────────
         <section class="section page-wrap">
             <div class="mb-lg">
@@ -400,11 +434,7 @@ pub fn HomePage() -> impl IntoView {
 }
 
 #[component]
-fn FeatureCard(
-    icon: &'static str,
-    title: &'static str,
-    body: &'static str,
-) -> impl IntoView {
+fn FeatureCard(icon: &'static str, title: &'static str, body: &'static str) -> impl IntoView {
     view! {
         <div class="glass card-pad">
             <div class="feature-icon">{icon}</div>

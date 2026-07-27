@@ -1,6 +1,6 @@
 use crate::{
     components::{footer::Footer, nav::Nav},
-    pages::{algorithms::AlgorithmsPage, config::ConfigPage, home::HomePage},
+    pages::{algorithms::AlgorithmsPage, config::ConfigPage, home::HomePage, sponsor::SponsorPage},
     theme,
 };
 use leptos::prelude::*;
@@ -11,6 +11,7 @@ pub enum Page {
     Home,
     Algorithms,
     Config,
+    Sponsor,
 }
 
 fn page_from_hash() -> Page {
@@ -21,6 +22,7 @@ fn page_from_hash() -> Page {
             match s {
                 s if s.starts_with("algorithms") => Page::Algorithms,
                 s if s.starts_with("config") => Page::Config,
+                s if s.starts_with("sponsor") => Page::Sponsor,
                 _ => Page::Home,
             }
         })
@@ -32,6 +34,7 @@ pub fn navigate(page: Page) {
         Page::Home => "#/",
         Page::Algorithms => "#/algorithms",
         Page::Config => "#/config",
+        Page::Sponsor => "#/sponsor",
     };
     if let Some(w) = web_sys::window() {
         let _ = w.location().set_hash(hash);
@@ -69,6 +72,7 @@ pub fn App() -> impl IntoView {
                 Page::Home       => view! { <HomePage       /> }.into_any(),
                 Page::Algorithms => view! { <AlgorithmsPage /> }.into_any(),
                 Page::Config     => view! { <ConfigPage     /> }.into_any(),
+                Page::Sponsor    => view! { <SponsorPage    /> }.into_any(),
             }}
         </main>
         <Footer />

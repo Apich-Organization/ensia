@@ -12,6 +12,15 @@
 OLLVM-Next (Ensia) is an LLVM-based obfuscator. It is a derivative work, continuing the lineage of the [Hikari](https://github.com/HikariObfuscator/Hikari/), [Hikari-LLVM15](https://github.com/NeHyci/Hikari-LLVM15/), and [Hikari-LLVM19](https://github.com/PPKunOfficial/Hikari-LLVM19/) projects.  
 This project aims to provide a functional tool for protecting code on modern LLVM toolchains (versions 21 and 22). It is not meant to be "perfect," but it tries to make the reverse-engineering process more time-consuming.
 
+## **Core Philosophy**
+
+Traditional **VM-based obfuscators (Virtualizers)** wrap bytecode inside a custom interpreter runtime. While hard to reverse manually, they introduce a **high Single Point of Failure (SPOF) risk**: once an analyst or automated tool devirtualizes the core handler table or dispatches the central VM loop, the entire protection collapses at once.
+
+**Ensia abandons the single-point interpreter architecture.** Instead, it enforces **SMT Symbolic Solver State-Space Explosion** through a composition of distributed passes:
+* **Vector-Space Lifting (SIMD):** Lifts scalar logic into multi-lane SIMD vector operations, defeating scalar symbolic execution engines.
+* **Interleaved Data & Control Flow:** Interlocks data flow passes (MBA, String/Constant Encryption) with control flow transforms (Chaos State Machine, Control Flow Flattening).
+* **Multi-Layer MBA & Hardware Predicates:** Injects multi-term Mixed Boolean-Arithmetic expressions and hardware-bound non-patchable opaque predicates (CPUID, RDTSC/CNTVCT), forcing SMT solvers (like Z3/Angr/KLEE) into exponential path and expression explosion.
+
 ## **Current Status**
 
 * **Core:** Updated to work with the latest LLVM internal APIs.  
@@ -58,6 +67,12 @@ You can also enable specific features by setting variables in your shell:
 ## **Licensing & Attribution**
 
 This project is licensed under the **AGPL-3.0**. It includes code and logic from the Hikari and LLVM projects. See [LEGAL.md](./LEGAL.md) for full details on project history and original authors.
+
+## Sponsorship & Funding Policy
+
+We welcome sponsorships from individuals and organizations supporting open-source compiler security research. Please review our [Sponsorship Policy](./sponsor.md) for details on fund allocation, contribution options via Open Collective, corporate tiers, and our strict anti-money laundering policies.
+
+* **Open Collective Link:** [https://opencollective.com/apich-organization](https://opencollective.com/apich-organization)
 
 ## Code of Conduct & Security
 

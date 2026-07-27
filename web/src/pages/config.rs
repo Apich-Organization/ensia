@@ -1,14 +1,16 @@
 use crate::models::config::*;
+use gloo_timers::future::TimeoutFuture;
 use leptos::{html, prelude::*};
 use wasm_bindgen_futures::spawn_local;
-use gloo_timers::future::TimeoutFuture;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY: &str = "ensia_config_v1";
 
 fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn highlight_toml_value(val: &str) -> String {
@@ -61,9 +63,7 @@ fn load_saved() -> TomlConfig {
 
 fn save_config(cfg: &TomlConfig) {
     if let Ok(json) = serde_json::to_string(cfg) {
-        if let Some(storage) = web_sys::window()
-            .and_then(|w| w.local_storage().ok().flatten())
-        {
+        if let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
             let _ = storage.set_item(STORAGE_KEY, &json);
         }
     }
@@ -120,10 +120,7 @@ pub fn ConfigPage() -> impl IntoView {
     let do_download = {
         move |_| {
             let text = toml_text.get();
-            let _ = js_sys::eval(&format!(
-                "window.downloadText('ensia.toml', {:?})",
-                text
-            ));
+            let _ = js_sys::eval(&format!("window.downloadText('ensia.toml', {:?})", text));
         }
     };
 
@@ -184,7 +181,7 @@ pub fn ConfigPage() -> impl IntoView {
                         "Pass this file with:"
                     </p>
                     <pre class="code-block text-xs mt-sm">
-"-mllvm -ensia-config=ensia.toml"
+    "-mllvm -ensia-config=ensia.toml"
                     </pre>
                 </div>
             </div>
@@ -1115,7 +1112,11 @@ fn SliderField(
     let pct = Signal::derive(move || {
         let v = get.get();
         let range = max - min;
-        if range == 0 { 50.0 } else { (v - min) as f64 / range as f64 * 100.0 }
+        if range == 0 {
+            50.0
+        } else {
+            (v - min) as f64 / range as f64 * 100.0
+        }
     });
 
     view! {
@@ -1170,7 +1171,9 @@ fn TagField(
     };
 
     let add_on_key = move |e: web_sys::KeyboardEvent| {
-        if e.key() == "Enter" { do_add(); }
+        if e.key() == "Enter" {
+            do_add();
+        }
     };
 
     view! {
@@ -1258,8 +1261,8 @@ fn TriToggle(
 
     let cycle = move |_| {
         let next = match current.get() {
-            None        => Some(true),
-            Some(true)  => Some(false),
+            None => Some(true),
+            Some(true) => Some(false),
             Some(false) => None,
         };
         current.set(next);
