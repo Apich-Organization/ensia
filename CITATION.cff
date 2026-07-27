@@ -50,6 +50,6 @@ keywords:
   - Dual-Use Technology
   - Reverse Engineering Countermeasures
 license: AGPL-3.0-only
-commit: dc782c1596eb9a5c8a19338a3b3918a6b76943d7
-version: v0.1.0
-date-released: '2026-05-14'
+commit: b9f6167e42a8d2d8f29d114164cedf72954b5426
+version: v0.1.1
+date-released: '2026-07-27'
