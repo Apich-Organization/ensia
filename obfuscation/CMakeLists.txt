@@ -1,6 +1,21 @@
 cmake_minimum_required(VERSION 4.3)
 project(Ensia LANGUAGES C CXX)
 
+if(NOT DEFINED LLVM_FOUND)
+  find_package(LLVM REQUIRED CONFIG)
+  list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+  include(AddLLVM)
+  include_directories(${LLVM_INCLUDE_DIRS})
+  add_definitions(${LLVM_DEFINITIONS})
+endif()
+
+# Include LLVM CMake functions (such as llvm_map_components_to_libnames)
+if(COMMAND LLVMMapComponentsToLibnames)
+  # already available
+elseif(EXISTS "${LLVM_CMAKE_DIR}/LLVM-Config.cmake")
+  include("${LLVM_CMAKE_DIR}/LLVM-Config.cmake")
+endif()
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
