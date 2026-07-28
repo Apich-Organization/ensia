@@ -301,6 +301,7 @@ struct IndirectBranch : public FunctionPass {
         IRBEntry->CreateStore(LoadFrom, LoadFromAI);
       }
       Value *index, *RealIndex = nullptr;
+      Value *indexVal = nullptr;
       if (BI->isConditional()) {
         Value *condition = BI->getCondition();
         Value *zext = IRBBI->CreateZExt(condition, Int32Ty);
@@ -313,13 +314,11 @@ struct IndirectBranch : public FunctionPass {
         if (UseStackTempLocal) {
           AllocaInst *condAI = IRBEntry->CreateAlloca(Int32Ty);
           IRBBI->CreateStore(zext, condAI);
-          index = condAI;
+          indexVal = IRBBI->CreateLoad(Int32Ty, condAI);
         } else {
-          index = zext;
+          indexVal = zext;
         }
-        RealIndex = index;
       } else {
-        Value *indexval = nullptr;
         uint32_t targetIdx = indexmap[BI->getSuccessor(0)];
         if (knuthKeys.count(&Func)) {
           const KnuthEncKey &kk = knuthKeys[&Func];
@@ -337,27 +336,27 @@ struct IndirectBranch : public FunctionPass {
                                IndexEncKey->getValue() ^ targetIdx),
               "IndirectBranchingIndex");
           usedGlobals.push_back(indexgv);
-          indexval = (UseStackTempLocal ? IRBEntry : IRBBI)
+          Value *ld = (UseStackTempLocal ? IRBEntry : IRBBI)
                          ->CreateLoad(indexgv->getValueType(), indexgv);
+          indexVal = IRBBI->CreateXor(ld, IndexEncKey);
         } else {
-          indexval = ConstantInt::get(Int32Ty, targetIdx);
+          Value *rawVal = ConstantInt::get(Int32Ty, targetIdx);
           if (UseStackTempLocal) {
             AllocaInst *indexAI = IRBEntry->CreateAlloca(Int32Ty);
-            IRBEntry->CreateStore(indexval, indexAI);
-            indexval = IRBBI->CreateLoad(indexAI->getAllocatedType(), indexAI);
+            IRBEntry->CreateStore(rawVal, indexAI);
+            indexVal = IRBBI->CreateLoad(indexAI->getAllocatedType(), indexAI);
+          } else {
+            indexVal = rawVal;
           }
         }
-        index = indexval;
-        RealIndex = EncryptJumpTargetTempLocal
-                        ? IRBBI->CreateXor(index, IndexEncKey)
-                        : index;
       }
+
       Value *LI, *enckeyLoad, *gepptr = nullptr;
       
       // OLLVM-Next: Knuth multiplicative hash decryption on index.
       // At compile time, the index is encoded as (index * mult + delta) ^ xorK.
       // At runtime, we reverse: index = (((encIndex ^ xorK) - delta) * multInv)
-      Value *effectiveIndex = RealIndex;
+      Value *effectiveIndex = indexVal;
       if (knuthKeys.count(&Func)) {
         const KnuthEncKey &kk = knuthKeys[&Func];
         uint64_t inv = kk.mult;
@@ -379,8 +378,7 @@ struct IndirectBranch : public FunctionPass {
             IRBBI->CreateLoad(LoadFrom->getType(), LoadFromAI);
         Value *GEP = IRBBI->CreateGEP(
             LoadFrom->getValueType(), LILoadFrom,
-            {zero, BI->isConditional() ? IRBBI->CreateLoad(Int32Ty, effectiveIndex)
-                                       : effectiveIndex});
+            {zero, effectiveIndex});
         if (!EncryptJumpTargetTempLocal)
           LI = IRBBI->CreateLoad(Int8PtrTy, GEP,
                                  "IndirectBranchingTargetAddress");

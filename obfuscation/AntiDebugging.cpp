@@ -219,7 +219,7 @@ struct AntiDebugging : public ModulePass {
     auto shuffleBlocks = [](SmallVectorImpl<std::string> &v) {
       unsigned n = v.size();
       for (unsigned i = n - 1; i > 0; --i) {
-        unsigned j = (unsigned)(rand() % (i + 1));
+        unsigned j = cryptoutils->get_range(i + 1);
         std::swap(v[i], v[j]);
       }
     };
