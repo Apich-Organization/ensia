@@ -12,6 +12,8 @@ pub struct BcfCfg {
     pub junk_asm: bool,
     pub junk_asm_min: u32,
     pub junk_asm_max: u32,
+    pub nested: bool,
+    pub create_func: bool,
 }
 impl Default for BcfCfg {
     fn default() -> Self {
@@ -24,6 +26,8 @@ impl Default for BcfCfg {
             junk_asm: false,
             junk_asm_min: 1,
             junk_asm_max: 4,
+            nested: false,
+            create_func: false,
         }
     }
 }
@@ -49,10 +53,13 @@ impl Default for StrEncCfg {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ConstEncCfg {
     pub enabled: bool,
+    pub iterations: u32,
     pub share_count: u32,
     pub feistel: bool,
     pub substitute_xor: bool,
     pub substitute_xor_prob: u32,
+    pub globalize: bool,
+    pub globalize_prob: u32,
     pub force_value: Vec<String>,
     pub skip_value: Vec<String>,
 }
@@ -60,10 +67,13 @@ impl Default for ConstEncCfg {
     fn default() -> Self {
         Self {
             enabled: true,
+            iterations: 1,
             share_count: 3,
             feistel: false,
             substitute_xor: false,
             substitute_xor_prob: 40,
+            globalize: false,
+            globalize_prob: 50,
             force_value: vec![],
             skip_value: vec!["^0x0$".into(), "^0x1$".into()],
         }
@@ -79,12 +89,16 @@ pub struct SimpleCfg {
 pub struct SplitBlocksCfg {
     pub enabled: bool,
     pub probability: u32,
+    pub splits: u32,
+    pub stack_confusion: bool,
 }
 impl Default for SplitBlocksCfg {
     fn default() -> Self {
         Self {
             enabled: false,
             probability: 50,
+            splits: 3,
+            stack_confusion: false,
         }
     }
 }
@@ -93,12 +107,14 @@ impl Default for SplitBlocksCfg {
 pub struct SubCfg {
     pub enabled: bool,
     pub probability: u32,
+    pub iterations: u32,
 }
 impl Default for SubCfg {
     fn default() -> Self {
         Self {
             enabled: true,
             probability: 60,
+            iterations: 1,
         }
     }
 }
@@ -106,6 +122,7 @@ impl Default for SubCfg {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MbaCfg {
     pub enabled: bool,
+    pub probability: u32,
     pub layers: u32,
     pub heuristic: bool,
 }
@@ -113,6 +130,7 @@ impl Default for MbaCfg {
     fn default() -> Self {
         Self {
             enabled: true,
+            probability: 50,
             layers: 1,
             heuristic: false,
         }
@@ -124,6 +142,7 @@ pub struct CsmCfg {
     pub enabled: bool,
     pub warmup: u32,
     pub nested_dispatch: bool,
+    pub max_blocks: u32,
 }
 impl Default for CsmCfg {
     fn default() -> Self {
@@ -131,6 +150,7 @@ impl Default for CsmCfg {
             enabled: false,
             warmup: 64,
             nested_dispatch: false,
+            max_blocks: 5000,
         }
     }
 }
@@ -156,6 +176,22 @@ impl Default for VecObfCfg {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct IndirBranchCfg {
+    pub enabled: bool,
+    pub use_stack: bool,
+    pub enc_jump_target: bool,
+}
+impl Default for IndirBranchCfg {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            use_stack: true,
+            enc_jump_target: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct FuncWrapCfg {
     pub enabled: bool,
     pub probability: u32,
@@ -167,6 +203,82 @@ impl Default for FuncWrapCfg {
             enabled: false,
             probability: 50,
             times: 1,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct FuncCallObfCfg {
+    pub enabled: bool,
+    pub flag: u32,
+    pub symbol_config_path: String,
+}
+impl Default for FuncCallObfCfg {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            flag: 0,
+            symbol_config_path: "".into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AntiDbgCfg {
+    pub enabled: bool,
+    pub probability: u32,
+}
+impl Default for AntiDbgCfg {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            probability: 50,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AntiHookCfg {
+    pub enabled: bool,
+    pub inline_aarch64: bool,
+    pub inline_x86: bool,
+    pub inline_win: bool,
+    pub objc_runtime: bool,
+    pub antirebind: bool,
+    pub direct_syscall: bool,
+}
+impl Default for AntiHookCfg {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            inline_aarch64: true,
+            inline_x86: true,
+            inline_win: true,
+            objc_runtime: false,
+            antirebind: false,
+            direct_syscall: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AntiAcdCfg {
+    pub enabled: bool,
+    pub use_initialize: bool,
+    pub rename_methodimp: bool,
+    pub scramble_methods: bool,
+    pub dummy_selectors: bool,
+    pub dummy_count: u32,
+}
+impl Default for AntiAcdCfg {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            use_initialize: true,
+            rename_methodimp: true,
+            scramble_methods: true,
+            dummy_selectors: false,
+            dummy_count: 8,
         }
     }
 }
@@ -316,12 +428,12 @@ pub struct TomlConfig {
     pub mba: MbaCfg,
     pub csm: CsmCfg,
     pub vec_obf: VecObfCfg,
-    pub indir_branch: SimpleCfg,
+    pub indir_branch: IndirBranchCfg,
     pub func_wrap: FuncWrapCfg,
-    pub anti_debugging: SimpleCfg,
-    pub anti_hooking: SimpleCfg,
-    pub anti_class_dump: SimpleCfg,
-    pub func_call_obf: SimpleCfg,
+    pub anti_debugging: AntiDbgCfg,
+    pub anti_hooking: AntiHookCfg,
+    pub anti_class_dump: AntiAcdCfg,
+    pub func_call_obf: FuncCallObfCfg,
     pub split_blocks: SplitBlocksCfg,
     pub policies: Vec<PolicyCfg>,
     pub next_policy_id: usize,
@@ -343,12 +455,12 @@ impl Default for TomlConfig {
             mba: Default::default(),
             csm: Default::default(),
             vec_obf: Default::default(),
-            indir_branch: SimpleCfg { enabled: false },
+            indir_branch: Default::default(),
             func_wrap: Default::default(),
-            anti_debugging: SimpleCfg { enabled: false },
-            anti_hooking: SimpleCfg { enabled: false },
-            anti_class_dump: SimpleCfg { enabled: false },
-            func_call_obf: SimpleCfg { enabled: false },
+            anti_debugging: Default::default(),
+            anti_hooking: Default::default(),
+            anti_class_dump: Default::default(),
+            func_call_obf: Default::default(),
             split_blocks: Default::default(),
             policies: vec![],
             next_policy_id: 0,
@@ -370,6 +482,8 @@ impl TomlConfig {
                     junk_asm: false,
                     junk_asm_min: 1,
                     junk_asm_max: 4,
+                    nested: false,
+                    create_func: false,
                 };
                 self.str_enc = StrEncCfg {
                     enabled: true,
@@ -379,10 +493,13 @@ impl TomlConfig {
                 };
                 self.const_enc = ConstEncCfg {
                     enabled: true,
+                    iterations: 1,
                     share_count: 2,
                     feistel: false,
                     substitute_xor: false,
                     substitute_xor_prob: 40,
+                    globalize: false,
+                    globalize_prob: 50,
                     force_value: self.const_enc.force_value.clone(),
                     skip_value: self.const_enc.skip_value.clone(),
                 };
@@ -390,9 +507,11 @@ impl TomlConfig {
                 self.substitution = SubCfg {
                     enabled: true,
                     probability: 40,
+                    iterations: 1,
                 };
                 self.mba = MbaCfg {
                     enabled: true,
+                    probability: 30,
                     layers: 1,
                     heuristic: false,
                 };
@@ -400,6 +519,7 @@ impl TomlConfig {
                     enabled: false,
                     warmup: 64,
                     nested_dispatch: false,
+                    max_blocks: 5000,
                 };
                 self.vec_obf = VecObfCfg {
                     enabled: false,
@@ -408,19 +528,47 @@ impl TomlConfig {
                     shuffle: false,
                     lift_comparisons: false,
                 };
-                self.indir_branch = SimpleCfg { enabled: false };
+                self.indir_branch = IndirBranchCfg {
+                    enabled: false,
+                    use_stack: true,
+                    enc_jump_target: false,
+                };
                 self.func_wrap = FuncWrapCfg {
                     enabled: false,
                     probability: 50,
                     times: 1,
                 };
-                self.anti_debugging = SimpleCfg { enabled: false };
-                self.anti_hooking = SimpleCfg { enabled: false };
-                self.anti_class_dump = SimpleCfg { enabled: false };
-                self.func_call_obf = SimpleCfg { enabled: false };
+                self.anti_debugging = AntiDbgCfg {
+                    enabled: false,
+                    probability: 50,
+                };
+                self.anti_hooking = AntiHookCfg {
+                    enabled: false,
+                    inline_aarch64: true,
+                    inline_x86: true,
+                    inline_win: true,
+                    objc_runtime: false,
+                    antirebind: false,
+                    direct_syscall: false,
+                };
+                self.anti_class_dump = AntiAcdCfg {
+                    enabled: false,
+                    use_initialize: true,
+                    rename_methodimp: true,
+                    scramble_methods: true,
+                    dummy_selectors: false,
+                    dummy_count: 8,
+                };
+                self.func_call_obf = FuncCallObfCfg {
+                    enabled: false,
+                    flag: 0,
+                    symbol_config_path: "".into(),
+                };
                 self.split_blocks = SplitBlocksCfg {
                     enabled: false,
                     probability: 50,
+                    splits: 2,
+                    stack_confusion: false,
                 };
             }
             "mid" => {
@@ -433,6 +581,8 @@ impl TomlConfig {
                     junk_asm: false,
                     junk_asm_min: 2,
                     junk_asm_max: 4,
+                    nested: false,
+                    create_func: false,
                 };
                 self.str_enc = StrEncCfg {
                     enabled: true,
@@ -442,10 +592,13 @@ impl TomlConfig {
                 };
                 self.const_enc = ConstEncCfg {
                     enabled: true,
+                    iterations: 1,
                     share_count: 3,
                     feistel: false,
                     substitute_xor: true,
                     substitute_xor_prob: 40,
+                    globalize: false,
+                    globalize_prob: 50,
                     force_value: self.const_enc.force_value.clone(),
                     skip_value: self.const_enc.skip_value.clone(),
                 };
@@ -453,9 +606,11 @@ impl TomlConfig {
                 self.substitution = SubCfg {
                     enabled: true,
                     probability: 60,
+                    iterations: 1,
                 };
                 self.mba = MbaCfg {
                     enabled: true,
+                    probability: 50,
                     layers: 2,
                     heuristic: true,
                 };
@@ -463,6 +618,7 @@ impl TomlConfig {
                     enabled: false,
                     warmup: 64,
                     nested_dispatch: false,
+                    max_blocks: 5000,
                 };
                 self.vec_obf = VecObfCfg {
                     enabled: true,
@@ -471,19 +627,47 @@ impl TomlConfig {
                     shuffle: false,
                     lift_comparisons: true,
                 };
-                self.indir_branch = SimpleCfg { enabled: true };
+                self.indir_branch = IndirBranchCfg {
+                    enabled: true,
+                    use_stack: true,
+                    enc_jump_target: false,
+                };
                 self.func_wrap = FuncWrapCfg {
                     enabled: false,
                     probability: 50,
                     times: 1,
                 };
-                self.anti_debugging = SimpleCfg { enabled: false };
-                self.anti_hooking = SimpleCfg { enabled: false };
-                self.anti_class_dump = SimpleCfg { enabled: false };
-                self.func_call_obf = SimpleCfg { enabled: false };
+                self.anti_debugging = AntiDbgCfg {
+                    enabled: false,
+                    probability: 50,
+                };
+                self.anti_hooking = AntiHookCfg {
+                    enabled: false,
+                    inline_aarch64: true,
+                    inline_x86: true,
+                    inline_win: true,
+                    objc_runtime: false,
+                    antirebind: false,
+                    direct_syscall: false,
+                };
+                self.anti_class_dump = AntiAcdCfg {
+                    enabled: false,
+                    use_initialize: true,
+                    rename_methodimp: true,
+                    scramble_methods: true,
+                    dummy_selectors: false,
+                    dummy_count: 8,
+                };
+                self.func_call_obf = FuncCallObfCfg {
+                    enabled: false,
+                    flag: 0,
+                    symbol_config_path: "".into(),
+                };
                 self.split_blocks = SplitBlocksCfg {
                     enabled: true,
                     probability: 50,
+                    splits: 3,
+                    stack_confusion: true,
                 };
             }
             "high" => {
@@ -496,6 +680,8 @@ impl TomlConfig {
                     junk_asm: true,
                     junk_asm_min: 2,
                     junk_asm_max: 6,
+                    nested: true,
+                    create_func: true,
                 };
                 self.str_enc = StrEncCfg {
                     enabled: true,
@@ -505,10 +691,13 @@ impl TomlConfig {
                 };
                 self.const_enc = ConstEncCfg {
                     enabled: true,
+                    iterations: 2,
                     share_count: 4,
                     feistel: true,
                     substitute_xor: true,
                     substitute_xor_prob: 60,
+                    globalize: true,
+                    globalize_prob: 50,
                     force_value: self.const_enc.force_value.clone(),
                     skip_value: self.const_enc.skip_value.clone(),
                 };
@@ -516,9 +705,11 @@ impl TomlConfig {
                 self.substitution = SubCfg {
                     enabled: true,
                     probability: 80,
+                    iterations: 2,
                 };
                 self.mba = MbaCfg {
                     enabled: true,
+                    probability: 70,
                     layers: 3,
                     heuristic: true,
                 };
@@ -526,6 +717,7 @@ impl TomlConfig {
                     enabled: true,
                     warmup: 128,
                     nested_dispatch: false,
+                    max_blocks: 5000,
                 };
                 self.vec_obf = VecObfCfg {
                     enabled: true,
@@ -534,19 +726,47 @@ impl TomlConfig {
                     shuffle: true,
                     lift_comparisons: true,
                 };
-                self.indir_branch = SimpleCfg { enabled: true };
+                self.indir_branch = IndirBranchCfg {
+                    enabled: true,
+                    use_stack: true,
+                    enc_jump_target: true,
+                };
                 self.func_wrap = FuncWrapCfg {
                     enabled: true,
                     probability: 50,
                     times: 1,
                 };
-                self.anti_debugging = SimpleCfg { enabled: true };
-                self.anti_hooking = SimpleCfg { enabled: true };
-                self.anti_class_dump = SimpleCfg { enabled: true };
-                self.func_call_obf = SimpleCfg { enabled: true };
+                self.anti_debugging = AntiDbgCfg {
+                    enabled: true,
+                    probability: 80,
+                };
+                self.anti_hooking = AntiHookCfg {
+                    enabled: true,
+                    inline_aarch64: true,
+                    inline_x86: true,
+                    inline_win: true,
+                    objc_runtime: true,
+                    antirebind: true,
+                    direct_syscall: true,
+                };
+                self.anti_class_dump = AntiAcdCfg {
+                    enabled: true,
+                    use_initialize: true,
+                    rename_methodimp: true,
+                    scramble_methods: true,
+                    dummy_selectors: true,
+                    dummy_count: 8,
+                };
+                self.func_call_obf = FuncCallObfCfg {
+                    enabled: true,
+                    flag: 0,
+                    symbol_config_path: "".into(),
+                };
                 self.split_blocks = SplitBlocksCfg {
                     enabled: true,
                     probability: 70,
+                    splits: 5,
+                    stack_confusion: true,
                 };
             }
             "max" => {
@@ -559,6 +779,8 @@ impl TomlConfig {
                     junk_asm: true,
                     junk_asm_min: 4,
                     junk_asm_max: 8,
+                    nested: true,
+                    create_func: true,
                 };
                 self.str_enc = StrEncCfg {
                     enabled: true,
@@ -568,10 +790,13 @@ impl TomlConfig {
                 };
                 self.const_enc = ConstEncCfg {
                     enabled: true,
+                    iterations: 3,
                     share_count: 6,
                     feistel: true,
                     substitute_xor: true,
                     substitute_xor_prob: 100,
+                    globalize: true,
+                    globalize_prob: 80,
                     force_value: self.const_enc.force_value.clone(),
                     skip_value: self.const_enc.skip_value.clone(),
                 };
@@ -579,9 +804,11 @@ impl TomlConfig {
                 self.substitution = SubCfg {
                     enabled: true,
                     probability: 100,
+                    iterations: 3,
                 };
                 self.mba = MbaCfg {
                     enabled: true,
+                    probability: 100,
                     layers: 3,
                     heuristic: true,
                 };
@@ -589,6 +816,7 @@ impl TomlConfig {
                     enabled: true,
                     warmup: 256,
                     nested_dispatch: true,
+                    max_blocks: 10000,
                 };
                 self.vec_obf = VecObfCfg {
                     enabled: true,
@@ -597,19 +825,47 @@ impl TomlConfig {
                     shuffle: true,
                     lift_comparisons: true,
                 };
-                self.indir_branch = SimpleCfg { enabled: true };
+                self.indir_branch = IndirBranchCfg {
+                    enabled: true,
+                    use_stack: true,
+                    enc_jump_target: true,
+                };
                 self.func_wrap = FuncWrapCfg {
                     enabled: true,
                     probability: 100,
                     times: 2,
                 };
-                self.anti_debugging = SimpleCfg { enabled: true };
-                self.anti_hooking = SimpleCfg { enabled: true };
-                self.anti_class_dump = SimpleCfg { enabled: true };
-                self.func_call_obf = SimpleCfg { enabled: true };
+                self.anti_debugging = AntiDbgCfg {
+                    enabled: true,
+                    probability: 100,
+                };
+                self.anti_hooking = AntiHookCfg {
+                    enabled: true,
+                    inline_aarch64: true,
+                    inline_x86: true,
+                    inline_win: true,
+                    objc_runtime: true,
+                    antirebind: true,
+                    direct_syscall: true,
+                };
+                self.anti_class_dump = AntiAcdCfg {
+                    enabled: true,
+                    use_initialize: true,
+                    rename_methodimp: true,
+                    scramble_methods: true,
+                    dummy_selectors: true,
+                    dummy_count: 16,
+                };
+                self.func_call_obf = FuncCallObfCfg {
+                    enabled: true,
+                    flag: 0,
+                    symbol_config_path: "".into(),
+                };
                 self.split_blocks = SplitBlocksCfg {
                     enabled: true,
                     probability: 100,
+                    splits: 8,
+                    stack_confusion: true,
                 };
             }
             _ => {}
@@ -677,6 +933,12 @@ impl TomlConfig {
                 s.push_str(&format!("junk_asm_min = {}\n", self.bcf.junk_asm_min));
                 s.push_str(&format!("junk_asm_max = {}\n", self.bcf.junk_asm_max));
             }
+            if self.bcf.nested {
+                s.push_str("nested = true\n");
+            }
+            if self.bcf.create_func {
+                s.push_str("create_func = true\n");
+            }
         }
         s.push('\n');
 
@@ -704,6 +966,7 @@ impl TomlConfig {
         s.push_str("[passes.constant_encryption]\n");
         s.push_str(&format!("enabled = {}\n", self.const_enc.enabled));
         if self.const_enc.enabled {
+            s.push_str(&format!("iterations = {}\n", self.const_enc.iterations));
             s.push_str(&format!("share_count = {}\n", self.const_enc.share_count));
             if self.const_enc.feistel {
                 s.push_str("feistel = true\n");
@@ -713,6 +976,13 @@ impl TomlConfig {
                 s.push_str(&format!(
                     "substitute_xor_prob = {}\n",
                     self.const_enc.substitute_xor_prob
+                ));
+            }
+            if self.const_enc.globalize {
+                s.push_str("globalize = true\n");
+                s.push_str(&format!(
+                    "globalize_prob = {}\n",
+                    self.const_enc.globalize_prob
                 ));
             }
             if !self.const_enc.force_value.is_empty() {
@@ -742,6 +1012,7 @@ impl TomlConfig {
                 "probability = {}\n",
                 self.substitution.probability
             ));
+            s.push_str(&format!("iterations = {}\n", self.substitution.iterations));
         }
         s.push('\n');
 
@@ -749,6 +1020,7 @@ impl TomlConfig {
         s.push_str("[passes.mba]\n");
         s.push_str(&format!("enabled = {}\n", self.mba.enabled));
         if self.mba.enabled {
+            s.push_str(&format!("probability = {}\n", self.mba.probability));
             s.push_str(&format!("layers = {}\n", self.mba.layers));
             if self.mba.heuristic {
                 s.push_str("heuristic = true\n");
@@ -764,6 +1036,7 @@ impl TomlConfig {
             if self.csm.nested_dispatch {
                 s.push_str("nested_dispatch = true\n");
             }
+            s.push_str(&format!("max_blocks = {}\n", self.csm.max_blocks));
         }
         s.push('\n');
 
@@ -784,7 +1057,16 @@ impl TomlConfig {
 
         // [passes.indirect_branch]
         s.push_str("[passes.indirect_branch]\n");
-        s.push_str(&format!("enabled = {}\n\n", self.indir_branch.enabled));
+        s.push_str(&format!("enabled = {}\n", self.indir_branch.enabled));
+        if self.indir_branch.enabled {
+            if self.indir_branch.use_stack {
+                s.push_str("use_stack = true\n");
+            }
+            if self.indir_branch.enc_jump_target {
+                s.push_str("enc_jump_target = true\n");
+            }
+        }
+        s.push('\n');
 
         // [passes.function_wrapper]
         s.push_str("[passes.function_wrapper]\n");
@@ -796,33 +1078,94 @@ impl TomlConfig {
         s.push('\n');
 
         // [passes.anti_debugging]
+        s.push_str("[passes.anti_debugging]\n");
+        s.push_str(&format!("enabled = {}\n", self.anti_debugging.enabled));
         if self.anti_debugging.enabled {
-            s.push_str("[passes.anti_debugging]\nenabled = true\n\n");
-        }
-
-        // [passes.anti_hooking]
-        if self.anti_hooking.enabled {
-            s.push_str("[passes.anti_hooking]\nenabled = true\n\n");
-        }
-
-        // [passes.anti_class_dump]
-        if self.anti_class_dump.enabled {
-            s.push_str("[passes.anti_class_dump]\nenabled = true\n\n");
-        }
-
-        // [passes.func_call_obf]
-        if self.func_call_obf.enabled {
-            s.push_str("[passes.func_call_obf]\nenabled = true\n\n");
-        }
-
-        // [passes.split_basic_blocks]
-        if self.split_blocks.enabled {
-            s.push_str("[passes.split_basic_blocks]\nenabled = true\n");
             s.push_str(&format!(
-                "probability = {}\n\n",
-                self.split_blocks.probability
+                "probability = {}\n",
+                self.anti_debugging.probability
             ));
         }
+        s.push('\n');
+
+        // [passes.anti_hooking]
+        s.push_str("[passes.anti_hooking]\n");
+        s.push_str(&format!("enabled = {}\n", self.anti_hooking.enabled));
+        if self.anti_hooking.enabled {
+            if self.anti_hooking.inline_aarch64 {
+                s.push_str("inline_aarch64 = true\n");
+            }
+            if self.anti_hooking.inline_x86 {
+                s.push_str("inline_x86 = true\n");
+            }
+            if self.anti_hooking.inline_win {
+                s.push_str("inline_win = true\n");
+            }
+            if self.anti_hooking.objc_runtime {
+                s.push_str("objc_runtime = true\n");
+            }
+            if self.anti_hooking.antirebind {
+                s.push_str("antirebind = true\n");
+            }
+            if self.anti_hooking.direct_syscall {
+                s.push_str("direct_syscall = true\n");
+            }
+        }
+        s.push('\n');
+
+        // [passes.anti_class_dump]
+        s.push_str("[passes.anti_class_dump]\n");
+        s.push_str(&format!("enabled = {}\n", self.anti_class_dump.enabled));
+        if self.anti_class_dump.enabled {
+            if self.anti_class_dump.use_initialize {
+                s.push_str("use_initialize = true\n");
+            }
+            if self.anti_class_dump.rename_methodimp {
+                s.push_str("rename_methodimp = true\n");
+            }
+            if self.anti_class_dump.scramble_methods {
+                s.push_str("scramble_methods = true\n");
+            }
+            if self.anti_class_dump.dummy_selectors {
+                s.push_str("dummy_selectors = true\n");
+                s.push_str(&format!(
+                    "dummy_count = {}\n",
+                    self.anti_class_dump.dummy_count
+                ));
+            }
+        }
+        s.push('\n');
+
+        // [passes.function_call_obfuscate]
+        s.push_str("[passes.function_call_obfuscate]\n");
+        s.push_str(&format!("enabled = {}\n", self.func_call_obf.enabled));
+        if self.func_call_obf.enabled {
+            if self.func_call_obf.flag != 0 {
+                s.push_str(&format!("flag = {}\n", self.func_call_obf.flag));
+            }
+            if !self.func_call_obf.symbol_config_path.is_empty() {
+                s.push_str(&format!(
+                    "symbol_config_path = {:?}\n",
+                    self.func_call_obf.symbol_config_path
+                ));
+            }
+        }
+        s.push('\n');
+
+        // [passes.split_basic_blocks]
+        s.push_str("[passes.split_basic_blocks]\n");
+        s.push_str(&format!("enabled = {}\n", self.split_blocks.enabled));
+        if self.split_blocks.enabled {
+            s.push_str(&format!(
+                "probability = {}\n",
+                self.split_blocks.probability
+            ));
+            s.push_str(&format!("splits = {}\n", self.split_blocks.splits));
+            if self.split_blocks.stack_confusion {
+                s.push_str("stack_confusion = true\n");
+            }
+        }
+        s.push('\n');
 
         // [[policy]] entries
         for pol in &self.policies {

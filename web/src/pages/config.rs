@@ -302,9 +302,19 @@ fn BcfCard() -> impl IntoView {
                         get=Signal::derive(move || cfg.with(|c| c.bcf.junk_asm))
                         set=move |v| cfg.update(|c| c.bcf.junk_asm = v)
                     />
+                    <ToggleField
+                        label="Nested predicate"
+                        get=Signal::derive(move || cfg.with(|c| c.bcf.nested))
+                        set=move |v| cfg.update(|c| c.bcf.nested = v)
+                    />
+                    <ToggleField
+                        label="Create helper func"
+                        get=Signal::derive(move || cfg.with(|c| c.bcf.create_func))
+                        set=move |v| cfg.update(|c| c.bcf.create_func = v)
+                    />
                 </div>
                 {move || cfg.with(|c| c.bcf.junk_asm).then(|| view! {
-                    <div class="config-grid-2">
+                    <div class="config-grid-2 mt-sm">
                         <SliderField
                             label="Junk ASM min"
                             min=1 max=8
@@ -394,6 +404,12 @@ fn ConstEncCard() -> impl IntoView {
                         get=Signal::derive(move || cfg.with(|c| c.const_enc.share_count))
                         set=move |v| cfg.update(|c| c.const_enc.share_count = v)
                     />
+                    <SliderField
+                        label="Iterations"
+                        min=1 max=5
+                        get=Signal::derive(move || cfg.with(|c| c.const_enc.iterations))
+                        set=move |v| cfg.update(|c| c.const_enc.iterations = v)
+                    />
                 </div>
                 <div class="flex gap-lg flex-wrap">
                     <ToggleField
@@ -406,6 +422,11 @@ fn ConstEncCard() -> impl IntoView {
                         get=Signal::derive(move || cfg.with(|c| c.const_enc.substitute_xor))
                         set=move |v| cfg.update(|c| c.const_enc.substitute_xor = v)
                     />
+                    <ToggleField
+                        label="Globalize constants"
+                        get=Signal::derive(move || cfg.with(|c| c.const_enc.globalize))
+                        set=move |v| cfg.update(|c| c.const_enc.globalize = v)
+                    />
                 </div>
                 {move || cfg.with(|c| c.const_enc.substitute_xor).then(|| view! {
                     <SliderField
@@ -413,6 +434,14 @@ fn ConstEncCard() -> impl IntoView {
                         min=0 max=100
                         get=Signal::derive(move || cfg.with(|c| c.const_enc.substitute_xor_prob))
                         set=move |v| cfg.update(|c| c.const_enc.substitute_xor_prob = v)
+                    />
+                })}
+                {move || cfg.with(|c| c.const_enc.globalize).then(|| view! {
+                    <SliderField
+                        label="Globalize probability (%)"
+                        min=0 max=100
+                        get=Signal::derive(move || cfg.with(|c| c.const_enc.globalize_prob))
+                        set=move |v| cfg.update(|c| c.const_enc.globalize_prob = v)
                     />
                 })}
                 <TagField
@@ -463,12 +492,20 @@ fn SubCard() -> impl IntoView {
                 />
             </div>
             <div class="pass-card-body">
-                <SliderField
-                    label="Probability (%)"
-                    min=0 max=100
-                    get=Signal::derive(move || cfg.with(|c| c.substitution.probability))
-                    set=move |v| cfg.update(|c| c.substitution.probability = v)
-                />
+                <div class="config-grid-2">
+                    <SliderField
+                        label="Probability (%)"
+                        min=0 max=100
+                        get=Signal::derive(move || cfg.with(|c| c.substitution.probability))
+                        set=move |v| cfg.update(|c| c.substitution.probability = v)
+                    />
+                    <SliderField
+                        label="Iterations"
+                        min=1 max=5
+                        get=Signal::derive(move || cfg.with(|c| c.substitution.iterations))
+                        set=move |v| cfg.update(|c| c.substitution.iterations = v)
+                    />
+                </div>
             </div>
         </div>
     }
@@ -491,12 +528,20 @@ fn MbaCard() -> impl IntoView {
                 />
             </div>
             <div class="pass-card-body">
-                <SliderField
-                    label="Layers"
-                    min=1 max=4
-                    get=Signal::derive(move || cfg.with(|c| c.mba.layers))
-                    set=move |v| cfg.update(|c| c.mba.layers = v)
-                />
+                <div class="config-grid-2">
+                    <SliderField
+                        label="Probability (%)"
+                        min=0 max=100
+                        get=Signal::derive(move || cfg.with(|c| c.mba.probability))
+                        set=move |v| cfg.update(|c| c.mba.probability = v)
+                    />
+                    <SliderField
+                        label="Layers"
+                        min=1 max=4
+                        get=Signal::derive(move || cfg.with(|c| c.mba.layers))
+                        set=move |v| cfg.update(|c| c.mba.layers = v)
+                    />
+                </div>
                 <ToggleField
                     label="Heuristic mode (faster, weaker)"
                     get=Signal::derive(move || cfg.with(|c| c.mba.heuristic))
@@ -524,12 +569,20 @@ fn CsmCard() -> impl IntoView {
                 />
             </div>
             <div class="pass-card-body">
-                <SliderField
-                    label="Warmup iterations"
-                    min=16 max=512
-                    get=Signal::derive(move || cfg.with(|c| c.csm.warmup))
-                    set=move |v| cfg.update(|c| c.csm.warmup = v)
-                />
+                <div class="config-grid-2">
+                    <SliderField
+                        label="Warmup iterations"
+                        min=16 max=512
+                        get=Signal::derive(move || cfg.with(|c| c.csm.warmup))
+                        set=move |v| cfg.update(|c| c.csm.warmup = v)
+                    />
+                    <SliderField
+                        label="Max blocks"
+                        min=500 max=20000
+                        get=Signal::derive(move || cfg.with(|c| c.csm.max_blocks))
+                        set=move |v| cfg.update(|c| c.csm.max_blocks = v)
+                    />
+                </div>
                 <ToggleField
                     label="Nested dispatch"
                     get=Signal::derive(move || cfg.with(|c| c.csm.nested_dispatch))
@@ -577,6 +630,7 @@ fn VecCard() -> impl IntoView {
                             <option value="64">"64"</option>
                             <option value="128">"128 (recommended)"</option>
                             <option value="256">"256"</option>
+                            <option value="512">"512 (extreme)"</option>
                         </select>
                     </div>
                 </div>
@@ -600,12 +654,34 @@ fn VecCard() -> impl IntoView {
 #[component]
 fn IndirCard() -> impl IntoView {
     let cfg = expect_context::<RwSignal<TomlConfig>>();
+    let enabled = Signal::derive(move || cfg.with(|c| c.indir_branch.enabled));
     view! {
-        <SimplePassCard
-            icon="↩" title="Indirect Branching"
-            get=Signal::derive(move || cfg.with(|c| c.indir_branch.enabled))
-            set=move |v| cfg.update(|c| c.indir_branch.enabled = v)
-        />
+        <div class="pass-card" class:pass-disabled=move || !enabled.get()>
+            <div class="pass-card-header">
+                <span class="pass-card-title">
+                    <span class="pass-card-icon">"↩"</span>
+                    "Indirect Branching"
+                </span>
+                <ToggleField label=""
+                    get=enabled
+                    set=move |v| cfg.update(|c| c.indir_branch.enabled = v)
+                />
+            </div>
+            <div class="pass-card-body">
+                <div class="flex gap-lg flex-wrap">
+                    <ToggleField
+                        label="Store state on stack"
+                        get=Signal::derive(move || cfg.with(|c| c.indir_branch.use_stack))
+                        set=move |v| cfg.update(|c| c.indir_branch.use_stack = v)
+                    />
+                    <ToggleField
+                        label="Encrypt jump targets"
+                        get=Signal::derive(move || cfg.with(|c| c.indir_branch.enc_jump_target))
+                        set=move |v| cfg.update(|c| c.indir_branch.enc_jump_target = v)
+                    />
+                </div>
+            </div>
+        </div>
     }
 }
 
@@ -650,48 +726,169 @@ fn FuncWrapCard() -> impl IntoView {
 #[component]
 fn AntiDebugCard() -> impl IntoView {
     let cfg = expect_context::<RwSignal<TomlConfig>>();
+    let enabled = Signal::derive(move || cfg.with(|c| c.anti_debugging.enabled));
     view! {
-        <SimplePassCard
-            icon="\u{1F41B}" title="Anti-Debugging"
-            get=Signal::derive(move || cfg.with(|c| c.anti_debugging.enabled))
-            set=move |v| cfg.update(|c| c.anti_debugging.enabled = v)
-        />
+        <div class="pass-card" class:pass-disabled=move || !enabled.get()>
+            <div class="pass-card-header">
+                <span class="pass-card-title">
+                    <span class="pass-card-icon">"\u{1F41B}"</span>
+                    "Anti-Debugging"
+                </span>
+                <ToggleField label=""
+                    get=enabled
+                    set=move |v| cfg.update(|c| c.anti_debugging.enabled = v)
+                />
+            </div>
+            <div class="pass-card-body">
+                <SliderField
+                    label="Probability (%)"
+                    min=0 max=100
+                    get=Signal::derive(move || cfg.with(|c| c.anti_debugging.probability))
+                    set=move |v| cfg.update(|c| c.anti_debugging.probability = v)
+                />
+            </div>
+        </div>
     }
 }
 
 #[component]
 fn AntiHookCard() -> impl IntoView {
     let cfg = expect_context::<RwSignal<TomlConfig>>();
+    let enabled = Signal::derive(move || cfg.with(|c| c.anti_hooking.enabled));
     view! {
-        <SimplePassCard
-            icon="\u{1F3A3}" title="Anti-Hooking"
-            get=Signal::derive(move || cfg.with(|c| c.anti_hooking.enabled))
-            set=move |v| cfg.update(|c| c.anti_hooking.enabled = v)
-        />
+        <div class="pass-card" class:pass-disabled=move || !enabled.get()>
+            <div class="pass-card-header">
+                <span class="pass-card-title">
+                    <span class="pass-card-icon">"\u{1F3A3}"</span>
+                    "Anti-Hooking"
+                </span>
+                <ToggleField label=""
+                    get=enabled
+                    set=move |v| cfg.update(|c| c.anti_hooking.enabled = v)
+                />
+            </div>
+            <div class="pass-card-body">
+                <div class="flex gap-lg flex-wrap">
+                    <ToggleField
+                        label="AArch64 inline scan"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_hooking.inline_aarch64))
+                        set=move |v| cfg.update(|c| c.anti_hooking.inline_aarch64 = v)
+                    />
+                    <ToggleField
+                        label="x86_64 inline scan"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_hooking.inline_x86))
+                        set=move |v| cfg.update(|c| c.anti_hooking.inline_x86 = v)
+                    />
+                    <ToggleField
+                        label="Windows inline scan"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_hooking.inline_win))
+                        set=move |v| cfg.update(|c| c.anti_hooking.inline_win = v)
+                    />
+                    <ToggleField
+                        label="ObjC runtime check"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_hooking.objc_runtime))
+                        set=move |v| cfg.update(|c| c.anti_hooking.objc_runtime = v)
+                    />
+                    <ToggleField
+                        label="Anti-rebind check"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_hooking.antirebind))
+                        set=move |v| cfg.update(|c| c.anti_hooking.antirebind = v)
+                    />
+                    <ToggleField
+                        label="Direct kernel syscall"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_hooking.direct_syscall))
+                        set=move |v| cfg.update(|c| c.anti_hooking.direct_syscall = v)
+                    />
+                </div>
+            </div>
+        </div>
     }
 }
 
 #[component]
 fn AntiClassDumpCard() -> impl IntoView {
     let cfg = expect_context::<RwSignal<TomlConfig>>();
+    let enabled = Signal::derive(move || cfg.with(|c| c.anti_class_dump.enabled));
     view! {
-        <SimplePassCard
-            icon="\u{1F50D}" title="Anti-Class Dump (ObjC)"
-            get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.enabled))
-            set=move |v| cfg.update(|c| c.anti_class_dump.enabled = v)
-        />
+        <div class="pass-card" class:pass-disabled=move || !enabled.get()>
+            <div class="pass-card-header">
+                <span class="pass-card-title">
+                    <span class="pass-card-icon">"\u{1F50D}"</span>
+                    "Anti-Class Dump (ObjC)"
+                </span>
+                <ToggleField label=""
+                    get=enabled
+                    set=move |v| cfg.update(|c| c.anti_class_dump.enabled = v)
+                />
+            </div>
+            <div class="pass-card-body">
+                <div class="flex gap-lg flex-wrap">
+                    <ToggleField
+                        label="Inject +initialize"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.use_initialize))
+                        set=move |v| cfg.update(|c| c.anti_class_dump.use_initialize = v)
+                    />
+                    <ToggleField
+                        label="Rename method IMP"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.rename_methodimp))
+                        set=move |v| cfg.update(|c| c.anti_class_dump.rename_methodimp = v)
+                    />
+                    <ToggleField
+                        label="Scramble methods"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.scramble_methods))
+                        set=move |v| cfg.update(|c| c.anti_class_dump.scramble_methods = v)
+                    />
+                    <ToggleField
+                        label="Dummy selectors"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.dummy_selectors))
+                        set=move |v| cfg.update(|c| c.anti_class_dump.dummy_selectors = v)
+                    />
+                </div>
+                {move || cfg.with(|c| c.anti_class_dump.dummy_selectors).then(|| view! {
+                    <SliderField
+                        label="Dummy count"
+                        min=1 max=32
+                        get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.dummy_count))
+                        set=move |v| cfg.update(|c| c.anti_class_dump.dummy_count = v)
+                    />
+                })}
+            </div>
+        </div>
     }
 }
 
 #[component]
 fn FuncCallObfCard() -> impl IntoView {
     let cfg = expect_context::<RwSignal<TomlConfig>>();
+    let enabled = Signal::derive(move || cfg.with(|c| c.func_call_obf.enabled));
     view! {
-        <SimplePassCard
-            icon="\u{1F4DE}" title="Function Call Obfuscation"
-            get=Signal::derive(move || cfg.with(|c| c.func_call_obf.enabled))
-            set=move |v| cfg.update(|c| c.func_call_obf.enabled = v)
-        />
+        <div class="pass-card" class:pass-disabled=move || !enabled.get()>
+            <div class="pass-card-header">
+                <span class="pass-card-title">
+                    <span class="pass-card-icon">"\u{1F4DE}"</span>
+                    "Function Call Obfuscation"
+                </span>
+                <ToggleField label=""
+                    get=enabled
+                    set=move |v| cfg.update(|c| c.func_call_obf.enabled = v)
+                />
+            </div>
+            <div class="pass-card-body">
+                <div class="field-group">
+                    <label class="field-label">"Symbol config path (JSON)"</label>
+                    <input
+                        type="text"
+                        class="field-input mono"
+                        placeholder="/path/to/symbols.json"
+                        prop:value=move || cfg.with(|c| c.func_call_obf.symbol_config_path.clone())
+                        on:input=move |e| {
+                            let v = event_target_value(&e);
+                            cfg.update(|c| c.func_call_obf.symbol_config_path = v);
+                        }
+                    />
+                </div>
+            </div>
+        </div>
     }
 }
 
@@ -712,11 +909,24 @@ fn SplitBlocksCard() -> impl IntoView {
                 />
             </div>
             <div class="pass-card-body">
-                <SliderField
-                    label="Probability (%)"
-                    min=0 max=100
-                    get=Signal::derive(move || cfg.with(|c| c.split_blocks.probability))
-                    set=move |v| cfg.update(|c| c.split_blocks.probability = v)
+                <div class="config-grid-2">
+                    <SliderField
+                        label="Probability (%)"
+                        min=0 max=100
+                        get=Signal::derive(move || cfg.with(|c| c.split_blocks.probability))
+                        set=move |v| cfg.update(|c| c.split_blocks.probability = v)
+                    />
+                    <SliderField
+                        label="Splits per block"
+                        min=1 max=10
+                        get=Signal::derive(move || cfg.with(|c| c.split_blocks.splits))
+                        set=move |v| cfg.update(|c| c.split_blocks.splits = v)
+                    />
+                </div>
+                <ToggleField
+                    label="Stack confusion (balanced push/pop)"
+                    get=Signal::derive(move || cfg.with(|c| c.split_blocks.stack_confusion))
+                    set=move |v| cfg.update(|c| c.split_blocks.stack_confusion = v)
                 />
             </div>
         </div>
