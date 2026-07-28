@@ -19,7 +19,6 @@
 #ifndef _BOGUSCONTROLFLOW_H_
 #define _BOGUSCONTROLFLOW_H_
 
-#include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
 
 namespace llvm {

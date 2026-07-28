@@ -16,45 +16,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// FunctionWrapper.cpp — polymorphic function-call obfuscation.
-//
-// Each call site that opts in is wrapped in a unique intermediate function
-// ("proxy") that performs one of several randomised transformations before
-// calling the real callee:
-//
-//  Strategy A — Identity wrapper with random ABI noise:
-//    The proxy allocates a random number of dead stack slots, touches them
-//    via volatile stores, then calls through.  IDA/Binja cannot easily
-//    collapse the indirection because they must prove the slots are dead.
-//
-//  Strategy B — Argument shuffle wrapper:
-//    For integer scalar arguments, the proxy XORs each arg with a
-//    per-proxy random constant and XORs back immediately before the call.
-//    The call graph edge target is the proxy, not the callee, so static
-//    call-graph reconstruction fails to connect the caller to the callee
-//    directly.
-//
-//  Strategy C — Return-value masking wrapper:
-//    If the callee returns an integer, the proxy XORs the return value with
-//    a compile-time constant (zero-net effect: XOR in callee / XOR out in
-//    proxy), making IDA's "return value tracking" produce garbage.
-//    NOTE: currently a no-op XOR (key XOR key = 0) so correctness is trivially
-//    maintained; the IR still shows an extra XOR that the optimizer will NOT
-//    eliminate if called from another compilation unit (separate IR module).
-//
-// OLLVM-Next fixes:
-//  ① Removed usage of deprecated `CS->getCalledValue()` (LLVM 16+).
-//    Now uses `CS->getCalledOperand()` via the CallSite compat layer.
-//  ② `CS->mutateFunctionType()` replaced with proper operand update.
-//  ③ `std::nullopt` branch already correct for LLVM 16+; fallback removed.
-//  ④ Each proxy is annotated with "noinline" + "optnone" so the pass pipeline
-//    cannot inline or optimise it away.
-
 #include "include/FunctionWrapper.h"
 #include "include/CryptoUtils.h"
 #include "include/ObfConfig.h"
 #include "include/Utils.h"
-#include "include/compat/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -149,11 +114,7 @@ struct FunctionWrapper : public ModulePass {
 
     SmallVector<unsigned int, 8> byvalArgNums;
     if (Function *tmp = dyn_cast<Function>(calledFunction)) {
-#if LLVM_VERSION_MAJOR >= 18
       if (tmp->getName().starts_with("clang."))
-#else
-      if (tmp->getName().startswith("clang."))
-#endif
         return nullptr;
       for (Argument &arg : tmp->args()) {
         if (arg.hasStructRetAttr() || arg.hasSwiftSelfAttr())

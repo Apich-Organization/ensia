@@ -29,53 +29,19 @@
 
 using namespace llvm;
 
-// ─── OLLVM-Next: hardware-bound opaque predicates ────────────────────────────
-//
-// Three tiers of predicates, chosen based on target architecture:
-//
-//  Tier A — x86/x86_64 CPUID:
-//    Execute CPUID leaf 1; EDX bit 25 (SSE) is always 1 on any CPU that can
-//    run a modern OS.  Static analyzers cannot evaluate CPUID without emulating
-//    the hardware.  Symbolic execution tools (angr, KLEE) produce "HW unknown".
-//
-//  Tier B — x86/x86_64 RDTSC:
-//    RDTSC returns a 64-bit tick count.  Predicate: (rdtsc | 1) != 0, which is
-//    trivially true but looks non-deterministic to a static analyzer because
-//    the counter value is unknown at analysis time.
-//
-//  Tier C — AArch64 MRS:
-//    Read CNTVCT_EL0 (virtual timer counter).  Same property as RDTSC.
-//
-//  Tier D — Software fallback:
-//    Classic global-variable opaque predicate (original BCF scheme).
-//
-// Architecture detection uses the LLVM target triple stored in the Module.
-
 static bool targetIsX86_64(Module &M) {
-#if LLVM_VERSION_MAJOR >= 20
   StringRef triple = M.getTargetTriple().getTriple();
-#else
-  StringRef triple = M.getTargetTriple();
-#endif
   return triple.contains("x86_64") || triple.contains("amd64");
 }
 static bool targetIsX86_32(Module &M) {
-#if LLVM_VERSION_MAJOR >= 20
   StringRef triple = M.getTargetTriple().getTriple();
-#else
-  StringRef triple = M.getTargetTriple();
-#endif
   return (triple.contains("i686") || triple.contains("i386") || triple.contains("x86")) && !targetIsX86_64(M);
 }
 static bool targetIsX86(Module &M) {
   return targetIsX86_64(M) || targetIsX86_32(M);
 }
 static bool targetIsAArch64(Module &M) {
-#if LLVM_VERSION_MAJOR >= 20
   StringRef triple = M.getTargetTriple().getTriple();
-#else
-  StringRef triple = M.getTargetTriple();
-#endif
   return triple.contains("aarch64") || triple.contains("arm64");
 }
 
@@ -256,24 +222,6 @@ static cl::opt<bool> CreateFunctionForOpaquePredicate(
     "bcf_createfunc", cl::desc("Create function for each opaque predicate"),
     cl::value_desc("create function"), cl::init(false), cl::Optional);
 static bool CreateFunctionForOpaquePredicateTemp = false;
-
-// ─── OLLVM-Next: nested BCF + entropy-chain predicate ─────────────────────────
-//
-// -bcf_nested: apply BCF recursively to the generated alteredBB blocks.
-//   In the standard BCF pass, the "altered" (dead) block is never itself
-//   obfuscated — leaving a recognisable pattern where one successor has no
-//   BCF structure.  With nested mode, generated blocks are fed back into
-//   the BCF queue, creating a fractal-like obfuscated control graph.
-//
-// -bcf_entropy_chain: replace the simple hardware predicate with a 3-way AND
-//   chain:  (CPUID-SSE-bit) AND (RDTSC|1 != 0) AND (global_load predicate).
-//   All three sub-predicates are always true at runtime, but each is opaque
-//   to a different class of analyzer:
-//     • CPUID: opaque to symbolic execution (hardware dependency)
-//     • RDTSC: opaque to static analysis (non-deterministic counter)
-//     • global var: opaque to compile-time constant folding (external load)
-//   The triple-AND defeats each class independently; an analyzer must solve
-//   all three simultaneously to resolve the branch.
 
 static cl::opt<bool> BCFNested(
     "bcf_nested",
@@ -553,13 +501,8 @@ struct BogusControlFlow : public FunctionPass {
     Value *RHS = ConstantInt::get(Type::getInt32Ty(F.getContext()), 1);
 
     // The always true condition. End of the first block
-#if LLVM_VERSION_MAJOR >= 19
     ICmpInst *condition = new ICmpInst(basicBlock->end(), ICmpInst::ICMP_EQ,
                                        LHS, RHS, "BCFPlaceHolderPred");
-#else
-    ICmpInst *condition = new ICmpInst(*basicBlock, ICmpInst::ICMP_EQ, LHS, RHS,
-                                       "BCFPlaceHolderPred");
-#endif
     needtoedit.emplace_back(condition);
 
     // Jump to the original basic block if the condition is true or
@@ -585,13 +528,8 @@ struct BogusControlFlow : public FunctionPass {
     // of the altered block.. So we erase the terminator created when splitting.
     originalBB->getTerminator()->eraseFromParent();
     // We add at the end a new always true condition
-#if LLVM_VERSION_MAJOR >= 19
     ICmpInst *condition2 = new ICmpInst(originalBB->end(), CmpInst::ICMP_EQ,
                                         LHS, RHS, "BCFPlaceHolderPred");
-#else
-    ICmpInst *condition2 = new ICmpInst(*originalBB, CmpInst::ICMP_EQ, LHS, RHS,
-                                        "BCFPlaceHolderPred");
-#endif
     needtoedit.emplace_back(condition2);
     // Do random behavior to avoid pattern recognition.
     // This is achieved by jumping to a random BB
@@ -665,7 +603,7 @@ struct BogusControlFlow : public FunctionPass {
         if (i->isBinaryOp() && i->getType()->isIntegerTy()) {
           unsigned int opcode = i->getOpcode();
           Instruction *op, *op1 = nullptr;
-          
+
           // Integer binary ops
           if (opcode == Instruction::Add || opcode == Instruction::Sub ||
               opcode == Instruction::Mul || opcode == Instruction::UDiv ||
@@ -893,11 +831,7 @@ struct BogusControlFlow : public FunctionPass {
       for (Instruction &I : *alteredBB) {
         if (CallInst *CI = dyn_cast<CallInst>(&I)) {
           if (CI->getCalledFunction() != nullptr &&
-#if LLVM_VERSION_MAJOR >= 18
               CI->getCalledFunction()->getName().starts_with("llvm.dbg"))
-#else
-              CI->getCalledFunction()->getName().startswith("llvm.dbg"))
-#endif
             toRemove.emplace_back(CI);
         }
       }
@@ -1090,11 +1024,6 @@ struct BogusControlFlow : public FunctionPass {
         IRBOp->CreateRet(IRBOp->CreateICmp(pred, Last, RealRHS));
         Last = IRBReal->CreateCall(opFunction);
       } else {
-        // OLLVM-Next: chain a hardware or entropy-chain predicate with AND.
-        // Both are always true at runtime but opaque to different classes of
-        // analyzer — see comments at buildEntropyChainPredicate().
-        // In MaxObf mode: always apply the entropy chain (not 50% random) to
-        // compensate for the reduced BCF iteration count (2 instead of 3).
         Value *swPred = IRBReal->CreateICmp(pred, Last, RealRHS);
         bool doEntropyChain = BCFEntropyChainTemp &&
             (ObfuscationMaxMode || cryptoutils->get_range(2) == 0);

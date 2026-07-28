@@ -15,46 +15,6 @@
  *  You should have received a copy of the GNU Affero General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
-// VectorObfuscation.cpp — Scalar-to-vector SIMD lifting pass.
-//
-// Strategy
-// ────────
-// For each eligible instruction on integer/float type, replace it with an
-// equivalent computation inside a <LANES × ElemTy> vector:
-//
-//   Original:  %r = add i32 %a, %b
-//
-//   Obfuscated (LANES=4, lane K chosen at compile time):
-//     %va  = insertelement <4 x i32> poison, %noise0, 0
-//     ...   insertelement noise into non-K lanes
-//     %va' = insertelement <4 x i32> %va,   %a,      K   ← real operand
-//     %vb' = (similarly)
-//     %vr  = add <4 x i32> %va', %vb'
-//     %r   = extractelement <4 x i32> %vr, K
-//
-//   For shift ops (Shl/LShr/AShr), the shift-amount vector is broadcast
-//   (same value in every lane) to avoid UB from out-of-range lane amounts.
-//
-//   For ICmp (integer comparisons), the result is lifted to a <N x i1> vector
-//   comparison; extraction gives back an i1.
-//
-//   Optional shuffle noise (vec_shuffle=true):
-//     After the vector op, apply a random fixed-permutation shufflevector, then
-//     extract from the shuffled lane.  Decompilers that pattern-match
-//     "insertelement → op → extractelement" fail on the interleaved shuffle.
-//
-// Width configuration (-vec_width=N):
-//   128 (default) → <4 x i32>, <16 x i8>, <8 x i16>, <2 x i64>
-//   256           → <8 x i32>, <32 x i8>, <16 x i16>, <4 x i64>
-//   512           → <16 x i32>, <64 x i8>, <32 x i16>, <8 x i64>
-//   (Float: <4 x f32>, <2 x f64> at 128-bit; scaled accordingly)
-//
-// IDA/Binja impact:
-//   • Decompilers emit _mm_add_epi32/vcmpeqq wrappers — the "real" op is hidden
-//     inside a lane-structured expression the tool never collapses.
-//   • Shuffle noise forces SSE/AVX shuffle pattern recognition to fail.
-//   • Per-site random lane K and noise constants defeat cross-site correlation.
 
 #include "include/VectorObfuscation.h"
 #include "include/CryptoUtils.h"

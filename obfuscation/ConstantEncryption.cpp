@@ -21,44 +21,17 @@
 #include "include/ObfConfig.h"
 #include "include/SubstituteImpl.h"
 #include "include/Utils.h"
-#include "include/compat/CallSite.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/NoFolder.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include <regex>
 #include <unordered_set>
 
 using namespace llvm;
-
-// ─── OLLVM-Next: ensemble (k-share) secret sharing ──────────────────────────
-//
-// Physical motivation — statistical ensemble principle:
-//   A thermodynamic ensemble is defined so that no single "particle" (sample)
-//   carries the full information; the macrostate only emerges from the full
-//   ensemble.  We apply this idea to constant encryption:
-//
-//   Given constant C, generate k−1 uniform random shares r_1, …, r_{k-1}.
-//   Define r_k = C ⊕ r_1 ⊕ … ⊕ r_{k-1}.
-//   Then C = r_1 ⊕ r_2 ⊕ … ⊕ r_k  (XOR identity).
-//
-//   Each individual share r_i is uniformly random and reveals nothing about C
-//   (information-theoretically, this is a (k,k)-threshold secret sharing
-//   scheme — all k shares are required; k-1 shares give zero information).
-//
-//   At runtime the generated IR XORs all k global-variable shares together.
-//   IDA/Binja cannot reconstruct C without tracing all k load→XOR chains
-//   to a single expression — path explosion proportional to k!.
-//
-// -constenc_kshare=k : number of shares (2 = classic 1-key XOR, 3-5 = good)
-// -constenc_feistel   : additionally encrypt through a 4-round Feistel cipher
-//   before share-splitting.  Adds a nonlinear layer that pure XOR analysis
-//   cannot factor through.
 
 static cl::opt<bool>
     SubstituteXor("constenc_subxor",
@@ -129,11 +102,7 @@ struct ConstantEncryption : public ModulePass {
     if (isa<CallInst>(I) || isa<InvokeInst>(I)) {
       CallSite CS(I);
       if (CS.getCalledFunction() &&
-#if LLVM_VERSION_MAJOR >= 18
           CS.getCalledFunction()->getName().starts_with("ensia_")) {
-#else
-          CS.getCalledFunction()->getName().startswith("ensia_")) {
-#endif
         return false;
       }
     }
@@ -308,7 +277,7 @@ struct ConstantEncryption : public ModulePass {
                         const std::vector<std::string> &forceVal = {}) {
     SmallVector<std::pair<Instruction *, unsigned>, 64> targets;
     SmallVector<GlobalVariable *, 32> gvTargets;
-    
+
     for (Instruction &I : instructions(F)) {
       if (!shouldEncryptConstant(&I))
         continue;
@@ -326,10 +295,10 @@ struct ConstantEncryption : public ModulePass {
             gvTargets.push_back(G);
       }
     }
-    
+
     uint32_t eligible = targets.size() + gvTargets.size();
     if (eligible == 0) return;
-    
+
     uint32_t currentProb = 100;
     uint32_t maxTargets = 1000000;
     if (eligible * currentProb / 100 > maxTargets) {

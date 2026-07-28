@@ -5,6 +5,7 @@ pub enum Theme {
     Dusk,
 }
 
+#[allow(dead_code)]
 impl Theme {
     pub fn attr(&self) -> &'static str {
         match self {

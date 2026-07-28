@@ -18,14 +18,9 @@
 
 #include "include/FunctionCallObfuscate.h"
 #include "include/json.hpp"
-#if LLVM_VERSION_MAJOR >= 17
 #include "llvm/ADT/SmallString.h"
 #include "llvm/TargetParser/Triple.h"
-#else
-#include "llvm/ADT/Triple.h"
-#endif
 #include "include/Utils.h"
-#include "include/compat/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -112,11 +107,7 @@ struct FunctionCallObfuscate : public FunctionPass {
       M.getOrInsertFunction("objc_getMetaClass", objc_getMetaClass_Type);
     }
     this->initialized = true;
-#if LLVM_VERSION_MAJOR >= 17
     this->opaquepointers = true;
-#else
-    this->opaquepointers = !M.getContext().supportsTypedPointers();
-#endif
     return true;
   }
 
@@ -143,15 +134,9 @@ struct FunctionCallObfuscate : public FunctionPass {
           if (!G->hasName() || !G->hasInitializer() ||
               !G->getSection().contains("objc"))
             continue;
-#if LLVM_VERSION_MAJOR >= 18
           if (G->getName().starts_with("OBJC_CLASSLIST_REFERENCES"))
             objcclassgv.insert(G);
           else if (G->getName().starts_with("OBJC_SELECTOR_REFERENCES"))
-#else
-          if (G->getName().startswith("OBJC_CLASSLIST_REFERENCES"))
-            objcclassgv.insert(G);
-          else if (G->getName().startswith("OBJC_SELECTOR_REFERENCES"))
-#endif
             objcselgv.insert(G);
         }
     Module *M = F->getParent();
@@ -278,11 +263,7 @@ struct FunctionCallObfuscate : public FunctionPass {
     bool isWindows = triple.isOSWindows();
     if (!triple.isAndroid() && !triple.isOSDarwin() && !isWindows) {
       errs() << "Unsupported Target Triple: "
-#if LLVM_VERSION_MAJOR >= 20
              << M->getTargetTriple().getTriple() << "\n";
-#else
-             << M->getTargetTriple() << "\n";
-#endif
       return false;
     }
     FixFunctionConstantExpr(&F);
@@ -346,11 +327,7 @@ struct FunctionCallObfuscate : public FunctionPass {
           // Use our own implementation
           if (!calledFunction)
             continue;
-#if LLVM_VERSION_MAJOR >= 18
           if (calledFunction->getName().starts_with("ensia_"))
-#else
-          if (calledFunction->getName().startswith("ensia_"))
-#endif
             continue;
 
           // It's only safe to restrict our modification to external symbols

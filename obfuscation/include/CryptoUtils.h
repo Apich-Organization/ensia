@@ -20,37 +20,11 @@
 #define _CRYPTO_UTILS_H_
 
 #include "llvm/Support/ManagedStatic.h"
-#include <cstdio>
-#include <map>
 #include <mutex>
 #include <stdint.h>
-#include <string>
 #include <unordered_map>
 
 extern std::mutex g_crypto_mutex;
-
-// ─── CryptoUtils — xoshiro256++ PRNG with multi-source entropy seeding ────────
-//
-// Replaces the original mt19937_64 implementation because:
-//   • mt19937_64 seeded with a millisecond timestamp is predictable (≤ 2^40
-//     distinguishable seeds for a typical build window).
-//   • After observing 624 × 64-bit outputs the mt19937 state can be fully
-//     reconstructed (Berlekamp–Massey on the output stream).
-//
-// xoshiro256++ properties:
-//   • Period: 2^256 − 1
-//   • Passes BigCrush / PractRand > 32 TiB
-//   • State: four 64-bit words (256 bits total) — cannot be reconstructed
-//     from a finite output window without solving a nonlinear system
-//   • Speed: ~2× faster than mt19937_64 on modern x86_64
-//
-// Seeding strategy (splitmix64 mixing from multiple entropy sources):
-//   s0 = mix(wall_clock_ns XOR process_address_entropy)
-//   s1 = mix(s0 XOR rdtsc_if_available XOR compile_time_counter)
-//   s2 = mix(s1 XOR stack_ptr_hash)
-//   s3 = mix(s2 XOR getpid_if_posix)
-// Each source contributes its own dimension of entropy; an attacker must
-// enumerate all simultaneously to predict the output.
 
 namespace llvm {
 

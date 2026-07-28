@@ -20,7 +20,6 @@
 #define _MBA_OBFUSCATION_H_
 
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
 
 namespace llvm {

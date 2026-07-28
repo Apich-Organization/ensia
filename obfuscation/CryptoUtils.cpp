@@ -16,36 +16,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// CryptoUtils.cpp — xoshiro256++ PRNG with multi-source entropy.
-//
-// Design rationale (see header for full analysis):
-//   The prior mt19937_64 implementation was seeded with a millisecond-
-//   resolution timestamp, making the PRNG output reconstructable by any
-//   attacker who can estimate the build time within a few hours (~3.6×10^9
-//   candidates — easily brute-forced). More critically, the mt19937 output
-//   stream allows full state reconstruction after 624 consecutive 64-bit
-//   outputs via the Berlekamp–Massey LFSR algorithm.
-//
-//   xoshiro256++ eliminates both weaknesses:
-//   ① 256-bit state cannot be reconstructed from any finite output window
-//      without solving a nonlinear system over GF(2^256).
-//   ② Seeding uses four independent entropy sources mixed via splitmix64,
-//      requiring an attacker to enumerate all simultaneously.
-//
-// Entropy sources:
-//   A. Nanosecond-resolution wall clock (std::chrono::high_resolution_clock)
-//   B. Stack pointer hash (contributes ASLR entropy on Linux/macOS)
-//   C. Heap pointer hash (separate ASLR region on most OSes)
-//   D. Compile-time __COUNTER__ XOR'd with source-file hash (constant but
-//      unique per TU, prevents identical seeds across parallel compile jobs)
-//   Bonus on POSIX: process PID mixed into s3 for uniqueness per fork.
-
 #include "include/CryptoUtils.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
 #include <chrono>
 #include <cstdlib>
-#include <cstring>
 #include <mutex>
 
 std::mutex g_crypto_mutex;

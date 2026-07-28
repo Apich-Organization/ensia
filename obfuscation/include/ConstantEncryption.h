@@ -19,7 +19,6 @@
 #ifndef _CONSTANT_ENCRYPTION_H_
 #define _CONSTANT_ENCRYPTION_H_
 
-#include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
 
 namespace llvm {

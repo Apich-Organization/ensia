@@ -79,9 +79,7 @@
 #include "include/Utils.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/Passes/PassBuilder.h"
-#if LLVM_VERSION_MAJOR >= 18
 #include "llvm/Plugins/PassPlugin.h"
-#endif
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
@@ -127,8 +125,6 @@ static cl::opt<bool> EnableIndirectBranching("enable-indibran", cl::init(false),
                                               cl::NotHidden, cl::desc("Enable Indirect Branching."));
 static cl::opt<bool> EnableFunctionWrapper("enable-funcwra", cl::init(false),
                                             cl::NotHidden, cl::desc("Enable Function Wrapper."));
-
-// ── OLLVM-Next new pass flags ─────────────────────────────────────────────────
 
 static cl::opt<bool> EnableChaosStateMachine(
     "enable-csmobf", cl::init(false), cl::NotHidden,
@@ -470,13 +466,8 @@ static void runFeatureElimination(Module &M) {
       continue;
     // Don't rename our own sentinel/marker functions
     StringRef nm = F.getName();
-#if LLVM_VERSION_MAJOR >= 18
     if (nm.starts_with("ensia_") || nm.starts_with("EnsiaBCF") ||
         nm.starts_with("ADB") || nm.starts_with("InitADB"))
-#else
-    if (nm.startswith("ensia_") || nm.startswith("EnsiaBCF") ||
-        nm.startswith("ADB") || nm.startswith("InitADB"))
-#endif
       continue;
     std::string newName;
     raw_string_ostream OS(newName);
@@ -491,13 +482,8 @@ static void runFeatureElimination(Module &M) {
       continue;
     StringRef nm = GV.getName();
     // Preserve BCF sentinel and our injected GVs — they're already hex-named
-#if LLVM_VERSION_MAJOR >= 18
     if (nm.starts_with("bcf.") || nm.starts_with("LHSGV") ||
         nm.starts_with("RHSGV") || nm.starts_with("g"))
-#else
-    if (nm.startswith("bcf.") || nm.startswith("LHSGV") ||
-        nm.startswith("RHSGV") || nm.startswith("g"))
-#endif
       continue;
     std::string newName;
     raw_string_ostream OS(newName);
@@ -784,11 +770,7 @@ struct Obfuscation : public ModulePass {
     for (Function &F : M) {
       if (!F.isDeclaration() || !F.hasName())
         continue;
-#if LLVM_VERSION_MAJOR >= 18
       if (!F.getName().starts_with("ensia_"))
-#else
-      if (!F.getName().startswith("ensia_"))
-#endif
         continue;
       for (User *U : F.users())
         if (Instruction *Inst = dyn_cast<Instruction>(U))
@@ -848,8 +830,6 @@ INITIALIZE_PASS_DEPENDENCY(VectorObfuscation)
 INITIALIZE_PASS_END(Obfuscation, "obfus", "Enable OLLVM-Next Obfuscation",
                     false, false)
 
-#if LLVM_VERSION_MAJOR >= 18
-
 namespace llvm {
 
 PassPluginLibraryInfo getEnsiaPluginInfo() {
@@ -896,7 +876,6 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
                 else if (n == EnableConstantEncryption.ArgStr)EnableConstantEncryption = true;
                 else if (n == EnableIndirectBranching.ArgStr) EnableIndirectBranching = true;
                 else if (n == EnableFunctionWrapper.ArgStr)   EnableFunctionWrapper = true;
-                // OLLVM-Next new passes and intensity presets
                 else if (n == EnableChaosStateMachine.ArgStr) EnableChaosStateMachine = true;
                 else if (n == EnableMBAObfuscation.ArgStr)    EnableMBAObfuscation = true;
                 else if (n == EnableVectorObfuscation.ArgStr) EnableVectorObfuscation = true;
@@ -925,5 +904,3 @@ extern "C" LLVM_ATTRIBUTE_WEAK
 ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() {
   return llvm::getEnsiaPluginInfo();
 }
-
-#endif // LLVM_VERSION_MAJOR >= 18

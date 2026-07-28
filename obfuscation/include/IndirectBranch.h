@@ -19,7 +19,6 @@
 #ifndef _INDIRECT_BRANCH_H_
 #define _INDIRECT_BRANCH_H_
 
-#include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
 
 namespace llvm {

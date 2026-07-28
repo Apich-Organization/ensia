@@ -16,23 +16,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Flattening.cpp — control-flow flattening (classic CFF).
-//
-// OLLVM-Next enhancements:
-//  ① The scrambling key is derived from a logistic-map warm-up sequence
-//    (via chaosMapStep), making case values appear chaotic rather than
-//    sequential — harder for Binja pattern recognition to identify the
-//    dispatcher structure.
-//  ② A second "address alloca" is replaced with a double-pointer indirection:
-//    switchVarAddr now holds a pointer to the alloca instead of the
-//    alloca's address directly, forcing tools to track one extra dereference.
-//  ③ The loop-end block contains a gratuitous XOR/ADD chain that nets to
-//    zero but defeats trivial dead-code elimination by using a volatile load.
-//
-// The classic ChaosStateMachine pass (ChaosStateMachine.cpp) provides the
-// full logistic-map-driven flattening; this file keeps the simpler version
-// so users can mix both passes at different annotation levels.
-
 #include "include/Flattening.h"
 #include "include/ChaosStateMachine.h"
 #include "include/CryptoUtils.h"
@@ -88,9 +71,6 @@ void Flattening::flatten(Function *f) {
   AllocaInst *switchVar, *switchVarAddr;
   const DataLayout &DL = f->getParent()->getDataLayout();
 
-  // OLLVM-Next: seed the scrambling key with a logistic-map warmup so case
-  // values are drawn from the chaotic attractor instead of std::mt19937_64.
-  // The seed itself is random; 37 warm-up steps escape the transient phase.
   uint32_t chaosSeed = cryptoutils->get_uint32_t() | 1u;
   for (int wu = 0; wu < 37; wu++)
     chaosSeed = chaosMapStep(chaosSeed);

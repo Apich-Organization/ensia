@@ -22,7 +22,6 @@
 #include "include/Utils.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/CommandLine.h"
 
 using namespace llvm;
@@ -38,37 +37,12 @@ static cl::opt<bool> StackConfusion(
     cl::init(true), cl::Optional);
 static bool StackConfusionTemp = true;
 
-// ── OLLVM-Next: balanced stack-confusion injection ────────────────────────────
-//
-// Strategy: after each BasicBlock split, optionally inject an InlineAsm sequence
-// of the form:
-//   push r15 ; push r14 ; <junk arithmetic on r14> ; pop r14 ; pop r15
-//
-// This sequence is architecturally a no-op (register values are restored) but:
-//  • Binja's LLIL stack-offset tracker increments its model on push and
-//    decrements on pop.  The interleaved junk arithmetic produces LLIL
-//    sequences with inconsistent offsets that cannot be easily merged.
-//  • IDA's stack analysis raises a "positive sp value" warning and may refuse
-//    to create a stack frame, degrading the pseudo-C output to raw offsets.
-//  • The volatile marker prevents the optimizer from removing the sequence.
-//
-// Architecture detection: only injected on x86_64 and AArch64 targets;
-// other arches fall through without injection.
-
 static bool moduleIsX86_64(Function *F) {
-#if LLVM_VERSION_MAJOR >= 20
   StringRef triple = F->getParent()->getTargetTriple().getTriple();
-#else
-  StringRef triple = F->getParent()->getTargetTriple();
-#endif
   return triple.contains("x86_64") || triple.contains("amd64");
 }
 static bool moduleIsAArch64(Function *F) {
-#if LLVM_VERSION_MAJOR >= 20
   StringRef triple = F->getParent()->getTargetTriple().getTriple();
-#else
-  StringRef triple = F->getParent()->getTargetTriple();
-#endif
   return triple.contains("aarch64") || triple.contains("arm64");
 }
 
@@ -218,8 +192,6 @@ struct SplitBasicBlock : public FunctionPass {
         BasicBlock *newBB = curr_bb_offset->splitBasicBlock(
             curr_bb_it, curr_bb_offset->getName() + ".split");
         curr_bb_offset = newBB;
-        // OLLVM-Next: inject balanced stack confusion in the new block
-        // so Binja's LLIL stack-offset tracker sees an irregular push/pop sequence.
         if (cryptoutils->get_range(2) == 0)
           injectStackConfusion(newBB, F);
       }

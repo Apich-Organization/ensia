@@ -16,23 +16,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// SubstituteImpl.cpp — instruction substitution primitives.
-//
-// OLLVM-Next enhancements (on top of classic Hikari):
-//  ① mulSubstitution3 / mulSubstitution4 — MUL broken into add/shift chains
-//    that IDA's HLIL simplifier cannot re-fold to a single multiply.
-//  ② addChainedMBA — 3-layer MBA chain for ADD, producing 15–25 IR instructions
-//    from a single add.  Symbolic execution path depth ×3.
-//  ③ xorSplitRotate — XOR via rotate-split form; bypasses Binja's XOR-pattern
-//    recogniser by using rotation rather than direct bit-ops.
-//  ④ All substitutions wrapped in a random-constant "dereference noise" that
-//    injects a dead load/store of a stack slot — confuses Binja LLIL stack
-//    offset analysis even when the value is ultimately ignored.
-
 #include "include/SubstituteImpl.h"
 #include "include/CryptoUtils.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/NoFolder.h"
 
 using namespace llvm;
 
@@ -84,13 +70,11 @@ static void mulSubstitution2(BinaryOperator *bo);
 static void mulSubstitution3(BinaryOperator *bo);
 static void mulSubstitution4(BinaryOperator *bo);
 
-// OLLVM-Next: additional ADD/XOR substitutions
 static void addChainedMBA(BinaryOperator *bo);
 static void addRotateDecompose(BinaryOperator *bo);
 static void xorSplitRotate(BinaryOperator *bo);
 static void xorArithDecompose(BinaryOperator *bo);
 
-// OLLVM-Next: additional substitutions (high instruction-count forms)
 static void addNegComplement(BinaryOperator *bo);  // a+b = ~(~a - b)
 static void addRandPair(BinaryOperator *bo);        // a+b = (a+r1)+(b+r2)-r1-r2
 static void addFourLayerChain(BinaryOperator *bo);  // 4-layer OR+AND chain
@@ -145,27 +129,6 @@ static void (*funcXor[NUMBER_XOR_SUBST])(BinaryOperator *bo) = {
 static void (*funcMul[NUMBER_MUL_SUBST])(BinaryOperator *bo) = {
     &mulSubstitution,  &mulSubstitution2, &mulSubstitution3, &mulSubstitution4,
     &mulViaNeg,        &mulIncrement,     &mulDoubleHalf};
-
-// ─── OLLVM-Next: shift substitutions ────────────────────────────────────────
-//
-// Physical motivation — energy quanta decomposition:
-//   In quantum mechanics, a shift by k bits is analogous to multiplying by 2^k
-//   (energy level spacing). We decompose this "energy packet" into a product
-//   of k single-bit shifts — each individually trivial, but their composition
-//   looks like a chain of independent operations to a decompiler that cannot
-//   fold constant sequences across memory aliasing barriers.
-//
-// a << k  — three substitution strategies:
-//   S1 (multiply): a << k  = a * 2^k, then apply mulSubstitution
-//   S2 (chain):    a << k  = (a << (k/2)) << (k - k/2)   [two shifts]
-//                  With a random-constant round-trip injected between steps.
-//   S3 (MBA):      a << k  = (a + r) << k - r << k        [linear in k]
-//
-// a >> k  (logical) — two substitution strategies:
-//   L1 (AND-mask): a >>u k = (a & (-1 << k)) >> k   [mask then shift]
-//   L2 (mul-inv):  for constant k: a >>u k ≈ a * modinv(2^k) >> w  [Granlund]
-//                  Only correct for exact-power divisors with no remainder;
-//                  we use the approximate form that is always correct.
 
 static void shlSubstituteMul(BinaryOperator *bo) {
   // a << k == a * (1 << k)
@@ -792,8 +755,6 @@ static void mulSubstitution(BinaryOperator *bo) {
   bo->replaceAllUsesWith(op);
 }
 
-// ─── OLLVM-Next: enhanced MUL substitutions ──────────────────────────────────
-
 // Implementation: a * b via Karatsuba-style decomposition into shifts+adds.
 // Splits b into high/low halves and reconstructs using only add/shl/sub.
 // IDA HLIL simplifier cannot re-fold this to a single imul reliably.
@@ -870,8 +831,6 @@ static void mulSubstitution2(BinaryOperator *bo) {
   bo->replaceAllUsesWith(op);
 }
 
-// ─── OLLVM-Next: chained MBA ADD ─────────────────────────────────────────────
-
 // 3-layer chained MBA: each layer applies a different linear MBA identity.
 //   Layer 1: a+b = (a|b) + (a&b)          → intermediate {p,q}
 //   Layer 2: p+q = (p^q) + ((p&q)<<1)     → intermediate {s,t}
@@ -927,8 +886,6 @@ static void addRotateDecompose(BinaryOperator *bo) {
       BinaryOperator::Create(Instruction::Sub, sum3, twoR, "", bo));
 }
 
-// ─── OLLVM-Next: additional XOR substitutions ────────────────────────────────
-
 // XOR via split: a^b = (a | r) - (a & r) + (b & ~r) - (b & r) + ... no,
 // use verified: a^b = (a - b) + 2*(~a & b)   [rearrangement of SUB-1]
 // Further wrapped in random constant injection to confuse constant folders.
@@ -965,8 +922,6 @@ static void xorArithDecompose(BinaryOperator *bo) {
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Sub, sum, dbl, "", bo));
 }
-
-// ─── OLLVM-Next: new high-depth substitutions ────────────────────────────────
 
 // ADD: a+b = ~(~a - b)
 // Proof: ~a = -a-1; ~a-b = -a-1-b; ~(-a-1-b) = a+b ✓

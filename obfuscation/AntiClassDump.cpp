@@ -16,37 +16,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//  For maximum usability. We provide two modes for this pass, as defined in
-//  include/AntiClassDump.h THIN mode is used on per-module
-//  basis without LTO overhead and structs are left in the module where possible.
-//  This is particularly useful for cases where LTO is not possible. For example
-//  static library. Full mode is used at LTO stage, this mode constructs
-//  dependency graph and perform full wipe-out as well as llvm.global_ctors
-//  injection.
-//  This pass only provides thin mode
-//
-//  OLLVM-Next enhancements:
-//  ① ScrambleMethodOrder: Fisher-Yates shuffle of ObjC method array entries
-//    at the IR ConstantArray level — Binja/IDA class-dump plugins iterate the
-//    array sequentially and rely on positional ordering; shuffling breaks their
-//    cross-reference chains and selector deduction.
-//  ② RandomisedRename: Replace -acd-rename-methodimp fixed "ACDMethodIMP" name
-//    with a per-function cryptoutils-seeded 64-bit hex string so every build
-//    produces unique IR symbol names.
-//  ③ DummySelectorInjection: At +initialize time, register random "ghost"
-//    selectors via sel_registerName() to flood the selector table with noise —
-//    tools that enumerate the selector table cannot distinguish real selectors
-//    from injected ones.
-//  ④ LLVM 17+ opaque-pointer compatibility: all getPointerTo() replaced with
-//    PointerType::getUnqual() via a local helper.
-
 #include "include/AntiClassDump.h"
 #include "include/CryptoUtils.h"
-#if LLVM_VERSION_MAJOR >= 17
 #include "llvm/TargetParser/Triple.h"
-#else
-#include "llvm/ADT/Triple.h"
-#endif
 #include "include/Utils.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -59,7 +31,6 @@
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include <algorithm>
 #include <deque>
-#include <map>
 #include <iomanip>
 #include <sstream>
 #include <unordered_map>
@@ -69,11 +40,7 @@ using namespace llvm;
 
 // Opaque-pointer-safe helper (same pattern as IndirectBranch / AntiHooking)
 static inline Type *getOpaquePtrTy(LLVMContext &Ctx) {
-#if LLVM_VERSION_MAJOR >= 17
   return PointerType::getUnqual(Ctx);
-#else
-  return Type::getInt8Ty(Ctx)->getPointerTo();
-#endif
 }
 
 static cl::opt<bool>
@@ -83,7 +50,6 @@ static cl::opt<bool>
     RenameMethodIMP("acd-rename-methodimp", cl::init(false), cl::NotHidden,
                     cl::desc("[AntiClassDump]Rename methods imp"));
 
-// OLLVM-Next new options
 static cl::opt<bool>
     ScrambleMethodOrder("acd-scramble-methods", cl::init(false), cl::NotHidden,
                         cl::desc("[AntiClassDump]Shuffle ObjC method list order "
@@ -110,15 +76,10 @@ struct AntiClassDump : public ModulePass {
     triple = Triple(M.getTargetTriple());
     if (triple.getVendor() != Triple::VendorType::Apple) {
       errs()
-#if LLVM_VERSION_MAJOR >= 20
           << M.getTargetTriple().getTriple()
-#else
-          << M.getTargetTriple()
-#endif
           << " is Not Supported For LLVM AntiClassDump\nProbably GNU Step?\n";
       return false;
     }
-    // OLLVM-Next: use opaque pointer type for all ObjC API declarations
     Type *OpaquePtrTy = getOpaquePtrTy(M.getContext());
     FunctionType *IMPType =
         FunctionType::get(OpaquePtrTy, {OpaquePtrTy, OpaquePtrTy}, true);
@@ -141,11 +102,7 @@ struct AntiClassDump : public ModulePass {
         FunctionType::get(OpaquePtrTy, {OpaquePtrTy}, false);
     M.getOrInsertFunction("objc_getMetaClass", objc_getMetaClass_Type);
     appleptrauth = hasApplePtrauth(&M);
-#if LLVM_VERSION_MAJOR >= 17
     opaquepointers = true;
-#else
-    opaquepointers = !M.getContext().supportsTypedPointers();
-#endif
     return true;
   }
 
@@ -153,11 +110,7 @@ struct AntiClassDump : public ModulePass {
     if (ObfVerbose) errs() << "Running AntiClassDump On " << M.getSourceFileName() << "\n";
     SmallVector<GlobalVariable *, 32> OLCGVs;
     for (GlobalVariable &GV : M.globals()) {
-#if LLVM_VERSION_MAJOR >= 18
       if (GV.getName().starts_with("OBJC_LABEL_CLASS_$")) {
-#else
-      if (GV.getName().startswith("OBJC_LABEL_CLASS_$")) {
-#endif
         OLCGVs.emplace_back(&GV);
       }
     }
@@ -239,13 +192,8 @@ struct AntiClassDump : public ModulePass {
       if ((!opaquepointers &&
            type == PointerType::getUnqual(objc_method_list_t_type)) ||
           (opaquepointers &&
-#if LLVM_VERSION_MAJOR >= 18
            (tmp->getName().starts_with("_OBJC_$_INSTANCE_METHODS") ||
             tmp->getName().starts_with("_OBJC_$_CLASS_METHODS")))) {
-#else
-           (tmp->getName().startswith("_OBJC_$_INSTANCE_METHODS") ||
-            tmp->getName().startswith("_OBJC_$_CLASS_METHODS")))) {
-#endif
         GlobalVariable *methodListGV =
             readPtrauth(cast<GlobalVariable>(tmp->stripPointerCasts()));
         assert(methodListGV->hasInitializer() &&
@@ -259,12 +207,6 @@ struct AntiClassDump : public ModulePass {
     return info;
   }
 
-  // ── OLLVM-Next: shuffle method list via Fisher-Yates ────────────────────────
-  //
-  // Returns a new ConstantArray containing the same method structs in a
-  // PRNG-shuffled order.  The shuffled array is substituted in place of the
-  // original, so Binja/IDA class-dump plugins that index method[0..n] will see
-  // methods in a different positional order per compilation.
   ConstantArray *scrambleMethodList(ConstantArray *methodList) {
     unsigned n = methodList->getNumOperands();
     if (n < 2)
@@ -279,7 +221,6 @@ struct AntiClassDump : public ModulePass {
         ConstantArray::get(methodList->getType(), methods));
   }
 
-  // ── OLLVM-Next: generate a random 64-bit hex IMP name ───────────────────────
   static std::string randomIMPName() {
     std::ostringstream oss;
     oss << "ACDm_";
@@ -354,7 +295,6 @@ struct AntiClassDump : public ModulePass {
     Value *ClassNameGV = IRB->CreateGlobalStringPtr(ClassName);
     CallInst *Class = IRB->CreateCall(objc_getClass, {ClassNameGV});
 
-    // OLLVM-Next: inject dummy ghost selectors to flood selector table ────────
     if (InjectDummySelectors) {
       Function *sel_reg = M->getFunction("sel_registerName");
       uint32_t cnt = DummySelectorCount;
@@ -404,7 +344,6 @@ struct AntiClassDump : public ModulePass {
           newMethodStruct, "ACDNewInstanceMethodMap");
       appendToCompilerUsed(*M, {newMethodStructGV});
       newMethodStructGV->copyAttributesFrom(methodListGV);
-      // OLLVM-Next: use PointerType::getUnqual instead of getPointerTo()
       Constant *bitcastExpr = opaquepointers
           ? cast<Constant>(newMethodStructGV)
           : ConstantExpr::getBitCast(
@@ -481,7 +420,6 @@ struct AntiClassDump : public ModulePass {
     appendToCompilerUsed(*M, {newMethodStructGV});
     if (methodListGV)
       newMethodStructGV->copyAttributesFrom(methodListGV);
-    // OLLVM-Next: PointerType::getUnqual instead of deprecated getPointerTo()
     Constant *bitcastExpr = ConstantExpr::getBitCast(
         newMethodStructGV,
         opaquepointers
@@ -516,13 +454,8 @@ struct AntiClassDump : public ModulePass {
       if ((!opaquepointers &&
            type == PointerType::getUnqual(objc_method_list_t_type)) ||
           (opaquepointers &&
-#if LLVM_VERSION_MAJOR >= 18
            (tmp->getName().starts_with("_OBJC_$_INSTANCE_METHODS") ||
             tmp->getName().starts_with("_OBJC_$_CLASS_METHODS")))) {
-#else
-           (tmp->getName().startswith("_OBJC_$_INSTANCE_METHODS") ||
-            tmp->getName().startswith("_OBJC_$_CLASS_METHODS")))) {
-#endif
         GlobalVariable *methodListGV =
             readPtrauth(cast<GlobalVariable>(tmp->stripPointerCasts()));
         assert(methodListGV->hasInitializer() &&
@@ -534,7 +467,6 @@ struct AntiClassDump : public ModulePass {
         ConstantArray *methodList =
             cast<ConstantArray>(methodListStruct->getOperand(2));
 
-        // OLLVM-Next: optionally shuffle method dispatch order
         if (ScrambleMethodOrder)
           methodList = scrambleMethodList(methodList);
 
@@ -589,7 +521,6 @@ struct AntiClassDump : public ModulePass {
           IRB->CreateCall(class_replaceMethod,
                           ArrayRef<Value *>(replaceMethodArgs));
 
-          // OLLVM-Next: enhanced rename — random hex name per IMP
           if (RenameMethodIMP) {
             Function *MethodIMP = cast<Function>(
                 appleptrauth
@@ -605,7 +536,6 @@ struct AntiClassDump : public ModulePass {
                                 ->getOperand(0)
                 : opaquepointers ? methodStruct->getOperand(2)
                                  : methodStruct->getOperand(2)->getOperand(0));
-            // OLLVM-Next: random 64-bit hex name instead of fixed "ACDMethodIMP"
             MethodIMP->setName(randomIMPName());
           }
         }

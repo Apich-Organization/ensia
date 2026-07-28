@@ -16,21 +16,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// AntiHooking.cpp — hook detection and syscall-based bypass.
-//
-// OLLVM-Next enhancements:
-//  ① x86_64 inline hook detection: scan function prologue for common hooking
-//    byte patterns (E9 rel32 jmp, 48 B8 movabs+FF E0 jmp rax) used by
-//    Substrate, fishhook, and dylib injectors.
-//  ② Direct BSD syscall bypass: exit via `syscall` on x86_64 Darwin and
-//    enhanced `svc` on AArch64 Darwin instead of libc abort() — libc is
-//    hookable by fishhook, the kernel syscall gate is not.
-//  ③ RDTSC-gated noise before syscall to confuse dynamic tracers and timing
-//    side-channel analysis.  Multi-stage dual syscall issuance as fallback.
-//  ④ LLVM 17+ opaque-pointer compatibility: all getPointerTo() replaced with
-//    PointerType::getUnqual(); local getOpaquePtrTy() helper for versioning.
-//  ⑤ LLVM 16+ CallSite: getCalledValue() → getCalledOperand() everywhere.
-
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
@@ -43,21 +28,15 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
-#if LLVM_VERSION_MAJOR >= 17
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/TargetParser/Triple.h"
-#else
-#include "llvm/ADT/Triple.h"
-#endif
 #include "include/AntiHook.h"
 #include "include/CryptoUtils.h"
 #include "include/Utils.h"
-#include "include/compat/CallSite.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include <fstream>
 #include <sstream>
-#include <iomanip>
 
 // Arm A64 Instruction Set for A-profile architecture 2022-12, Page 56
 #define AARCH64_SIGNATURE_B 0b000101
@@ -87,11 +66,7 @@ using namespace llvm;
 
 // Opaque-pointer-safe helper
 static inline Type *getOpaquePtrTy(LLVMContext &Ctx) {
-#if LLVM_VERSION_MAJOR >= 17
   return PointerType::getUnqual(Ctx);
-#else
-  return Type::getInt8Ty(Ctx)->getPointerTo();
-#endif
 }
 
 static cl::opt<std::string>
@@ -114,7 +89,6 @@ static cl::opt<bool> AntiRebindSymbol("ah_antirebind", cl::init(false),
                                       cl::desc("Make fishhook unavailable"));
 static bool AntiRebindSymbolTemp = false;
 
-// OLLVM-Next new options
 static cl::opt<bool>
     CheckInlineHookX86("ah_inline_x86", cl::init(true), cl::NotHidden,
                        cl::desc("[AntiHook]Check Inline Hook for x86_64"));
@@ -175,11 +149,7 @@ struct AntiHook : public ModulePass {
       errs() << "Failed To Link PreCompiled AntiHooking IR From:"
              << PreCompiledIRPath << "\n";
     }
-#if LLVM_VERSION_MAJOR >= 17
     opaquepointers = true;
-#else
-    opaquepointers = !M.getContext().supportsTypedPointers();
-#endif
 
     if (triple.getVendor() == Triple::VendorType::Apple &&
         StructType::getTypeByName(M.getContext(), "struct._objc_method")) {
@@ -263,11 +233,7 @@ struct AntiHook : public ModulePass {
               if (Called && Called->isDeclaration() &&
                   Called->isExternalLinkage(Called->getLinkage()) &&
                   !Called->isIntrinsic() &&
-#if LLVM_VERSION_MAJOR >= 18
                   !Called->getName().starts_with("clang.")) {
-#else
-                  !Called->getName().startswith("clang.")) {
-#endif
                 GlobalVariable *GV = cast<GlobalVariable>(M.getOrInsertGlobal(
                     ("AntiRebindSymbol_" + Called->getName()).str(),
                     Called->getType()));
@@ -304,7 +270,6 @@ struct AntiHook : public ModulePass {
             for (User *U3 : U2->users())
               for (User *U4 : U3->users()) {
                 if (opaquepointers) {
-#if LLVM_VERSION_MAJOR >= 18
                   if (U4->getName().starts_with("_OBJC_$_INSTANCE_METHODS") ||
                       U4->getName().starts_with("_OBJC_$_CLASS_METHODS"))
                     methodListGV = dyn_cast<GlobalVariable>(U4);
@@ -312,15 +277,6 @@ struct AntiHook : public ModulePass {
                   for (User *U5 : U4->users()) {
                     if (U5->getName().starts_with("_OBJC_$_INSTANCE_METHODS") ||
                         U5->getName().starts_with("_OBJC_$_CLASS_METHODS"))
-#else
-                  if (U4->getName().startswith("_OBJC_$_INSTANCE_METHODS") ||
-                      U4->getName().startswith("_OBJC_$_CLASS_METHODS"))
-                    methodListGV = dyn_cast<GlobalVariable>(U4);
-                } else
-                  for (User *U5 : U4->users()) {
-                    if (U5->getName().startswith("_OBJC_$_INSTANCE_METHODS") ||
-                        U5->getName().startswith("_OBJC_$_CLASS_METHODS"))
-#endif
                       methodListGV = dyn_cast<GlobalVariable>(U5);
                   }
               }
@@ -332,11 +288,7 @@ struct AntiHook : public ModulePass {
           ConstantDataSequential *SELNameCDS =
               cast<ConstantDataSequential>(SELNameGV->getInitializer());
           bool classmethod =
-#if LLVM_VERSION_MAJOR >= 18
               methodListGV->getName().starts_with("_OBJC_$_CLASS_METHODS");
-#else
-              methodListGV->getName().startswith("_OBJC_$_CLASS_METHODS");
-#endif
           std::string classname =
               methodListGV->getName()
                   .substr(strlen(classmethod ? "_OBJC_$_CLASS_METHODS_"
@@ -368,7 +320,7 @@ struct AntiHook : public ModulePass {
     LLVMContext &Ctx = F->getContext();
     Type *Int64Ty = Type::getInt64Ty(Ctx);
     Type *Int32Ty = Type::getInt32Ty(Ctx);
-    Type *PtrTy = getOpaquePtrTy(Ctx); // OLLVM-Next: opaque pointer
+    Type *PtrTy = getOpaquePtrTy(Ctx);
 
     // Load first 4-byte instruction from function entry
     Value *FPtrCast = IRBDetect.CreateBitCast(F, PtrTy);
@@ -401,30 +353,6 @@ struct AntiHook : public ModulePass {
     CreateCallbackAndJumpBack(&IRBB, C);
   }
 
-  // ── x86_64 inline hook detection (OLLVM-Next) ──────────────────────────────
-  //
-  // Three-stage prologue scanner covering the most common hook encodings:
-  //
-  //  Stage 1 — E9 xx xx xx xx        jmp rel32
-  //    Classic 5-byte trampoline used by Substrate, Frida (macOS), MS Detours.
-  //    byte[0] == 0xE9 is unambiguous: no legitimate x86_64 prologue starts
-  //    with a forward unconditional jump.
-  //
-  //  Stage 2 — 48 B8 <imm64> FF E0   movabs rax, imm64 + jmp rax
-  //    10-byte absolute stub used by Frida (macOS/Windows) and frida-gum.
-  //    Both bytes must match: 0x48 is the REX.W prefix for _many_ prologue
-  //    instructions (push rbp = 55, sub rsp = 48 83 EC …), so we MUST verify
-  //    byte[1] == 0xB8 before flagging.
-  //
-  //  Stage 3 — FF 25 <disp32>        jmp [RIP+disp32]
-  //    6-byte indirect jump through the GOT/PLT, the canonical Frida-Linux hook
-  //    pattern and standard ELF PLT stub form.  byte[0]==0xFF and byte[1]==0x25
-  //    together are conclusive.
-  //
-  // CFG after transformation:
-  //   A (empty entry) → Detect → Detect2 → Detect3 → C (original body)
-  //                         ↘        ↘         ↘
-  //                          B        B          B   (handler → 3-layer exit)
   void HandleInlineHookX86_64(Function *F) {
     BasicBlock *A = &(F->getEntryBlock());
     BasicBlock *C = A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
@@ -656,7 +584,7 @@ struct AntiHook : public ModulePass {
     IRBuilder<> IRBA(A);
     IRBuilder<> IRBB(B);
 
-    Type *PtrTy = getOpaquePtrTy(M->getContext()); // OLLVM-Next: opaque pointer
+    Type *PtrTy = getOpaquePtrTy(M->getContext());
 
     Value *GetClass = IRBA.CreateCall(M->getFunction("objc_getClass"),
                                       {IRBA.CreateGlobalStringPtr(classname)});
@@ -676,25 +604,6 @@ struct AntiHook : public ModulePass {
     CreateCallbackAndJumpBack(&IRBB, C);
   }
 
-  // ── Hook-detected callback + jump back ──────────────────────────────────────
-  //
-  // OLLVM-Next strategy:
-  //  • Custom AHCallBack: use it if linked in.
-  //  • Darwin AArch64: multi-stage svc with PRNG-varied immediate.
-  //  • Darwin x86_64: direct BSD exit syscall bypassing libc.
-  //  • Linux/Android x86_64: prctl(PR_SET_DUMPABLE,0) then UD2 hardware trap.
-  //    The UD2 raises SIGILL via the CPU's invalid-opcode exception (#UD), not
-  //    via any signal() or raise() call. Core dumps are disabled first to
-  //    prevent forensic analysis of the crash state.
-  //  • Linux/Android AArch64: prctl then BRK #0xDEAD (SIGTRAP from hw).
-  //  • Other targets: libc abort() as fallback.
-  //
-  // The Linux raw-syscall approach for prctl:
-  //   x86_64: SYS_prctl=157, arg0=PR_SET_DUMPABLE=4, arg1=0
-  //   arm64:  SYS_prctl=167, same args
-  // After prctl, the hardware fault instruction causes an OS signal delivered
-  // by the kernel directly from the exception handler — completely bypassing
-  // any libc abort/signal infrastructure that a hook could intercept.
   void CreateCallbackAndJumpBack(IRBuilder<> *IRBB, BasicBlock *C) {
     Module *M = C->getModule();
     Function *AHCallBack = M->getFunction("AHCallBack");
@@ -750,16 +659,6 @@ struct AntiHook : public ModulePass {
     } else if (DirectSyscallExitTemp && triple.isOSDarwin() &&
                (triple.getArch() == Triple::x86_64 ||
                 triple.getArch() == Triple::x86_64)) {
-      // ── x86_64 Darwin: direct BSD exit syscall bypass (OLLVM-Next new) ───
-      //
-      // BSD syscall ABI on macOS x86_64:
-      //   rax = 0x2000000 (class 2 = BSD) | syscall_number
-      //   SYS_exit = 1  →  rax = 0x2000001
-      //   rdi = exit code
-      //   `syscall` instruction bypasses the libSystem.B.dylib stub
-      //
-      // RDTSC inserted as junk timing noise: rdtsc result in edx:eax;
-      // the `and` zeroes out eax (affects flags but not program logic).
       uint64_t exitCode = cryptoutils->get_range(256);
       uint64_t noiseConst = cryptoutils->get_uint32_t() & 0xFFFF;
       uint64_t nc2 = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)

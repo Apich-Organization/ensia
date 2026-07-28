@@ -16,45 +16,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// ChaosStateMachine.cpp — Control-flow flattening driven by a Q16 logistic map.
-//
-// Mathematical foundation
-// ───────────────────────
-// Logistic map:  x_{n+1} = r · x_n · (1 − x_n),  r ≈ 3.9999 (chaotic regime)
-//
-// Fixed-point encoding (Q16):  x_fp ∈ [0, 65535] represents x_real ∈ [0, 1).
-// Integer recurrence:
-//   product = x_fp × (65536 − x_fp)          (fits in 32 bits)
-//   x_next  = (product × 65533) >> 30         (65533 ≈ r · 2^14)
-//
-// In the LLVM IR the state transition is rendered as a 64-bit multiply chain:
-//   %s64   = zext i32 %state to i64
-//   %xc    = and  i64 %s64,  65535
-//   %inv   = sub  i64 65536, %xc
-//   %prod  = mul  i64 %xc,   %inv
-//   %sc    = mul  i64 %prod, 65533
-//   %next  = lshr i64 %sc,   30
-//   %state_new = trunc i64 %next to i32
-//
-// Binja MLIL cannot collapse a quadratic recurrence over a loaded variable to
-// a constant; symbolic execution faces path explosion at each switch iteration.
-//
-// Block-exit state update (correctness proof):
-//   Let caseVals[i] = chaos label for block i (precomputed sequence).
-//   At block i exit heading to block j:
-//     • Compile-time: L_i = chaosMapStep(caseVals[i])
-//     • Compile-time: corr_ij = L_i XOR caseVals[j]
-//     • Runtime IR:   stored = logistic_IR(%state) XOR corr_ij
-//       = chaosMapStep(caseVals[i]) XOR (chaosMapStep(caseVals[i]) XOR caseVals[j])
-//       = caseVals[j]   ✓
-//
-// The switch in loopEntry then dispatches on caseVals[j], jumping to block j.
-//
-// Additional confusion layer: every case value is XOR'd with a per-function
-// Feistel-round constant (feistelK) before being used as a switch case.
-// The state alloca stores the pre-feistel value; the switch comparison uses
-// (state XOR feistelK). A static analyzer must uncover feistelK to proceed.
-
 #include "include/ChaosStateMachine.h"
 #include "include/CryptoUtils.h"
 #include "include/ObfConfig.h"
@@ -121,7 +82,7 @@ buildChaosSequence(uint32_t seed, unsigned len, uint32_t warmupOverride = 0) {
   std::unordered_set<uint32_t> seen;
   SmallVector<uint32_t, 32> seq;
   seq.reserve(len);
-  
+
   uint32_t stuck_counter = 0;
   while (seq.size() < len) {
     x = chaosMapStep(x);

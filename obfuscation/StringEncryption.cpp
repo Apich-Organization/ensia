@@ -16,52 +16,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// StringEncryption.cpp — compile-time string encryption with runtime decryption.
-//
-// ─── Cipher design: Vernam-GF8 (information-theoretically secure) ────────────
-//
-// Physical inspiration — Maxwell-Boltzmann energy distribution:
-//   In statistical mechanics, each microstate is assigned a random independent
-//   energy value from the Boltzmann distribution.  No individual sample carries
-//   information about the macrostate; only the ensemble does.  We apply this
-//   to per-byte encryption: each byte gets its own independent random key pair,
-//   making the ciphertext indistinguishable from uniform noise.
-//
-//  ① Vernam OTP layer (k1[i]):
-//    plain[i] XOR k1[i] where k1[i] is uniformly random and independent.
-//    This is the classical One-Time Pad — information-theoretically secure:
-//    H(enc[i] | plain[i]) = H(k1[i]) = 8 bits (maximum entropy).
-//    An attacker who knows enc[i] learns nothing about plain[i] without k1[i].
-//
-//  ② GF(2^8) multiplication layer (k2[i], non-zero):
-//    result[i] = GF8_mul(plain[i] XOR k1[i], k2[i])
-//    where k2[i] is a non-zero random byte and GF8_mul is multiplication in
-//    GF(2^8) with the AES irreducible polynomial x^8+x^4+x^3+x+1 (0x11B).
-//    - GF8 multiplication by a non-zero element is a bijection (permutation)
-//      of the 256-element field, so it does not reduce entropy.
-//    - The decryption IR emits a shift-and-XOR carry-less multiply sequence
-//      (8 iterations of the russian-peasant algorithm) that no decompiler
-//      recognises as string decryption.  IDA pattern-matches "xor + load" not
-//      "conditional-xor shift chain".
-//    - Different from ConstantEncryption which uses XOR k-share splitting.
-//
-//  ③ Split-key storage:
-//    The key is stored as two separate arrays (k1 and k2) in distinct
-//    GlobalVariables.  An attacker reading one array learns nothing without
-//    also reading the other, and the GF8 inversion step requires solving
-//    the GF multiplication for each byte independently.
-//
-//  ④ Unordered decryption:  decrypt in a chaos-permuted order so the IR
-//    decryption block does not exhibit the byte-sequential pattern that
-//    string deobfuscation tools expect.
-//
-// Correctness guarantee:
-//    Decryption: plain[i] = GF8_mul(enc[i], GF8_inv(k2[i])) XOR k1[i]
-//    Both GF8_inv(k2[i]) and k1[i] are pre-computed offline and stored as
-//    compile-time constants in the key arrays.
-
 #include "include/StringEncryption.h"
-#include "include/ChaosStateMachine.h"
 #include "include/CryptoUtils.h"
 #include "include/ObfConfig.h"
 #include "include/Utils.h"
@@ -115,11 +70,7 @@ struct StringEncryption : public ModulePass {
   StringRef getPassName() const override { return "StringEncryption"; }
 
   bool handleableGV(GlobalVariable *GV) {
-#if LLVM_VERSION_MAJOR >= 18
     if (GV->hasInitializer() && !GV->getSection().starts_with("llvm.") &&
-#else
-    if (GV->hasInitializer() && !GV->getSection().startswith("llvm.") &&
-#endif
         !(GV->getSection().contains("__objc") &&
           !GV->getSection().contains("array")) &&
         !GV->getName().contains("OBJC") &&
@@ -135,11 +86,7 @@ struct StringEncryption : public ModulePass {
     // in runOnModule. We simple iterate function list and dispatch functions
     // to handlers
     this->appleptrauth = hasApplePtrauth(&M);
-#if LLVM_VERSION_MAJOR >= 17
     this->opaquepointers = true;
-#else
-    this->opaquepointers = !M.getContext().supportsTypedPointers();
-#endif
 
     for (Function &F : M)
       if (toObfuscate(flag, &F, "strenc")) {
@@ -739,12 +686,6 @@ struct StringEncryption : public ModulePass {
     }
     return ObjcGV;
   }
-
-  // ── OLLVM-Next: Vernam-GF8 cipher helpers ────────────────────────────────
-  //
-  // Compile-time GF(2^8) arithmetic with the AES polynomial 0x11B.
-  //   xtime(a) = (a << 1) ^ (a & 0x80 ? 0x1B : 0)  [multiply by x in GF(2^8)]
-  //   gf8_mul(a, b) = russian-peasant algorithm over xtime
 
   static uint8_t xtime(uint8_t a) {
     return (uint8_t)((a << 1) ^ ((a & 0x80) ? 0x1Bu : 0u));

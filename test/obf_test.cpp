@@ -18,9 +18,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <cmath>
 #include <array>
-#include <vector>
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

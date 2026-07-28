@@ -16,22 +16,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// IndirectBranch.cpp — direct-to-indirect branch conversion.
-//
-// OLLVM-Next enhancements:
-//  ① LLVM 17+ opaque-pointer compatibility: replace all `getPointerTo()` calls
-//    with `PointerType::getUnqual()`.  LLVM 20+ removes typed-pointer APIs.
-//  ② Multi-layer Knuth multiplicative hash on jump targets:
-//    address = (raw_block_address + delta1) * KNUTH_MULT ^ KNUTH_XOR
-//    The encrypted address is stored in the global table; at runtime, the
-//    inverse transform is computed in IR before calling indirectbr.
-//    This turns a simple table-lookup cross-reference into a 3-instruction
-//    arithmetic chain that IDA cannot trace statically.
-//  ③ Per-function unique encryption keys: each function gets its own
-//    (delta, mult, xor) triple so table re-use across functions is invisible.
-//  ④ Shuffle-after-encrypt: basic blocks are shuffled again after encryption,
-//    further breaking the sequential layout assumption.
-
 #include "include/IndirectBranch.h"
 #include "include/CryptoUtils.h"
 #include "include/Utils.h"
@@ -51,11 +35,7 @@ using namespace llvm;
 
 // Opaque-pointer-safe helper: returns the universal ptr type.
 static inline Type *getOpaquePtrTy(LLVMContext &Ctx) {
-#if LLVM_VERSION_MAJOR >= 17
   return PointerType::getUnqual(Ctx);
-#else
-  return Type::getInt8Ty(Ctx)->getPointerTo();
-#endif
 }
 
 static cl::opt<bool>
@@ -83,7 +63,7 @@ struct IndirectBranch : public FunctionPass {
   bool initialized;
   std::unordered_map<BasicBlock *, unsigned long long> indexmap;
   std::unordered_map<Function *, ConstantInt *> encmap;
-  std::unordered_map<Function *, KnuthEncKey> knuthKeys; // OLLVM-Next
+  std::unordered_map<Function *, KnuthEncKey> knuthKeys;
   std::unordered_map<Function *, bool> perFuncUseStack;     // per-function option cache
   std::unordered_map<Function *, bool> perFuncEncryptJump;  // per-function option cache
   std::unordered_set<Function *> to_obf_funcs;
@@ -97,7 +77,7 @@ struct IndirectBranch : public FunctionPass {
     this->initialized = false;
   }
   StringRef getPassName() const override { return "IndirectBranch"; }
-  
+
   bool doFinalization(Module &M) override {
     if (!usedGlobals.empty()) {
       appendToCompilerUsed(M, usedGlobals);
@@ -105,7 +85,7 @@ struct IndirectBranch : public FunctionPass {
     }
     return false;
   }
-  
+
   bool initialize(Module &M) {
     // Replace nested PassBuilder/LowerSwitchPass with inline BST lowering.
     // A nested FPM.run(F, FAM) inside an already-running new-PM pass deadlocks
@@ -138,8 +118,6 @@ struct IndirectBranch : public FunctionPass {
             Type::getInt32Ty(M.getContext()),
             cryptoutils->get_range(UINT8_MAX, UINT16_MAX * 2) * 4);
 
-      // OLLVM-Next: generate per-function Knuth multiplicative hash keys.
-      // mult must be odd for the multiplicative inverse to exist mod 2^64.
       KnuthEncKey kk;
       kk.delta = cryptoutils->get_uint64_t();
       kk.mult  = (cryptoutils->get_uint64_t() | 1ULL); // ensure odd
@@ -155,11 +133,7 @@ struct IndirectBranch : public FunctionPass {
         // already holds the block address).  Including them bloats the table by
         // O(switch-cases) entries per function with no benefit.
         if (BB.getName().
-#if LLVM_VERSION_MAJOR >= 18
             starts_with
-#else
-            startswith
-#endif
             ("sw.bst."))
           continue;
         indexmap[&BB] = i++;
@@ -214,11 +188,7 @@ struct IndirectBranch : public FunctionPass {
         // function) with zero additional obfuscation benefit, since the case
         // BBs they dispatch to are already covered by IndirectBranch.
         if (BI->getParent()->getName().
-#if LLVM_VERSION_MAJOR >= 18
             starts_with
-#else
-            startswith
-#endif
             ("sw.bst."))
           continue;
         BIs.emplace_back(BI);
@@ -352,10 +322,7 @@ struct IndirectBranch : public FunctionPass {
       }
 
       Value *LI, *enckeyLoad, *gepptr = nullptr;
-      
-      // OLLVM-Next: Knuth multiplicative hash decryption on index.
-      // At compile time, the index is encoded as (index * mult + delta) ^ xorK.
-      // At runtime, we reverse: index = (((encIndex ^ xorK) - delta) * multInv)
+
       Value *effectiveIndex = indexVal;
       if (knuthKeys.count(&Func)) {
         const KnuthEncKey &kk = knuthKeys[&Func];

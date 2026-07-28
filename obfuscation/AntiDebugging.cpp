@@ -17,17 +17,12 @@
  */
 
 #include "include/AntiDebugging.h"
-#if LLVM_VERSION_MAJOR >= 17
 #include "llvm/ADT/SmallString.h"
 #include "llvm/TargetParser/Triple.h"
-#else
-#include "llvm/ADT/Triple.h"
-#endif
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "include/CryptoUtils.h"
 #include "include/Utils.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
@@ -195,11 +190,7 @@ struct AntiDebugging : public ModulePass {
 
     errs() << "The ADBCallBack/ADBInit functions were not found; "
               "injecting inline-asm anti-debug for "
-#if LLVM_VERSION_MAJOR >= 20
            << F.getParent()->getTargetTriple().getTriple() << "\n";
-#else
-           << F.getParent()->getTargetTriple() << "\n";
-#endif
 
     if (!F.getReturnType()->isVoidTy())
       return false;
