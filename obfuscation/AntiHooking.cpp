@@ -31,6 +31,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/TargetParser/Triple.h"
+#include "include/compat/CallSite.h"
 #include "include/AntiHook.h"
 #include "include/CryptoUtils.h"
 #include "include/Utils.h"

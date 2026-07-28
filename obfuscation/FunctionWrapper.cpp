@@ -16,6 +16,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "include/compat/CallSite.h"
 #include "include/FunctionWrapper.h"
 #include "include/CryptoUtils.h"
 #include "include/ObfConfig.h"

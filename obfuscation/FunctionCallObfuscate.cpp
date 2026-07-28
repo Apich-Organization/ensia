@@ -16,6 +16,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "include/compat/CallSite.h"
 #include "include/FunctionCallObfuscate.h"
 #include "include/json.hpp"
 #include "llvm/ADT/SmallString.h"
