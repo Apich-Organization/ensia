@@ -175,7 +175,7 @@ static void shlSubstituteMul(BinaryOperator *bo) {
   unsigned k = (unsigned)kC->getZExtValue();
   unsigned width = bo->getType()->getIntegerBitWidth();
   if (k >= width) return; // UB domain
-  uint64_t pow2k = 1ULL << k;
+  APInt pow2k = APInt::getOneBitSet(width, k);
   ConstantInt *mulC = cast<ConstantInt>(ConstantInt::get(bo->getType(), pow2k));
   BinaryOperator *mul = BinaryOperator::Create(
       Instruction::Mul, bo->getOperand(0), mulC, "", bo);
@@ -192,16 +192,16 @@ static void shlSubstituteChain(BinaryOperator *bo) {
   unsigned width = bo->getType()->getIntegerBitWidth();
   if (k >= width) return;
   Type *T = bo->getType();
-  ConstantInt *r = cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
+  APInt rVal(width, cryptoutils->get_uint64_t());
+  ConstantInt *r = cast<ConstantInt>(ConstantInt::get(T, rVal));
   // (a + r) << k
   BinaryOperator *aPr = BinaryOperator::Create(
       Instruction::Add, bo->getOperand(0), r, "", bo);
   BinaryOperator *shl1 = BinaryOperator::Create(
       Instruction::Shl, aPr, kC, "", bo);
   // r << k
-  ConstantInt *rShifted = cast<ConstantInt>(ConstantInt::get(
-      T, (r->getZExtValue() << k) &
-             ((width < 64) ? ((1ULL << width) - 1ULL) : UINT64_MAX)));
+  APInt rShiftedVal = rVal.shl(k);
+  ConstantInt *rShifted = cast<ConstantInt>(ConstantInt::get(T, rShiftedVal));
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Sub, shl1, rShifted, "", bo));
 }
@@ -216,9 +216,8 @@ static void lshrSubstituteMask(BinaryOperator *bo) {
   unsigned width = bo->getType()->getIntegerBitWidth();
   if (k == 0 || k >= width) return;
   Type *T = bo->getType();
-  uint64_t mask = ~((1ULL << k) - 1ULL);
-  if (width < 64) mask &= (1ULL << width) - 1ULL;
-  ConstantInt *maskC = cast<ConstantInt>(ConstantInt::get(T, mask));
+  APInt maskVal = APInt::getHighBitsSet(width, width - k);
+  ConstantInt *maskC = cast<ConstantInt>(ConstantInt::get(T, maskVal));
   BinaryOperator *andOp = BinaryOperator::Create(
       Instruction::And, bo->getOperand(0), maskC, "", bo);
   bo->replaceAllUsesWith(
@@ -235,16 +234,16 @@ static void lshrSubstituteXorRound(BinaryOperator *bo) {
   unsigned width = bo->getType()->getIntegerBitWidth();
   if (k >= width) return;
   Type *T = bo->getType();
-  uint64_t rVal = cryptoutils->get_uint64_t();
-  if (width < 64) rVal &= (1ULL << width) - 1ULL;
-  ConstantInt *r   = cast<ConstantInt>(ConstantInt::get(T, rVal));
+  APInt rVal(width, cryptoutils->get_uint64_t());
+  ConstantInt *r = cast<ConstantInt>(ConstantInt::get(T, rVal));
   // (a ^ r) >>u k
   BinaryOperator *xorOp = BinaryOperator::Create(
       Instruction::Xor, bo->getOperand(0), r, "", bo);
   BinaryOperator *shrOp = BinaryOperator::Create(
       Instruction::LShr, xorOp, kC, "", bo);
   // r >>u k (constant)
-  ConstantInt *rShr = cast<ConstantInt>(ConstantInt::get(T, rVal >> k));
+  APInt rShrVal = rVal.lshr(k);
+  ConstantInt *rShr = cast<ConstantInt>(ConstantInt::get(T, rShrVal));
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Xor, shrOp, rShr, "", bo));
 }
@@ -275,9 +274,7 @@ static void ashrSubstituteXorRound(BinaryOperator *bo) {
   if (k == 0 || k >= width) return;
   Type *T = bo->getType();
 
-  uint64_t rVal = cryptoutils->get_uint64_t();
-  if (width < 64)
-    rVal &= (1ULL << width) - 1ULL;
+  APInt rVal(width, cryptoutils->get_uint64_t());
   ConstantInt *r = cast<ConstantInt>(ConstantInt::get(T, rVal));
 
   // (a ^ r) >>s k
@@ -286,17 +283,9 @@ static void ashrSubstituteXorRound(BinaryOperator *bo) {
   BinaryOperator *ashrOp = BinaryOperator::Create(
       Instruction::AShr, xorOp, kC, "", bo);
 
-  // r >>s k  (compile-time arithmetic right-shift, sign-extending rVal)
-  int64_t rSigned = (int64_t)rVal;
-  if (width < 64) {
-    // Sign-extend rVal from [width] bits to 64 bits before shifting
-    int ext = 64 - (int)width;
-    rSigned = (rSigned << ext) >> ext;
-  }
-  int64_t rShrVal = rSigned >> (int)k;
-  if (width < 64)
-    rShrVal &= (int64_t)((1ULL << width) - 1ULL);
-  ConstantInt *rShr = cast<ConstantInt>(ConstantInt::get(T, (uint64_t)rShrVal));
+  // r >>s k  (compile-time arithmetic right-shift via APInt)
+  APInt rShrVal = rVal.ashr(k);
+  ConstantInt *rShr = cast<ConstantInt>(ConstantInt::get(T, rShrVal));
 
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Xor, ashrOp, rShr, "", bo));
@@ -314,30 +303,13 @@ static void ashrSubstituteDoubleRound(BinaryOperator *bo) {
   if (k == 0 || k >= width) return;
   Type *T = bo->getType();
 
-  // Helper: compute compile-time arithmetic right-shift for a width-bit value
-  auto computeAShr = [&](uint64_t v) -> uint64_t {
-    int64_t sv = (int64_t)v;
-    if (width < 64) {
-      int ext = 64 - (int)width;
-      sv = (sv << ext) >> ext;
-    }
-    sv >>= (int)k;
-    if (width < 64)
-      sv &= (int64_t)((1ULL << width) - 1ULL);
-    return (uint64_t)sv;
-  };
-
-  uint64_t r1Val = cryptoutils->get_uint64_t();
-  uint64_t r2Val = cryptoutils->get_uint64_t();
-  if (width < 64) {
-    r1Val &= (1ULL << width) - 1ULL;
-    r2Val &= (1ULL << width) - 1ULL;
-  }
+  APInt r1Val(width, cryptoutils->get_uint64_t());
+  APInt r2Val(width, cryptoutils->get_uint64_t());
 
   ConstantInt *r1    = cast<ConstantInt>(ConstantInt::get(T, r1Val));
   ConstantInt *r2    = cast<ConstantInt>(ConstantInt::get(T, r2Val));
-  ConstantInt *r1Shr = cast<ConstantInt>(ConstantInt::get(T, computeAShr(r1Val)));
-  ConstantInt *r2Shr = cast<ConstantInt>(ConstantInt::get(T, computeAShr(r2Val)));
+  ConstantInt *r1Shr = cast<ConstantInt>(ConstantInt::get(T, r1Val.ashr(k)));
+  ConstantInt *r2Shr = cast<ConstantInt>(ConstantInt::get(T, r2Val.ashr(k)));
 
   // (a ^ r1 ^ r2)
   BinaryOperator *xr1  = BinaryOperator::Create(Instruction::Xor,

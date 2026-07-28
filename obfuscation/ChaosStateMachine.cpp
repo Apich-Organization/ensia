@@ -191,6 +191,7 @@ struct ChaosStateMachine : public FunctionPass {
   ChaosStateMachine(bool flag) : FunctionPass(ID) { this->flag = flag; }
 
   uint32_t warmupOverride = 0; // per-invocation warmup resolved from config
+  uint32_t maxBlocksOverride = 0;
 
   bool runOnFunction(Function &F) override {
     if (!toObfuscate(flag, &F, "csm") || F.isPresplitCoroutine())
@@ -200,6 +201,8 @@ struct ChaosStateMachine : public FunctionPass {
       if (!toObfuscateBoolOption(&F, "csm_nested", &ChaosNestedDispatchTemp))
         ChaosNestedDispatchTemp = ec.csm.nested_dispatch.value_or((bool)ChaosNestedDispatch);
       warmupOverride = ec.csm.warmup.value_or(0);
+      if (!toObfuscateUint32Option(&F, "csm_maxblocks", &maxBlocksOverride))
+        maxBlocksOverride = ec.csm.max_blocks.value_or((uint32_t)ChaosMaxBlocks);
     }
     // MaxObf: enable nested dispatch (doubles CFG nodes, defeats analyzer
     // path-enumeration without adding basic block count to the function body).
@@ -239,9 +242,10 @@ struct ChaosStateMachine : public FunctionPass {
     // ControlFlowFlattening causes LowerSwitchPass to expand the CFF switch
     // into a binary-comparison tree, giving O(N²) or worse IR growth.
     // Bail out early when the post-LowerSwitch block count exceeds the limit.
-    if (origBBs.size() > ChaosMaxBlocks) {
+    uint32_t maxBlocks = maxBlocksOverride ? maxBlocksOverride : (uint32_t)ChaosMaxBlocks;
+    if (origBBs.size() > maxBlocks) {
       if (ObfVerbose) errs() << F->getName() << ": ChaosStateMachine skipped (too many BBs: "
-             << origBBs.size() << " > csm_maxblocks=" << ChaosMaxBlocks
+             << origBBs.size() << " > csm_maxblocks=" << maxBlocks
              << ")\n";
       return;
     }

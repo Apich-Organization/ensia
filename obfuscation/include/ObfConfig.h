@@ -150,6 +150,9 @@ struct ObfBcfConfig {
   std::optional<bool>     junk_asm;
   std::optional<uint32_t> junk_asm_min;
   std::optional<uint32_t> junk_asm_max;
+  std::optional<bool>     nested;
+  std::optional<bool>     create_func;
+  std::optional<bool>     only_junk_asm;
 };
 
 struct ObfSubConfig {
@@ -210,6 +213,7 @@ struct ObfCsmConfig {
   std::optional<bool>     enabled;
   std::optional<bool>     nested_dispatch;
   std::optional<uint32_t> warmup;
+  std::optional<uint32_t> max_blocks;
 };
 
 struct ObfFlatConfig {

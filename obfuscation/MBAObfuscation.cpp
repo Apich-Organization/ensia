@@ -595,10 +595,8 @@ void mbaMul(BinaryOperator *bo) {
     if (width < 4) { res = IRB.CreateMul(a, b); break; }
     unsigned k = width / 2;
     ConstantInt *kC    = cast<ConstantInt>(ConstantInt::get(T, k));
-    // k = width/2 ≤ 32, so 1ULL<<k never overflows; UINT64_MAX was wrong for
-    // width==64 (it left bL = b, making Karatsuba compute a*(b>>32)*2^32 + a*b).
-    uint64_t    maskV  = (1ULL << k) - 1ULL;
-    ConstantInt *maskC = cast<ConstantInt>(ConstantInt::get(T, maskV));
+    ConstantInt *maskC = cast<ConstantInt>(ConstantInt::get(
+        T, APInt::getLowBitsSet(width, k)));
     Value *bH  = IRB.CreateLShr(b, kC);
     Value *bL  = IRB.CreateAnd(b, maskC);
     Value *aH  = IRB.CreateMul(a, bH);
@@ -631,7 +629,7 @@ void mbaBPP(BinaryOperator *bo) {
   Type  *T = bo->getType();
   if (!T->isIntegerTy()) return;
   unsigned width = T->getIntegerBitWidth();
-  if (width < 8) return;
+  if (width < 8 || width > 64) return;
 
   uint64_t a1 = cryptoutils->get_uint64_t() | 1ULL; // odd
   uint64_t b  = cryptoutils->get_uint64_t();

@@ -205,7 +205,38 @@ static cl::opt<std::string> ObfConfigFile(
 
 // ── Environment variable loader ───────────────────────────────────────────────
 
+static std::optional<uint32_t> getEnvU32(const char *name) {
+  if (const char *v = getenv(name)) {
+    char *end = nullptr;
+    unsigned long val = std::strtoul(v, &end, 0);
+    if (end != v) return (uint32_t)val;
+  }
+  return std::nullopt;
+}
+
+static std::optional<uint64_t> getEnvU64(const char *name) {
+  if (const char *v = getenv(name)) {
+    char *end = nullptr;
+    unsigned long long val = std::strtoull(v, &end, 0);
+    if (end != v) return (uint64_t)val;
+  }
+  return std::nullopt;
+}
+
+static std::optional<bool> getEnvBool(const char *name) {
+  if (const char *v = getenv(name)) {
+    std::string s(v);
+    for (char &c : s) c = (char)std::tolower((unsigned char)c);
+    if (s == "1" || s == "true" || s == "yes" || s == "on")
+      return true;
+    if (s == "0" || s == "false" || s == "no" || s == "off")
+      return false;
+  }
+  return std::nullopt;
+}
+
 static void LoadEnv() {
+  if (getEnvBool("ENSIA").value_or(false)) EnableIRObfusaction = true;
   if (getenv("SPLITOBF"))   EnableBasicBlockSplit   = true;
   if (getenv("SUBOBF"))     EnableSubstitution       = true;
   if (getenv("ALLOBF"))     EnableAllObfuscation     = true;
@@ -227,6 +258,54 @@ static void LoadEnv() {
   if (getenv("MEDOBF"))     EnableMedObfuscation     = true;
   if (getenv("VERBOSE"))    EnableObfVerbose         = true;
   if (getenv("TRACE"))      EnableObfTrace           = true;
+
+  if (const char *p = getenv("ENSIA_PRESET")) ObfPreset = p;
+  if (auto seed = getEnvU64("AES_SEED")) AesSeed = *seed;
+
+  // Pass-specific sub-options via environment variables into GObfConfig.passes:
+  auto &pc = GObfConfig.passes;
+  if (auto v = getEnvU32("BCF_PROB"))           pc.bcf.probability = *v;
+  if (auto v = getEnvU32("BCF_LOOP"))           pc.bcf.iterations = *v;
+  if (auto v = getEnvU32("BCF_COND_COMPL"))     pc.bcf.complexity = *v;
+  if (auto v = getEnvBool("BCF_ENTROPY_CHAIN")) pc.bcf.entropy_chain = *v;
+  if (auto v = getEnvBool("BCF_JUNKASM"))       pc.bcf.junk_asm = *v;
+  if (auto v = getEnvU32("BCF_JUNKASM_MINNUM")) pc.bcf.junk_asm_min = *v;
+  if (auto v = getEnvU32("BCF_JUNKASM_MAXNUM")) pc.bcf.junk_asm_max = *v;
+  if (auto v = getEnvBool("BCF_NESTED"))        pc.bcf.nested = *v;
+  if (auto v = getEnvBool("BCF_CREATEFUNC"))    pc.bcf.create_func = *v;
+  if (auto v = getEnvBool("BCF_ONLYJUNKASM"))   pc.bcf.only_junk_asm = *v;
+
+  if (auto v = getEnvU32("SUB_PROB"))           pc.sub.probability = *v;
+  if (auto v = getEnvU32("SUB_LOOP"))           pc.sub.iterations = *v;
+
+  if (auto v = getEnvU32("MBA_PROB"))           pc.mba.probability = *v;
+  if (auto v = getEnvU32("MBA_LAYERS"))         pc.mba.layers = *v;
+  if (auto v = getEnvBool("MBA_HEURISTIC"))     pc.mba.heuristic = *v;
+
+  if (auto v = getEnvU32("SPLIT_NUM"))          pc.split.splits = *v;
+  if (auto v = getEnvBool("SPLIT_STACKCONF"))   pc.split.stack_confusion = *v;
+
+  if (auto v = getEnvU32("STRCRY_PROB"))        pc.str_enc.probability = *v;
+
+  if (auto v = getEnvU32("CONSTENC_TIMES"))       pc.const_enc.iterations = *v;
+  if (auto v = getEnvU32("CONSTENC_KSHARE"))      pc.const_enc.share_count = *v;
+  if (auto v = getEnvBool("CONSTENC_FEISTEL"))    pc.const_enc.feistel = *v;
+  if (auto v = getEnvBool("CONSTENC_SUBXOR"))     pc.const_enc.substitute_xor = *v;
+  if (auto v = getEnvU32("CONSTENC_SUBXOR_PROB")) pc.const_enc.substitute_xor_prob = *v;
+  if (auto v = getEnvBool("CONSTENC_TOGV"))       pc.const_enc.globalize = *v;
+  if (auto v = getEnvU32("CONSTENC_TOGV_PROB"))   pc.const_enc.globalize_prob = *v;
+
+  if (auto v = getEnvU32("VOBF_PROB"))          pc.vec.probability = *v;
+  if (auto v = getEnvU32("VOBF_WIDTH"))         pc.vec.width = *v;
+  if (auto v = getEnvBool("VOBF_SHUFFLE"))      pc.vec.shuffle = *v;
+  if (auto v = getEnvBool("VOBF_ICMP"))         pc.vec.lift_comparisons = *v;
+
+  if (auto v = getEnvBool("CSM_NESTED"))        pc.csm.nested_dispatch = *v;
+  if (auto v = getEnvU32("CSM_WARMUP"))         pc.csm.warmup = *v;
+  if (auto v = getEnvU32("CSM_MAXBLOCKS"))      pc.csm.max_blocks = *v;
+
+  if (auto v = getEnvU32("FUNCWRA_PROB"))       pc.func_wrap.probability = *v;
+  if (auto v = getEnvU32("FUNCWRA_TIMES"))      pc.func_wrap.times = *v;
 }
 
 // ── Config loading ────────────────────────────────────────────────────────────

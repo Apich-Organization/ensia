@@ -253,6 +253,9 @@ void ObfGlobalConfig::merge(ObfPassConfig &dst, const ObfPassConfig &src) {
   MERGE_OPT(bcf.junk_asm)
   MERGE_OPT(bcf.junk_asm_min)
   MERGE_OPT(bcf.junk_asm_max)
+  MERGE_OPT(bcf.nested)
+  MERGE_OPT(bcf.create_func)
+  MERGE_OPT(bcf.only_junk_asm)
   // Sub
   MERGE_OPT(sub.enabled)
   MERGE_OPT(sub.probability)
@@ -292,6 +295,7 @@ void ObfGlobalConfig::merge(ObfPassConfig &dst, const ObfPassConfig &src) {
   MERGE_OPT(csm.enabled)
   MERGE_OPT(csm.nested_dispatch)
   MERGE_OPT(csm.warmup)
+  MERGE_OPT(csm.max_blocks)
   // Flatten
   MERGE_OPT(flatten.enabled)
   // IndirBranch
@@ -440,6 +444,9 @@ static void parseBcf(const toml::table &t, ObfBcfConfig &c) {
   if (auto v = t["junk_asm"].value<bool>())          c.junk_asm      = *v;
   if (auto v = tomlU32(t["junk_asm_min"]))           c.junk_asm_min  = *v;
   if (auto v = tomlU32(t["junk_asm_max"]))           c.junk_asm_max  = *v;
+  if (auto v = t["nested"].value<bool>())            c.nested        = *v;
+  if (auto v = t["create_func"].value<bool>())       c.create_func   = *v;
+  if (auto v = t["only_junk_asm"].value<bool>())     c.only_junk_asm = *v;
 }
 
 static void parseSub(const toml::table &t, ObfSubConfig &c) {
@@ -493,6 +500,7 @@ static void parseCsm(const toml::table &t, ObfCsmConfig &c) {
   if (auto v = t["enabled"].value<bool>())          c.enabled         = *v;
   if (auto v = t["nested_dispatch"].value<bool>())  c.nested_dispatch = *v;
   if (auto v = tomlU32(t["warmup"]))                c.warmup          = *v;
+  if (auto v = tomlU32(t["max_blocks"]))            c.max_blocks      = *v;
 }
 
 static void parseFw(const toml::table &t, ObfFwConfig &c) {

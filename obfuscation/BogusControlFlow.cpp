@@ -397,9 +397,11 @@ struct BogusControlFlow : public FunctionPass {
       if (!toObfuscateBoolOption(&F, "bcf_junkasm", &JunkAssemblyTemp))
         JunkAssemblyTemp = ec.bcf.junk_asm.value_or((bool)JunkAssembly);
       if (!toObfuscateBoolOption(&F, "bcf_onlyjunkasm", &OnlyJunkAssemblyTemp))
-        OnlyJunkAssemblyTemp = OnlyJunkAssembly;
+        OnlyJunkAssemblyTemp = ec.bcf.only_junk_asm.value_or((bool)OnlyJunkAssembly);
       if (!toObfuscateBoolOption(&F, "bcf_nested", &BCFNestedTemp))
-        BCFNestedTemp = BCFNested;
+        BCFNestedTemp = ec.bcf.nested.value_or((bool)BCFNested);
+      if (!toObfuscateBoolOption(&F, "bcf_createfunc", &CreateFunctionForOpaquePredicateTemp))
+        CreateFunctionForOpaquePredicateTemp = ec.bcf.create_func.value_or((bool)CreateFunctionForOpaquePredicate);
       if (!toObfuscateBoolOption(&F, "bcf_entropy_chain", &BCFEntropyChainTemp))
         BCFEntropyChainTemp = ec.bcf.entropy_chain.value_or((bool)BCFEntropyChain);
     }
