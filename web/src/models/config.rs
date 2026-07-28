@@ -356,6 +356,267 @@ impl Default for TomlConfig {
     }
 }
 
+impl TomlConfig {
+    pub fn apply_preset(&mut self, preset_name: &str) {
+        self.preset = preset_name.to_string();
+        match preset_name {
+            "low" => {
+                self.bcf = BcfCfg {
+                    enabled: true,
+                    probability: 30,
+                    iterations: 1,
+                    complexity: 2,
+                    entropy_chain: false,
+                    junk_asm: false,
+                    junk_asm_min: 1,
+                    junk_asm_max: 4,
+                };
+                self.str_enc = StrEncCfg {
+                    enabled: true,
+                    probability: 70,
+                    force_content: self.str_enc.force_content.clone(),
+                    skip_content: self.str_enc.skip_content.clone(),
+                };
+                self.const_enc = ConstEncCfg {
+                    enabled: true,
+                    share_count: 2,
+                    feistel: false,
+                    substitute_xor: false,
+                    substitute_xor_prob: 40,
+                    force_value: self.const_enc.force_value.clone(),
+                    skip_value: self.const_enc.skip_value.clone(),
+                };
+                self.flattening = SimpleCfg { enabled: false };
+                self.substitution = SubCfg {
+                    enabled: true,
+                    probability: 40,
+                };
+                self.mba = MbaCfg {
+                    enabled: true,
+                    layers: 1,
+                    heuristic: false,
+                };
+                self.csm = CsmCfg {
+                    enabled: false,
+                    warmup: 64,
+                    nested_dispatch: false,
+                };
+                self.vec_obf = VecObfCfg {
+                    enabled: false,
+                    probability: 50,
+                    width: 128,
+                    shuffle: false,
+                    lift_comparisons: false,
+                };
+                self.indir_branch = SimpleCfg { enabled: false };
+                self.func_wrap = FuncWrapCfg {
+                    enabled: false,
+                    probability: 50,
+                    times: 1,
+                };
+                self.anti_debugging = SimpleCfg { enabled: false };
+                self.anti_hooking = SimpleCfg { enabled: false };
+                self.anti_class_dump = SimpleCfg { enabled: false };
+                self.func_call_obf = SimpleCfg { enabled: false };
+                self.split_blocks = SplitBlocksCfg {
+                    enabled: false,
+                    probability: 50,
+                };
+            }
+            "mid" => {
+                self.bcf = BcfCfg {
+                    enabled: true,
+                    probability: 60,
+                    iterations: 1,
+                    complexity: 4,
+                    entropy_chain: false,
+                    junk_asm: false,
+                    junk_asm_min: 2,
+                    junk_asm_max: 4,
+                };
+                self.str_enc = StrEncCfg {
+                    enabled: true,
+                    probability: 100,
+                    force_content: self.str_enc.force_content.clone(),
+                    skip_content: self.str_enc.skip_content.clone(),
+                };
+                self.const_enc = ConstEncCfg {
+                    enabled: true,
+                    share_count: 3,
+                    feistel: false,
+                    substitute_xor: true,
+                    substitute_xor_prob: 40,
+                    force_value: self.const_enc.force_value.clone(),
+                    skip_value: self.const_enc.skip_value.clone(),
+                };
+                self.flattening = SimpleCfg { enabled: true };
+                self.substitution = SubCfg {
+                    enabled: true,
+                    probability: 60,
+                };
+                self.mba = MbaCfg {
+                    enabled: true,
+                    layers: 2,
+                    heuristic: true,
+                };
+                self.csm = CsmCfg {
+                    enabled: false,
+                    warmup: 64,
+                    nested_dispatch: false,
+                };
+                self.vec_obf = VecObfCfg {
+                    enabled: true,
+                    probability: 40,
+                    width: 128,
+                    shuffle: false,
+                    lift_comparisons: true,
+                };
+                self.indir_branch = SimpleCfg { enabled: true };
+                self.func_wrap = FuncWrapCfg {
+                    enabled: false,
+                    probability: 50,
+                    times: 1,
+                };
+                self.anti_debugging = SimpleCfg { enabled: false };
+                self.anti_hooking = SimpleCfg { enabled: false };
+                self.anti_class_dump = SimpleCfg { enabled: false };
+                self.func_call_obf = SimpleCfg { enabled: false };
+                self.split_blocks = SplitBlocksCfg {
+                    enabled: true,
+                    probability: 50,
+                };
+            }
+            "high" => {
+                self.bcf = BcfCfg {
+                    enabled: true,
+                    probability: 75,
+                    iterations: 2,
+                    complexity: 6,
+                    entropy_chain: true,
+                    junk_asm: true,
+                    junk_asm_min: 2,
+                    junk_asm_max: 6,
+                };
+                self.str_enc = StrEncCfg {
+                    enabled: true,
+                    probability: 100,
+                    force_content: self.str_enc.force_content.clone(),
+                    skip_content: self.str_enc.skip_content.clone(),
+                };
+                self.const_enc = ConstEncCfg {
+                    enabled: true,
+                    share_count: 4,
+                    feistel: true,
+                    substitute_xor: true,
+                    substitute_xor_prob: 60,
+                    force_value: self.const_enc.force_value.clone(),
+                    skip_value: self.const_enc.skip_value.clone(),
+                };
+                self.flattening = SimpleCfg { enabled: false };
+                self.substitution = SubCfg {
+                    enabled: true,
+                    probability: 80,
+                };
+                self.mba = MbaCfg {
+                    enabled: true,
+                    layers: 3,
+                    heuristic: true,
+                };
+                self.csm = CsmCfg {
+                    enabled: true,
+                    warmup: 128,
+                    nested_dispatch: false,
+                };
+                self.vec_obf = VecObfCfg {
+                    enabled: true,
+                    probability: 65,
+                    width: 256,
+                    shuffle: true,
+                    lift_comparisons: true,
+                };
+                self.indir_branch = SimpleCfg { enabled: true };
+                self.func_wrap = FuncWrapCfg {
+                    enabled: true,
+                    probability: 50,
+                    times: 1,
+                };
+                self.anti_debugging = SimpleCfg { enabled: true };
+                self.anti_hooking = SimpleCfg { enabled: true };
+                self.anti_class_dump = SimpleCfg { enabled: true };
+                self.func_call_obf = SimpleCfg { enabled: true };
+                self.split_blocks = SplitBlocksCfg {
+                    enabled: true,
+                    probability: 70,
+                };
+            }
+            "max" => {
+                self.bcf = BcfCfg {
+                    enabled: true,
+                    probability: 100,
+                    iterations: 3,
+                    complexity: 8,
+                    entropy_chain: true,
+                    junk_asm: true,
+                    junk_asm_min: 4,
+                    junk_asm_max: 8,
+                };
+                self.str_enc = StrEncCfg {
+                    enabled: true,
+                    probability: 100,
+                    force_content: self.str_enc.force_content.clone(),
+                    skip_content: self.str_enc.skip_content.clone(),
+                };
+                self.const_enc = ConstEncCfg {
+                    enabled: true,
+                    share_count: 6,
+                    feistel: true,
+                    substitute_xor: true,
+                    substitute_xor_prob: 100,
+                    force_value: self.const_enc.force_value.clone(),
+                    skip_value: self.const_enc.skip_value.clone(),
+                };
+                self.flattening = SimpleCfg { enabled: true };
+                self.substitution = SubCfg {
+                    enabled: true,
+                    probability: 100,
+                };
+                self.mba = MbaCfg {
+                    enabled: true,
+                    layers: 3,
+                    heuristic: true,
+                };
+                self.csm = CsmCfg {
+                    enabled: true,
+                    warmup: 256,
+                    nested_dispatch: true,
+                };
+                self.vec_obf = VecObfCfg {
+                    enabled: true,
+                    probability: 90,
+                    width: 512,
+                    shuffle: true,
+                    lift_comparisons: true,
+                };
+                self.indir_branch = SimpleCfg { enabled: true };
+                self.func_wrap = FuncWrapCfg {
+                    enabled: true,
+                    probability: 100,
+                    times: 2,
+                };
+                self.anti_debugging = SimpleCfg { enabled: true };
+                self.anti_hooking = SimpleCfg { enabled: true };
+                self.anti_class_dump = SimpleCfg { enabled: true };
+                self.func_call_obf = SimpleCfg { enabled: true };
+                self.split_blocks = SplitBlocksCfg {
+                    enabled: true,
+                    probability: 100,
+                };
+            }
+            _ => {}
+        }
+    }
+}
+
 // ── TOML serializer ───────────────────────────────────────────────────────
 
 fn toml_arr(v: &[String]) -> String {

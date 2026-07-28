@@ -206,7 +206,7 @@ fn GlobalSection() -> impl IntoView {
                         prop:value=move || cfg.with(|c| c.preset.clone())
                         on:change=move |e| {
                             let v = event_target_value(&e);
-                            cfg.update(|c| c.preset = v);
+                            cfg.update(|c| c.apply_preset(&v));
                         }
                     >
                         <option value="low">"low — minimal overhead"</option>
