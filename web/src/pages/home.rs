@@ -335,7 +335,7 @@ pub fn HomePage() -> impl IntoView {
                         "If you use Ensia in academic work, please cite via the Zenodo DOI:"
                     </p>
                     <pre class="code-block text-xs mt-sm">
-"@software{yang_2026_21621196,
+"@software{yang_2026_21648942,
   author       = {Yang, Xinyu},
   title        = {Ensia (OLLVM-Next): A Chaos-Based High-Entropy
                    Obfuscation Framework for LLVM IR with Dual-Use
@@ -344,9 +344,9 @@ pub fn HomePage() -> impl IntoView {
   month        = jul,
   year         = 2026,
   publisher    = {Zenodo},
-  version      = {v0.1.1},
-  doi          = {10.5281/zenodo.21621196},
-  url          = {https://doi.org/10.5281/zenodo.21621196},
+  version      = {v0.1.2},
+  doi          = {10.5281/zenodo.21648942},
+  url          = {https://doi.org/10.5281/zenodo.21648942},
 }"
                     </pre>
                     <div class="flex gap-sm mt-md flex-wrap">
