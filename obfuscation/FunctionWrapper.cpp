@@ -16,11 +16,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "include/compat/CallSite.h"
 #include "include/FunctionWrapper.h"
 #include "include/CryptoUtils.h"
 #include "include/ObfConfig.h"
 #include "include/Utils.h"
+#include "include/compat/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -49,9 +49,12 @@ static cl::opt<uint32_t> ObfTimes(
 enum class ProxyStrategy { IdentityNoise, ArgShuffle, RetMask };
 static ProxyStrategy pickStrategy() {
   switch (cryptoutils->get_range(3)) {
-  case 0:  return ProxyStrategy::IdentityNoise;
-  case 1:  return ProxyStrategy::ArgShuffle;
-  default: return ProxyStrategy::RetMask;
+  case 0:
+    return ProxyStrategy::IdentityNoise;
+  case 1:
+    return ProxyStrategy::ArgShuffle;
+  default:
+    return ProxyStrategy::RetMask;
   }
 }
 
@@ -64,15 +67,18 @@ struct FunctionWrapper : public ModulePass {
   StringRef getPassName() const override { return "FunctionWrapper"; }
 
   bool runOnModule(Module &M) override {
-    // Resolve config once for the module (per-function overrides applied per-F below)
+    // Resolve config once for the module (per-function overrides applied per-F
+    // below)
     auto modec = GObfConfig.resolve(M.getSourceFileName(), "");
-    uint32_t effectiveTimes = modec.func_wrap.times.value_or((uint32_t)ObfTimes);
+    uint32_t effectiveTimes =
+        modec.func_wrap.times.value_or((uint32_t)ObfTimes);
 
     SmallVector<CallSite *, 16> callsites;
     for (Function &F : M) {
       if (!toObfuscate(flag, &F, "fw"))
         continue;
-      if (ObfVerbose) errs() << "Running FunctionWrapper On " << F.getName() << "\n";
+      if (ObfVerbose)
+        errs() << "Running FunctionWrapper On " << F.getName() << "\n";
       if (!toObfuscateUint32Option(&F, "fw_prob", &ProbRateTemp)) {
         auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
         ProbRateTemp = ec.func_wrap.probability.value_or((uint32_t)ProbRate);
@@ -104,7 +110,9 @@ struct FunctionWrapper : public ModulePass {
                            SmallVectorImpl<GlobalValue *> &newProxies) {
     Value *calledFunction = CS->getCalledFunction();
     if (!calledFunction)
-      calledFunction = cast<CallBase>(CS->getInstruction())->getCalledOperand()->stripPointerCasts();
+      calledFunction = cast<CallBase>(CS->getInstruction())
+                           ->getCalledOperand()
+                           ->stripPointerCasts();
 
     // Filter: only wrap direct calls to named non-intrinsic functions
     if (!calledFunction ||
@@ -133,17 +141,17 @@ struct FunctionWrapper : public ModulePass {
         FunctionType::get(CS->getType(), ArrayRef<Type *>(types), false);
 
     // Create the proxy with a unique mangled name
-    Function *proxy =
-        Function::Create(ft, GlobalValue::InternalLinkage,
-                         "EnsiaFW_" + std::to_string(cryptoutils->get_uint32_t()),
-                         M);
+    Function *proxy = Function::Create(
+        ft, GlobalValue::InternalLinkage,
+        "EnsiaFW_" + std::to_string(cryptoutils->get_uint32_t()), M);
     proxy->setCallingConv(CS->getCallingConv());
     // Prevent inlining / optimisation so the wrapper is not erased
     proxy->addFnAttr(Attribute::NoInline);
     proxy->addFnAttr(Attribute::OptimizeNone);
     newProxies.push_back(proxy);
 
-    BasicBlock *entryBB = BasicBlock::Create(proxy->getContext(), "fw.entry", proxy);
+    BasicBlock *entryBB =
+        BasicBlock::Create(proxy->getContext(), "fw.entry", proxy);
     IRBuilder<> IRB(entryBB);
 
     ProxyStrategy strat = pickStrategy();
@@ -151,14 +159,13 @@ struct FunctionWrapper : public ModulePass {
     // Collect proxy arguments
     SmallVector<Value *, 8> callArgs;
     for (Argument &arg : proxy->args()) {
-      if (std::find(byvalArgNums.begin(), byvalArgNums.end(),
-                    arg.getArgNo()) != byvalArgNums.end()) {
+      if (std::find(byvalArgNums.begin(), byvalArgNums.end(), arg.getArgNo()) !=
+          byvalArgNums.end()) {
         callArgs.push_back(&arg);
         continue;
       }
 
-      if (strat == ProxyStrategy::ArgShuffle &&
-          arg.getType()->isIntegerTy() &&
+      if (strat == ProxyStrategy::ArgShuffle && arg.getType()->isIntegerTy() &&
           !byvalArgNums.empty() == false) {
         // XOR argument with a random constant; XOR back immediately.
         // Net effect: zero. But IR shows 2 XOR ops on the argument.
@@ -166,7 +173,7 @@ struct FunctionWrapper : public ModulePass {
         if (arg.getType()->getIntegerBitWidth() < 64)
           mask &= ((1ULL << arg.getType()->getIntegerBitWidth()) - 1ULL);
         Constant *maskC = ConstantInt::get(arg.getType(), mask);
-        Value *masked   = IRB.CreateXor(&arg, maskC, "fw.mask");
+        Value *masked = IRB.CreateXor(&arg, maskC, "fw.mask");
         Value *unmasked = IRB.CreateXor(masked, maskC, "fw.unmask");
         AllocaInst *slot = IRB.CreateAlloca(arg.getType(), nullptr, "fw.slot");
         IRB.CreateStore(unmasked, slot);
@@ -186,18 +193,23 @@ struct FunctionWrapper : public ModulePass {
         AllocaInst *ns = IRB.CreateAlloca(Type::getInt64Ty(M.getContext()),
                                           nullptr, "fw.noise");
         uint64_t nval = cryptoutils->get_uint64_t();
-        IRB.CreateStore(ConstantInt::get(Type::getInt64Ty(M.getContext()), nval),
-                        ns, /*volatile=*/true);
+        IRB.CreateStore(
+            ConstantInt::get(Type::getInt64Ty(M.getContext()), nval), ns,
+            /*volatile=*/true);
       }
     }
 
-    // Emit the real call via bit-rotated indirect pointer table / XOR-scrambled ptr
+    // Emit the real call via bit-rotated indirect pointer table / XOR-scrambled
+    // ptr
     uint64_t ptrMask = cryptoutils->get_uint64_t();
-    Value *calleeInt = IRB.CreatePtrToInt(calledFunction, Type::getInt64Ty(M.getContext()), "fw.ptri");
-    Value *maskC64   = ConstantInt::get(Type::getInt64Ty(M.getContext()), ptrMask);
+    Value *calleeInt = IRB.CreatePtrToInt(
+        calledFunction, Type::getInt64Ty(M.getContext()), "fw.ptri");
+    Value *maskC64 =
+        ConstantInt::get(Type::getInt64Ty(M.getContext()), ptrMask);
     Value *scrambled = IRB.CreateXor(calleeInt, maskC64, "fw.scram");
-    Value *unscram   = IRB.CreateXor(scrambled, maskC64, "fw.unscram");
-    Value *calleePtr = IRB.CreateIntToPtr(unscram, PointerType::getUnqual(M.getContext()), "fw.fnptr");
+    Value *unscram = IRB.CreateXor(scrambled, maskC64, "fw.unscram");
+    Value *calleePtr = IRB.CreateIntToPtr(
+        unscram, PointerType::getUnqual(M.getContext()), "fw.fnptr");
     Value *retval = IRB.CreateCall(ft, calleePtr, ArrayRef<Value *>(callArgs));
 
     // Strategy C: mask return value (zero-net XOR)
@@ -207,7 +219,7 @@ struct FunctionWrapper : public ModulePass {
       if (retBits < 64)
         retMask &= ((1ULL << retBits) - 1ULL);
       Constant *rmC = ConstantInt::get(ft->getReturnType(), retMask);
-      Value *masked   = IRB.CreateXor(retval, rmC, "fw.retm");
+      Value *masked = IRB.CreateXor(retval, rmC, "fw.retm");
       retval = IRB.CreateXor(masked, rmC, "fw.retu");
     }
 
@@ -229,4 +241,5 @@ ModulePass *createFunctionWrapperPass(bool flag) {
 } // namespace llvm
 
 char FunctionWrapper::ID = 0;
-INITIALIZE_PASS(FunctionWrapper, "funcwra", "Enable FunctionWrapper.", false, false)
+INITIALIZE_PASS(FunctionWrapper, "funcwra", "Enable FunctionWrapper.", false,
+                false)

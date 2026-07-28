@@ -40,7 +40,8 @@ void mbaAdd(BinaryOperator *bo);
 // Apply Bit Permutation Polynomial (BPP) transformation: x -> P^-1(P(x))
 void mbaBPP(BinaryOperator *bo);
 
-// Apply Bivariate Non-Linear MBA with cross-product terms: c1*(a*b) + c2*(a&b) + c3*(a^b)
+// Apply Bivariate Non-Linear MBA with cross-product terms: c1*(a*b) + c2*(a&b)
+// + c3*(a^b)
 void mbaBivariateNonlinear(BinaryOperator *bo);
 
 // Apply a random linear MBA identity for SUB

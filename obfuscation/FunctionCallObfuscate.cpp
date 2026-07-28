@@ -16,12 +16,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "include/compat/CallSite.h"
 #include "include/FunctionCallObfuscate.h"
+#include "include/Utils.h"
+#include "include/compat/CallSite.h"
 #include "include/json.hpp"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/TargetParser/Triple.h"
-#include "include/Utils.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -31,6 +30,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TargetParser/Triple.h"
 #include <fstream>
 
 using namespace llvm;
@@ -156,7 +156,9 @@ struct FunctionCallObfuscate : public FunctionPass {
           Value *newClassName =
               builder.CreateGlobalStringPtr(StringRef(className));
           CallInst *CI = builder.CreateCall(objc_getClass_Func, {newClassName});
-          Value *BCI = (CI->getType() == I->getType()) ? cast<Value>(CI) : builder.CreateBitCast(CI, I->getType());
+          Value *BCI = (CI->getType() == I->getType())
+                           ? cast<Value>(CI)
+                           : builder.CreateBitCast(CI, I->getType());
           I->replaceAllUsesWith(BCI);
           toErase.emplace_back(I);
         }
@@ -179,7 +181,9 @@ struct FunctionCallObfuscate : public FunctionPass {
           Value *newGlobalSELName = builder.CreateGlobalStringPtr(SELName);
           CallInst *CI =
               builder.CreateCall(sel_registerName_Func, {newGlobalSELName});
-          Value *BCI = (CI->getType() == I->getType()) ? cast<Value>(CI) : builder.CreateBitCast(CI, I->getType());
+          Value *BCI = (CI->getType() == I->getType())
+                           ? cast<Value>(CI)
+                           : builder.CreateBitCast(CI, I->getType());
           I->replaceAllUsesWith(BCI);
           toErase.emplace_back(I); // We cannot erase it directly or we will
                                    // have problems releasing the IRBuilder.
@@ -254,7 +258,8 @@ struct FunctionCallObfuscate : public FunctionPass {
     // Construct Function Prototypes
     if (!toObfuscate(flag, &F, "fco"))
       return false;
-    if (ObfVerbose) errs() << "Running FunctionCallObfuscate On " << F.getName() << "\n";
+    if (ObfVerbose)
+      errs() << "Running FunctionCallObfuscate On " << F.getName() << "\n";
     Module *M = F.getParent();
     if (!this->initialized)
       initialize(*M);
@@ -273,8 +278,9 @@ struct FunctionCallObfuscate : public FunctionPass {
     Type *Int8PtrTy = Type::getInt8Ty(M->getContext())->getPointerTo();
 
     // Platform-specific dynamic-linker declarations.
-    // Unix/Darwin/Android  : dlopen(const char*, int)  / dlsym(void*, const char*)
-    // Windows              : GetModuleHandleA(LPCSTR)  / GetProcAddress(HMODULE, LPCSTR)
+    // Unix/Darwin/Android  : dlopen(const char*, int)  / dlsym(void*, const
+    // char*) Windows              : GetModuleHandleA(LPCSTR)  /
+    // GetProcAddress(HMODULE, LPCSTR)
     //
     // On Windows, GetModuleHandleA(NULL) returns a handle to the current
     // executable image.  To resolve symbols that live in a DLL rather than the
@@ -285,8 +291,7 @@ struct FunctionCallObfuscate : public FunctionPass {
 
     if (isWindows) {
       // HMODULE GetModuleHandleA(LPCSTR lpModuleName)
-      FunctionType *gmh_type =
-          FunctionType::get(Int8PtrTy, {Int8PtrTy}, false);
+      FunctionType *gmh_type = FunctionType::get(Int8PtrTy, {Int8PtrTy}, false);
       // FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
       FunctionType *gpa_type =
           FunctionType::get(Int8PtrTy, {Int8PtrTy, Int8PtrTy}, false);
@@ -336,7 +341,8 @@ struct FunctionCallObfuscate : public FunctionPass {
           if (!calledFunction->empty() ||
               calledFunction->getName().equals_insensitive("dlsym") ||
               calledFunction->getName().equals_insensitive("dlopen") ||
-              calledFunction->getName().equals_insensitive("GetModuleHandleA") ||
+              calledFunction->getName().equals_insensitive(
+                  "GetModuleHandleA") ||
               calledFunction->getName().equals_insensitive("GetProcAddress") ||
               calledFunction->isIntrinsic())
             continue;
@@ -367,18 +373,18 @@ struct FunctionCallObfuscate : public FunctionPass {
               else
                 dlopen_flag = ANDROID32_FLAG;
             }
-            Handle = IRB.CreateCall(
-                resolve_lib_decl,
-                {Constant::getNullValue(Int8PtrTy),
-                 ConstantInt::get(Int32Ty, dlopen_flag)});
+            Handle = IRB.CreateCall(resolve_lib_decl,
+                                    {Constant::getNullValue(Int8PtrTy),
+                                     ConstantInt::get(Int32Ty, dlopen_flag)});
             fp = IRB.CreateCall(
                 resolve_sym_decl,
                 {Handle, IRB.CreateGlobalStringPtr(calledFunctionName)});
           }
 
-          Value *bitCastedFunction = (fp->getType() == CS.getCalledValue()->getType())
-              ? fp
-              : IRB.CreateBitCast(fp, CS.getCalledValue()->getType());
+          Value *bitCastedFunction =
+              (fp->getType() == CS.getCalledValue()->getType())
+                  ? fp
+                  : IRB.CreateBitCast(fp, CS.getCalledValue()->getType());
           CS.setCalledFunction(bitCastedFunction);
         }
       }

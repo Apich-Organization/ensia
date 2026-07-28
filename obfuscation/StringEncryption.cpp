@@ -27,10 +27,10 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include <algorithm>
 #include <regex>
 #include <unordered_set>
 #include <vector>
-#include <algorithm>
 
 using namespace llvm;
 
@@ -90,12 +90,14 @@ struct StringEncryption : public ModulePass {
 
     for (Function &F : M)
       if (toObfuscate(flag, &F, "strenc")) {
-        if (ObfVerbose) errs() << "Running StringEncryption On " << F.getName() << "\n";
+        if (ObfVerbose)
+          errs() << "Running StringEncryption On " << F.getName() << "\n";
 
         if (!toObfuscateUint32Option(&F, "strcry_prob",
                                      &ElementEncryptProbTemp)) {
           auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
-          ElementEncryptProbTemp = ec.str_enc.probability.value_or((uint32_t)ElementEncryptProb);
+          ElementEncryptProbTemp =
+              ec.str_enc.probability.value_or((uint32_t)ElementEncryptProb);
         }
 
         // Check if the number of applications is correct
@@ -180,7 +182,7 @@ struct StringEncryption : public ModulePass {
   //   base — unchanged
   // Only examines i8 (char) arrays; other element widths are returned as-is.
   static uint32_t contentProb(GlobalVariable *GV, const ObfStrEncConfig &cfg,
-                               uint32_t base) {
+                              uint32_t base) {
     if (cfg.skip_content.empty() && cfg.force_content.empty())
       return base;
     auto *CDS = dyn_cast<ConstantDataSequential>(GV->getInitializer());
@@ -189,17 +191,21 @@ struct StringEncryption : public ModulePass {
     std::string content = CDS->getRawDataValues().str();
     for (const auto &pat : cfg.skip_content) {
       try {
-        if (std::regex_search(content,
-              std::regex(pat, std::regex::ECMAScript | std::regex::optimize)))
+        if (std::regex_search(
+                content,
+                std::regex(pat, std::regex::ECMAScript | std::regex::optimize)))
           return 0;
-      } catch (const std::regex_error &) {}
+      } catch (const std::regex_error &) {
+      }
     }
     for (const auto &pat : cfg.force_content) {
       try {
-        if (std::regex_search(content,
-              std::regex(pat, std::regex::ECMAScript | std::regex::optimize)))
+        if (std::regex_search(
+                content,
+                std::regex(pat, std::regex::ECMAScript | std::regex::optimize)))
           return 100;
-      } catch (const std::regex_error &) {}
+      } catch (const std::regex_error &) {
+      }
     }
     return base;
   }
@@ -310,16 +316,18 @@ struct StringEncryption : public ModulePass {
       // Per-GV content filter: skip or force-encrypt based on string content.
       uint32_t gvProb = contentProb(GV, ec.str_enc, ElementEncryptProbTemp);
       if (gvProb == 0)
-        continue;  // skip_content matched — leave this string unencrypted
+        continue; // skip_content matched — leave this string unencrypted
       uint32_t savedProb = ElementEncryptProbTemp;
-      ElementEncryptProbTemp = gvProb;  // may be 100 if force_content matched
+      ElementEncryptProbTemp = gvProb; // may be 100 if force_content matched
 
       ConstantDataSequential *CDS =
           dyn_cast<ConstantDataSequential>(GV->getInitializer());
       bool rust_string = !CDS;
       if (rust_string) {
-        ConstantAggregate *CA = dyn_cast<ConstantAggregate>(GV->getInitializer());
-        if (!CA || CA->getNumOperands() == 0) continue;
+        ConstantAggregate *CA =
+            dyn_cast<ConstantAggregate>(GV->getInitializer());
+        if (!CA || CA->getNumOperands() == 0)
+          continue;
         Constant *Op0 = CA->getOperand(0);
         if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Op0))
           Op0 = CE->getOperand(0);
@@ -328,7 +336,8 @@ struct StringEncryption : public ModulePass {
           CDS = dyn_cast<ConstantDataSequential>(TargetGV->getInitializer());
         if (!CDS)
           CDS = dyn_cast<ConstantDataSequential>(CA->getOperand(0));
-        if (!CDS) continue;
+        if (!CDS)
+          continue;
       }
       Type *ElementTy = CDS->getElementType();
       if (!ElementTy->isIntegerTy()) {
@@ -344,25 +353,28 @@ struct StringEncryption : public ModulePass {
         // Vernam-GF8 cipher — array layout:
         //
         //  k1s[i]    OTP XOR key (FULL layout: 1u placeholder for unencrypted)
-        //  encry[i]  GF8-encrypted ciphertext (COMPACT: encrypted elements only)
-        //  k2invs[i] GF8 decryption multiplier (FULL layout):
+        //  encry[i]  GF8-encrypted ciphertext (COMPACT: encrypted elements
+        //  only) k2invs[i] GF8 decryption multiplier (FULL layout):
         //              • Encrypted  → GF8_inv(k2[i])
-        //              • Unencrypted→ plain[i]  (so DecryptSpace keeps plain text)
+        //              • Unencrypted→ plain[i]  (so DecryptSpace keeps plain
+        //              text)
         //
         // IMPORTANT: k1s and k2invs are FULL layout (one entry per element,
         // indexed by element position `i`).  encry is COMPACT (one entry per
         // encrypted element, indexed by compact offset `ko`).  The decryption
-        // IR in HandleDecryptionBlock reads k1s[idx] and k2invs[idx] (NOT [ko]).
-        // k2invs is stored in gv_k2inv_map[DecryptSpaceGV] for direct access.
+        // IR in HandleDecryptionBlock reads k1s[idx] and k2invs[idx] (NOT
+        // [ko]). k2invs is stored in gv_k2inv_map[DecryptSpaceGV] for direct
+        // access.
         std::vector<uint8_t> k1s, k2invs, encry;
         for (unsigned i = 0; i < CDS->getNumElements(); i++) {
           if (cryptoutils->get_range(100) >= ElementEncryptProbTemp) {
             // Unencrypted: record index, store plain value in k2invs (= dummy),
             // DON'T push to encry (compact skip — same as original).
             unencryptedindex[GV].emplace_back(i);
-            k1s.emplace_back(1u);                                        // unused key
-            k2invs.emplace_back((uint8_t)CDS->getElementAsInteger(i));  // plain → initial DecryptSpace
-            continue;  // DO NOT push to encry
+            k1s.emplace_back(1u); // unused key
+            k2invs.emplace_back((uint8_t)CDS->getElementAsInteger(
+                i));  // plain → initial DecryptSpace
+            continue; // DO NOT push to encry
           }
           // ── Vernam-GF8 encryption ──────────────────────────────────────────
           // OTP key k1: uniformly random — information-theoretically secure.
@@ -373,12 +385,12 @@ struct StringEncryption : public ModulePass {
           while (k2 == 0)
             k2 = cryptoutils->get_uint8_t();
           const uint8_t k2inv = gf8_inv(k2);
-          const uint8_t V     = (uint8_t)CDS->getElementAsInteger(i);
+          const uint8_t V = (uint8_t)CDS->getElementAsInteger(i);
           // enc = GF8_mul(plain XOR k1, k2)
-          const uint8_t enc   = gf8_mul(V ^ k1, k2);
+          const uint8_t enc = gf8_mul(V ^ k1, k2);
           k1s.emplace_back(k1);
           k2invs.emplace_back(k2inv);
-          encry.emplace_back(enc);       // compact
+          encry.emplace_back(enc); // compact
         }
         // KeyConst      = k1s    (OTP XOR keys;  full layout: 1 per element)
         // EncryptedConst= encry   (GF8-encrypted ciphertext; compact)
@@ -386,12 +398,12 @@ struct StringEncryption : public ModulePass {
         //                          and plain values for unencrypted elements)
         // Save k2invs for storage in gv_k2inv_map once DecryptSpaceGV is known.
         pending_k2invs = k2invs;
-        KeyConst = ConstantDataArray::get(M->getContext(),
-                                          ArrayRef<uint8_t>(k1s));
-        EncryptedConst = ConstantDataArray::get(M->getContext(),
-                                                ArrayRef<uint8_t>(encry));
-        DummyConst = ConstantDataArray::get(M->getContext(),
-                                             ArrayRef<uint8_t>(k2invs));
+        KeyConst =
+            ConstantDataArray::get(M->getContext(), ArrayRef<uint8_t>(k1s));
+        EncryptedConst =
+            ConstantDataArray::get(M->getContext(), ArrayRef<uint8_t>(encry));
+        DummyConst =
+            ConstantDataArray::get(M->getContext(), ArrayRef<uint8_t>(k2invs));
 
       } else if (intType == Type::getInt16Ty(M->getContext())) {
         std::vector<uint16_t> keys, encry, dummy;
@@ -492,7 +504,7 @@ struct StringEncryption : public ModulePass {
       globalOld2New[GV] = std::make_pair(EncryptedRawGV, DecryptSpaceGV);
       globalProcessedGVs.insert(GV);
       old2new[GV] = globalOld2New[GV];
-      ElementEncryptProbTemp = savedProb;  // restore after processing this GV
+      ElementEncryptProbTemp = savedProb; // restore after processing this GV
     }
     // Now prepare ObjC new GV
     for (GlobalVariable *GV : objCStrings) {
@@ -546,8 +558,7 @@ struct StringEncryption : public ModulePass {
                     PtrauthGV->getInitializer()->getOperand(2))) {
               if (GlobalVariable *GV2 =
                       dyn_cast<GlobalVariable>(CE->getOperand(0))) {
-                if (GV->getNumUses() <= 1 &&
-                    GV2->getName() == GV->getName())
+                if (GV->getNumUses() <= 1 && GV2->getName() == GV->getName())
                   PtrauthGV->getInitializer()->setOperand(
                       2, ConstantExpr::getPtrToInt(
                              M->getGlobalVariable(
@@ -556,8 +567,7 @@ struct StringEncryption : public ModulePass {
               }
             } else if (GlobalVariable *GV2 = dyn_cast<GlobalVariable>(
                            PtrauthGV->getInitializer()->getOperand(2)))
-              if (GV->getNumUses() <= 1 &&
-                  GV2->getName() == GV->getName())
+              if (GV->getNumUses() <= 1 && GV2->getName() == GV->getName())
                 PtrauthGV->getInitializer()->setOperand(
                     2, ConstantExpr::getPtrToInt(
                            M->getGlobalVariable(
@@ -732,21 +742,20 @@ struct StringEncryption : public ModulePass {
   // For 8 iterations, this produces at most 8*(3 shifts + 1 mul + 1 xor) +
   // (popcount(c) XOR accumulations) = ≈24–40 IR instructions per element.
   // No decompiler pattern-matches "GF8 multiply" as string decryption.
-  static Value *emitGF8Mul(IRBuilder<> &IRB, Value *x, uint8_t c,
-                            Type *I8Ty) {
+  static Value *emitGF8Mul(IRBuilder<> &IRB, Value *x, uint8_t c, Type *I8Ty) {
     Value *result = ConstantInt::get(I8Ty, 0);
-    Value *a      = x;
-    ConstantInt *c0x1B  = cast<ConstantInt>(ConstantInt::get(I8Ty, 0x1Bu));
+    Value *a = x;
+    ConstantInt *c0x1B = cast<ConstantInt>(ConstantInt::get(I8Ty, 0x1Bu));
     ConstantInt *cShift = cast<ConstantInt>(ConstantInt::get(I8Ty, 1));
-    ConstantInt *cMSB   = cast<ConstantInt>(ConstantInt::get(I8Ty, 7));
+    ConstantInt *cMSB = cast<ConstantInt>(ConstantInt::get(I8Ty, 7));
     for (int bit = 0; bit < 8; bit++) {
       if ((c >> bit) & 1u) {
         result = IRB.CreateXor(result, a, "gf8.acc");
       }
       if (bit < 7) { // last iteration doesn't need xtime
         // carry = (a >> 7) & 1
-        Value *carry = IRB.CreateAnd(
-            IRB.CreateLShr(a, cMSB, "gf8.carry"), cShift, "gf8.carry1");
+        Value *carry = IRB.CreateAnd(IRB.CreateLShr(a, cMSB, "gf8.carry"),
+                                     cShift, "gf8.carry1");
         // mask = carry * 0x1B  (0 or 0x1B)
         Value *mask = IRB.CreateMul(carry, c0x1B, "gf8.mask");
         // a = (a << 1) ^ mask
@@ -762,7 +771,7 @@ struct StringEncryption : public ModulePass {
                          std::pair<Constant *, GlobalVariable *>> &GV2Keys) {
     IRBuilder<> IRB(B);
     LLVMContext &Ctx = B->getContext();
-    Type *I8Ty  = Type::getInt8Ty(Ctx);
+    Type *I8Ty = Type::getInt8Ty(Ctx);
     Type *I32Ty = Type::getInt32Ty(Ctx);
     Type *I64Ty = Type::getInt64Ty(Ctx);
     Value *zero32 = ConstantInt::get(I32Ty, 0);
@@ -780,23 +789,24 @@ struct StringEncryption : public ModulePass {
       // The DecryptSpace GV (iter->first when called from HandleFunction)
       // was initialised with k2inv values (GF8 decryption multipliers).
       // We read enc from EncryptedRawGV and k2inv from DecryptSpace init.
-      Constant *KeyConst = iter->second.first;          // k1[]
+      Constant *KeyConst = iter->second.first; // k1[]
       ConstantDataArray *CDA_k1 = cast<ConstantDataArray>(KeyConst);
 
       // Retrieve the k2inv vector (full-layout, one entry per string element)
       // that was stored in gv_k2inv_map during HandleFunction.  This is the
       // authoritative source for the GF8 decryption multipliers; it avoids
-      // introspecting the GV initializer (which may be a mutated ConstantAggregate
-      // in the Rust-string path, making direct cast<ConstantDataArray> unsafe).
-      // For non-i8 GVs the map entry will be absent; CDA_k2inv stays nullptr.
+      // introspecting the GV initializer (which may be a mutated
+      // ConstantAggregate in the Rust-string path, making direct
+      // cast<ConstantDataArray> unsafe). For non-i8 GVs the map entry will be
+      // absent; CDA_k2inv stays nullptr.
       ConstantDataArray *CDA_k2inv = nullptr;
       {
         auto mapIt = gv_k2inv_map.find(iter->first);
         if (mapIt != gv_k2inv_map.end()) {
           // Reconstitute a ConstantDataArray view from the stored vector so
           // getElementAsInteger() works uniformly in the loop below.
-          Constant *k2invConst = ConstantDataArray::get(
-              Ctx, ArrayRef<uint8_t>(mapIt->second));
+          Constant *k2invConst =
+              ConstantDataArray::get(Ctx, ArrayRef<uint8_t>(mapIt->second));
           CDA_k2inv = cast<ConstantDataArray>(k2invConst);
         }
       }
@@ -813,8 +823,8 @@ struct StringEncryption : public ModulePass {
       for (uint64_t i = 0; i < numElems; i++) {
         if (!unencryptedindex[KeyConst].size() ||
             std::find(unencryptedindex[KeyConst].begin(),
-                      unencryptedindex[KeyConst].end(), i) ==
-                unencryptedindex[KeyConst].end())
+                      unencryptedindex[KeyConst].end(),
+                      i) == unencryptedindex[KeyConst].end())
           order.push_back(i);
       }
       for (size_t i = order.size(); i > 1; i--)
@@ -827,8 +837,8 @@ struct StringEncryption : public ModulePass {
         for (uint64_t i = 0; i < numElems; i++) {
           bool skip = unencryptedindex[KeyConst].size() &&
                       std::find(unencryptedindex[KeyConst].begin(),
-                                unencryptedindex[KeyConst].end(), i) !=
-                          unencryptedindex[KeyConst].end();
+                                unencryptedindex[KeyConst].end(),
+                                i) != unencryptedindex[KeyConst].end();
           if (!skip)
             keyOffsetMap[i] = ko++;
         }
@@ -842,7 +852,7 @@ struct StringEncryption : public ModulePass {
         // offKO  — compact offset into EncryptedRawGV (encry[] is compact)
         // offIdx — full element index into DecryptSpaceGV and key arrays
         //          (k1s[], k2invs[], keys[] are all full-layout)
-        Value *offKO  = ConstantInt::get(I64Ty, ko);
+        Value *offKO = ConstantInt::get(I64Ty, ko);
         Value *offIdx = ConstantInt::get(I64Ty, idx);
 
         // Source: encrypted byte from EncryptedRawGV (compact layout → offKO)
@@ -859,8 +869,8 @@ struct StringEncryption : public ModulePass {
                 : IRB.CreateGEP(iter->first->getValueType(), iter->first,
                                 {zero32, offIdx});
 
-        LoadInst *encLoad = IRB.CreateLoad(CDA_k1->getElementType(), EncGEP,
-                                           "strcry.enc");
+        LoadInst *encLoad =
+            IRB.CreateLoad(CDA_k1->getElementType(), EncGEP, "strcry.enc");
         Value *decoded = encLoad;
 
         if (isI8) {
@@ -874,18 +884,18 @@ struct StringEncryption : public ModulePass {
           //
           // k2inv[i] is inlined as a compile-time immediate in the GF8 chain.
           // k1[i] is a compile-time constant XOR'd at the end.
-          uint8_t k1    = (uint8_t)CDA_k1->getElementAsInteger(idx);
-          uint8_t k2inv = (CDA_k2inv &&
-                           idx < CDA_k2inv->getType()->getNumElements())
-                              ? (uint8_t)CDA_k2inv->getElementAsInteger(idx)
-                              : 1u; // fallback: identity (no GF8 mul effect)
+          uint8_t k1 = (uint8_t)CDA_k1->getElementAsInteger(idx);
+          uint8_t k2inv =
+              (CDA_k2inv && idx < CDA_k2inv->getType()->getNumElements())
+                  ? (uint8_t)CDA_k2inv->getElementAsInteger(idx)
+                  : 1u; // fallback: identity (no GF8 mul effect)
 
           // Step 1: GF8_mul(enc, k2inv) — emit shift-XOR carry-less multiply
           decoded = emitGF8Mul(IRB, encLoad, k2inv, I8Ty);
 
           // Step 2: XOR with k1 (OTP reversal — plain = gf8_result ^ k1)
-          decoded = IRB.CreateXor(decoded,
-                                  ConstantInt::get(I8Ty, k1), "strcry.otpxor");
+          decoded = IRB.CreateXor(decoded, ConstantInt::get(I8Ty, k1),
+                                  "strcry.otpxor");
         } else {
           // Non-i8: plain XOR (wide types use simple XOR, no GF8 layer).
           // keys[] is full-layout — index by `idx`, not compact `ko`.

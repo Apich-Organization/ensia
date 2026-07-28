@@ -16,12 +16,12 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "include/compat/CallSite.h"
 #include "include/ConstantEncryption.h"
 #include "include/CryptoUtils.h"
 #include "include/ObfConfig.h"
 #include "include/SubstituteImpl.h"
 #include "include/Utils.h"
+#include "include/compat/CallSite.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -135,31 +135,42 @@ struct ConstantEncryption : public ModulePass {
     dispatchonce = M.getFunction("dispatch_once");
     for (Function &F : M)
       if (toObfuscate(flag, &F, "constenc") && !F.isPresplitCoroutine()) {
-        if (ObfVerbose) errs() << "Running ConstantEncryption On " << F.getName() << "\n";
+        if (ObfVerbose)
+          errs() << "Running ConstantEncryption On " << F.getName() << "\n";
         FixFunctionConstantExpr(&F);
         std::vector<std::string> skipVal, forceVal;
         {
-          auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+          auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(),
+                                       F.getName());
           if (!toObfuscateUint32Option(&F, "constenc_times", &ObfTimesTemp))
             ObfTimesTemp = ec.const_enc.iterations.value_or((uint32_t)ObfTimes);
           if (!toObfuscateBoolOption(&F, "constenc_togv", &ConstToGVTemp))
             ConstToGVTemp = ec.const_enc.globalize.value_or((bool)ConstToGV);
           if (!toObfuscateBoolOption(&F, "constenc_subxor", &SubstituteXorTemp))
-            SubstituteXorTemp = ec.const_enc.substitute_xor.value_or((bool)SubstituteXor);
+            SubstituteXorTemp =
+                ec.const_enc.substitute_xor.value_or((bool)SubstituteXor);
           if (!toObfuscateUint32Option(&F, "constenc_subxor_prob",
                                        &SubstituteXorProbTemp))
-            SubstituteXorProbTemp = ec.const_enc.substitute_xor_prob.value_or((uint32_t)SubstituteXorProb);
+            SubstituteXorProbTemp = ec.const_enc.substitute_xor_prob.value_or(
+                (uint32_t)SubstituteXorProb);
           if (!toObfuscateUint32Option(&F, "constenc_kshare", &KShareCountTemp))
-            KShareCountTemp = ec.const_enc.share_count.value_or((uint32_t)KShareCount);
-          if (KShareCountTemp < 2) KShareCountTemp = 2;
-          if (KShareCountTemp > 8) KShareCountTemp = 8;
-          if (ObfuscationMaxMode) KShareCountTemp = 4;
+            KShareCountTemp =
+                ec.const_enc.share_count.value_or((uint32_t)KShareCount);
+          if (KShareCountTemp < 2)
+            KShareCountTemp = 2;
+          if (KShareCountTemp > 8)
+            KShareCountTemp = 8;
+          if (ObfuscationMaxMode)
+            KShareCountTemp = 4;
           if (!toObfuscateBoolOption(&F, "constenc_feistel", &FeistelTierTemp))
             FeistelTierTemp = ec.const_enc.feistel.value_or((bool)FeistelTier);
-          if (ObfuscationMaxMode) FeistelTierTemp = true;
-          if (!toObfuscateUint32Option(&F, "constenc_togv_prob", &ConstToGVProbTemp))
-            ConstToGVProbTemp = ec.const_enc.globalize_prob.value_or((uint32_t)ConstToGVProb);
-          skipVal  = ec.const_enc.skip_value;
+          if (ObfuscationMaxMode)
+            FeistelTierTemp = true;
+          if (!toObfuscateUint32Option(&F, "constenc_togv_prob",
+                                       &ConstToGVProbTemp))
+            ConstToGVProbTemp =
+                ec.const_enc.globalize_prob.value_or((uint32_t)ConstToGVProb);
+          skipVal = ec.const_enc.skip_value;
           forceVal = ec.const_enc.force_value;
         }
         if (SubstituteXorProbTemp > 100) {
@@ -245,7 +256,7 @@ struct ConstantEncryption : public ModulePass {
   static std::string ciHex(const ConstantInt *CI) {
     llvm::SmallString<32> buf;
     CI->getValue().toString(buf, 16, /*Signed=*/false);
-    return "0x" + buf.str().upper();  // StringRef::upper() returns std::string
+    return "0x" + buf.str().upper(); // StringRef::upper() returns std::string
   }
 
   // Checks ci's value against skip/force patterns (case-insensitive hex match).
@@ -253,23 +264,26 @@ struct ConstantEncryption : public ModulePass {
   static int valueGate(const ConstantInt *CI,
                        const std::vector<std::string> &skipPats,
                        const std::vector<std::string> &forcePats) {
-    if (skipPats.empty() && forcePats.empty()) return 0;
+    if (skipPats.empty() && forcePats.empty())
+      return 0;
     std::string hex = ciHex(CI);
     for (const auto &pat : skipPats) {
       try {
-        if (std::regex_search(hex,
-              std::regex(pat, std::regex::ECMAScript |
-                              std::regex::icase | std::regex::optimize)))
+        if (std::regex_search(hex, std::regex(pat, std::regex::ECMAScript |
+                                                       std::regex::icase |
+                                                       std::regex::optimize)))
           return -1;
-      } catch (const std::regex_error &) {}
+      } catch (const std::regex_error &) {
+      }
     }
     for (const auto &pat : forcePats) {
       try {
-        if (std::regex_search(hex,
-              std::regex(pat, std::regex::ECMAScript |
-                              std::regex::icase | std::regex::optimize)))
+        if (std::regex_search(hex, std::regex(pat, std::regex::ECMAScript |
+                                                       std::regex::icase |
+                                                       std::regex::optimize)))
           return +1;
-      } catch (const std::regex_error &) {}
+      } catch (const std::regex_error &) {
+      }
     }
     return 0;
   }
@@ -299,26 +313,30 @@ struct ConstantEncryption : public ModulePass {
     }
 
     uint32_t eligible = targets.size() + gvTargets.size();
-    if (eligible == 0) return;
+    if (eligible == 0)
+      return;
 
     uint32_t currentProb = 100;
     uint32_t maxTargets = 1000000;
     if (eligible * currentProb / 100 > maxTargets) {
       currentProb = (maxTargets * 100) / eligible;
-      if (currentProb == 0) currentProb = 1;
+      if (currentProb == 0)
+        currentProb = 1;
     }
 
     for (auto &T : targets) {
       const ConstantInt *CI = cast<ConstantInt>(T.first->getOperand(T.second));
       int gate = valueGate(CI, skipVal, forceVal);
-      if (gate < 0) continue;                            // skip_value matched
+      if (gate < 0)
+        continue; // skip_value matched
       if (gate > 0 || cryptoutils->get_range(100) < currentProb)
         HandleConstantIntOperand(T.first, T.second);
     }
     for (GlobalVariable *G : gvTargets) {
       const ConstantInt *CI = cast<ConstantInt>(G->getInitializer());
       int gate = valueGate(CI, skipVal, forceVal);
-      if (gate < 0) continue;                            // skip_value matched
+      if (gate < 0)
+        continue; // skip_value matched
       if (gate > 0 || cryptoutils->get_range(100) < currentProb)
         HandleConstantIntInitializerGV(G);
     }
@@ -343,8 +361,8 @@ struct ConstantEncryption : public ModulePass {
           GlobalVariable *GV = new GlobalVariable(
               *F.getParent(), CI->getType(), false,
               GlobalValue::LinkageTypes::PrivateLinkage,
-              ConstantInt::get(CI->getType(), CI->getValue()), "CToGV",
-              nullptr, GlobalValue::GeneralDynamicTLSModel);
+              ConstantInt::get(CI->getType(), CI->getValue()), "CToGV", nullptr,
+              GlobalValue::GeneralDynamicTLSModel);
           usedGlobals.push_back(GV);
           I.setOperand(i, new LoadInst(GV->getValueType(), GV, "", &I));
         }
@@ -372,8 +390,8 @@ struct ConstantEncryption : public ModulePass {
           continue;
         GlobalVariable *GV = new GlobalVariable(
             M, BO->getType(), false, GlobalValue::LinkageTypes::PrivateLinkage,
-            ConstantInt::get(BO->getType(), dummy), "CToGV",
-            nullptr, GlobalValue::GeneralDynamicTLSModel);
+            ConstantInt::get(BO->getType(), dummy), "CToGV", nullptr,
+            GlobalValue::GeneralDynamicTLSModel);
         StoreInst *SI =
             new StoreInst(BO, GV, false, DL.getABITypeAlign(BO->getType()));
         SI->insertAfter(BO);
@@ -470,7 +488,8 @@ struct ConstantEncryption : public ModulePass {
   // Returns nullptr if the constant is too narrow (bits < 16).
   ConstantInt *feistelEncrypt(ConstantInt *C, FeistelState &fst) {
     unsigned bits = C->getBitWidth();
-    if (bits < 16) return nullptr; // need at least 8-bit halves
+    if (bits < 16)
+      return nullptr; // need at least 8-bit halves
     fst.half = bits / 2;
     fst.mask = APInt::getLowBitsSet(bits, fst.half);
 
@@ -499,19 +518,20 @@ struct ConstantEncryption : public ModulePass {
     return cast<ConstantInt>(ConstantInt::get(C->getType(), enc));
   }
 
-  // IR-time: emit the 4-round inverse Feistel that recovers the original constant.
-  // encVal is the IR Value carrying the encrypted constant (output of k-share XOR
-  // or simple XOR decryption).  All instructions are inserted just before I.
-  Value *emitFeistelDecryptIR(Instruction *I, Value *encVal,
-                               IntegerType *T, const FeistelState &fst) {
+  // IR-time: emit the 4-round inverse Feistel that recovers the original
+  // constant. encVal is the IR Value carrying the encrypted constant (output of
+  // k-share XOR or simple XOR decryption).  All instructions are inserted just
+  // before I.
+  Value *emitFeistelDecryptIR(Instruction *I, Value *encVal, IntegerType *T,
+                              const FeistelState &fst) {
     ConstantInt *halfC = cast<ConstantInt>(ConstantInt::get(T, fst.half));
     ConstantInt *maskC = cast<ConstantInt>(ConstantInt::get(T, fst.mask));
 
     // Extract halves: L = upper half, R = lower half
     Value *L = BinaryOperator::Create(
         Instruction::And,
-        BinaryOperator::Create(Instruction::LShr, encVal, halfC, "", I),
-        maskC, "", I);
+        BinaryOperator::Create(Instruction::LShr, encVal, halfC, "", I), maskC,
+        "", I);
     Value *R = BinaryOperator::Create(Instruction::And, encVal, maskC, "", I);
 
     // Apply 4 inverse rounds in reverse order (r = 3, 2, 1, 0)
@@ -525,8 +545,7 @@ struct ConstantEncryption : public ModulePass {
       // Inverse: newL = R ^ F(L),  newR = L
       Value *newL = BinaryOperator::Create(
           Instruction::And,
-          BinaryOperator::Create(Instruction::Xor, R, F, "", I),
-          maskC, "", I);
+          BinaryOperator::Create(Instruction::Xor, R, F, "", I), maskC, "", I);
       Value *newR = L;
       L = newL;
       R = newR;
@@ -543,7 +562,7 @@ struct ConstantEncryption : public ModulePass {
   // Shares are stored as module-level GlobalVariables (private linkage).
   // Returns the IR Value representing C (the XOR of all k loads).
   Value *emitKShareDecrypt(Instruction *I, ConstantInt *C, unsigned k) {
-    Module &M  = *I->getModule();
+    Module &M = *I->getModule();
     IntegerType *T = cast<IntegerType>(C->getType());
     unsigned bits = T->getBitWidth();
     if (bits < 8 || k < 2) {
@@ -574,10 +593,8 @@ struct ConstantEncryption : public ModulePass {
     SmallVector<GlobalVariable *, 8> gvs;
     for (unsigned i = 0; i < k; i++) {
       GlobalVariable *GV = new GlobalVariable(
-          M, T, /*isConstant=*/false,
-          GlobalValue::PrivateLinkage,
-          ConstantInt::get(T, shares[i]),
-          "constenc.share");
+          M, T, /*isConstant=*/false, GlobalValue::PrivateLinkage,
+          ConstantInt::get(T, shares[i]), "constenc.share");
       usedGlobals.push_back(GV);
       gvs.push_back(GV);
     }
@@ -586,8 +603,7 @@ struct ConstantEncryption : public ModulePass {
     Value *acc = new LoadInst(T, gvs[0], "", I);
     for (unsigned i = 1; i < k; i++) {
       Value *ld = new LoadInst(T, gvs[i], "", I);
-      acc = BinaryOperator::Create(Instruction::Xor, acc, ld,
-                                   "", I);
+      acc = BinaryOperator::Create(Instruction::Xor, acc, ld, "", I);
       // Optionally substitute the XOR for additional depth
       if (SubstituteXorTemp &&
           cryptoutils->get_range(100) <= SubstituteXorProbTemp)

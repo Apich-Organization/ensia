@@ -17,22 +17,22 @@
  */
 
 #include "include/AntiDebugging.h"
-#include "llvm/ADT/SmallString.h"
-#include "llvm/TargetParser/Triple.h"
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/StringExtras.h"
 #include "include/CryptoUtils.h"
 #include "include/Utils.h"
+#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TargetParser/Triple.h"
 #include <fstream>
 #include <sstream>
 
@@ -129,8 +129,7 @@ struct AntiDebugging : public ModulePass {
           OS << format("g%08x%08x", cryptoutils->get_uint32_t(),
                        cryptoutils->get_uint32_t());
           (void)new GlobalVariable(M, GV->getValueType(), GV->isConstant(),
-                                   GlobalValue::PrivateLinkage, init,
-                                   OS.str());
+                                   GlobalValue::PrivateLinkage, init, OS.str());
         }
 
         ADBCallBack->setVisibility(
@@ -168,7 +167,8 @@ struct AntiDebugging : public ModulePass {
     for (Function &F : M) {
       if (toObfuscate(flag, &F, "adb") && F.getName() != "ADBCallBack" &&
           F.getName() != "InitADB") {
-        if (ObfVerbose) errs() << "Running AntiDebugging On " << F.getName() << "\n";
+        if (ObfVerbose)
+          errs() << "Running AntiDebugging On " << F.getName() << "\n";
         if (!this->initialized)
           initialize(M);
         if (cryptoutils->get_range(100) <= ProbRate)
@@ -181,7 +181,7 @@ struct AntiDebugging : public ModulePass {
   bool runOnFunction(Function &F) {
     BasicBlock *EntryBlock = &(F.getEntryBlock());
     Function *ADBCallBack = F.getParent()->getFunction("ADBCallBack");
-    Function *ADBInit     = F.getParent()->getFunction("InitADB");
+    Function *ADBInit = F.getParent()->getFunction("InitADB");
     if (ADBCallBack && ADBInit) {
       CallInst::Create(ADBInit, "",
                        cast<Instruction>(EntryBlock->getFirstInsertionPt()));
@@ -223,17 +223,21 @@ struct AntiDebugging : public ModulePass {
       {
         auto makeDarwinAA64Abort = [&]() -> std::string {
           uint32_t seed = cryptoutils->get_range(1, 0xBEFF);
-          uint32_t ec   = cryptoutils->get_range(256);
-          uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                        | 0x8000000000000000ull;
+          uint32_t ec = cryptoutils->get_range(256);
+          uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) &
+                         0x00007FFFFFFFFFFFull) |
+                        0x8000000000000000ull;
           std::string a;
           a += "mov x0, #" + std::to_string(ec) + "\n\t";
-          a += "mov x16, #1\n\t";               // SYS_exit
-          a += "svc #0x80\n\t";                 // Layer 1
+          a += "mov x16, #1\n\t"; // SYS_exit
+          a += "svc #0x80\n\t";   // Layer 1
           a += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-          a += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-          a += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-          a += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+          a += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) +
+               ", lsl #16\n\t";
+          a += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) +
+               ", lsl #32\n\t";
+          a += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) +
+               ", lsl #48\n\t";
           a += "br x15\n\t";
           uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
           a += ".inst 0x" + utohexstr(rndInst) + "\n\t";
@@ -264,9 +268,11 @@ struct AntiDebugging : public ModulePass {
         vm += makeDarwinAA64Abort();
         vm += "2:\n\t";
         InlineAsm *vmIA = InlineAsm::get(VoidFTy, vm,
-            "~{x0},~{x12},~{x13},~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}",
-            true, false);
-        CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value*>{}, "", lastTerm);
+                                         "~{x0},~{x12},~{x13},~{x14},~{x15},~{"
+                                         "x16},~{dirflag},~{fpsr},~{flags}",
+                                         true, false);
+        CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
+                         lastTerm);
       }
 
       std::string adbasm;
@@ -286,25 +292,30 @@ struct AntiDebugging : public ModulePass {
         parts.push_back("mov x16, #0\n\t");
       }
       shuffleBlocks(parts);
-      for (auto &p : parts) adbasm += p;
-      adbasm += "svc #" + std::to_string(cryptoutils->get_range(0x80, 0x200)) + "\n\t";
+      for (auto &p : parts)
+        adbasm += p;
+      adbasm += "svc #" + std::to_string(cryptoutils->get_range(0x80, 0x200)) +
+                "\n\t";
       adbasm += "mrs x9, cntvct_el0\n\t";
       uint32_t ji = cryptoutils->get_range(1, 0x100);
       adbasm += "add x9, x9, #" + std::to_string(ji) + "\n\t";
       adbasm += "sub x9, x9, #" + std::to_string(ji) + "\n\t";
-      InlineAsm *IA = InlineAsm::get(VoidFTy, adbasm,
+      InlineAsm *IA = InlineAsm::get(
+          VoidFTy, adbasm,
           "~{x0},~{x1},~{x2},~{x3},~{x9},~{x16},~{dirflag},~{fpsr},~{flags}",
           true, false);
-      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value*>{}, "", lastTerm);
+      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
+                       lastTerm);
 
-    // ── Darwin x86_64 ─────────────────────────────────────────────────────
+      // ── Darwin x86_64 ─────────────────────────────────────────────────────
     } else if (triple.isOSDarwin() && triple.getArch() == Triple::x86_64) {
       {
         auto makeDarwinX64Abort = [&]() -> std::string {
-          uint64_t ec  = cryptoutils->get_range(256);
-          uint64_t nc  = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                        | 0x8000000000000000ull;
-          uint32_t cs  = cryptoutils->get_range(1, 0xBEFF);
+          uint64_t ec = cryptoutils->get_range(256);
+          uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) &
+                         0x00007FFFFFFFFFFFull) |
+                        0x8000000000000000ull;
+          uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
           std::ostringstream ncoss;
           ncoss << std::hex << nc;
           std::string s;
@@ -340,12 +351,18 @@ struct AntiDebugging : public ModulePass {
         vm += "push %rbx\n\t";
         vm += "movl $$0x40000000, %eax\n\t";
         vm += "cpuid\n\t";
-        vm += "cmpl $$0x61774D56, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x4B4D564B, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x7263694D, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x786F4256, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x566E6558, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x54474354, %ebx\n\t"; vm += "je 2f\n\t";
+        vm += "cmpl $$0x61774D56, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x4B4D564B, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x7263694D, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x786F4256, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x566E6558, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x54474354, %ebx\n\t";
+        vm += "je 2f\n\t";
         vm += "pop %rbx\n\t";
         vm += "jmp 3f\n\t";
         vm += "2:\n\t";
@@ -353,9 +370,11 @@ struct AntiDebugging : public ModulePass {
         vm += makeDarwinX64Abort();
         vm += "3:\n\t";
         InlineAsm *vmIA = InlineAsm::get(VoidFTy, vm,
-            "~{rax},~{rcx},~{rdx},~{rdi},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
-            true, false, InlineAsm::AD_ATT);
-        CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value*>{}, "", lastTerm);
+                                         "~{rax},~{rcx},~{rdx},~{rdi},~{r14},~{"
+                                         "r15},~{dirflag},~{fpsr},~{flags}",
+                                         true, false, InlineAsm::AD_ATT);
+        CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
+                         lastTerm);
       }
 
       uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
@@ -371,25 +390,29 @@ struct AntiDebugging : public ModulePass {
       adbasm += "andl $$0xFFFF, %eax\n\t";
       adbasm += "addl $$" + std::to_string(noiseK) + ", %eax\n\t";
       adbasm += "subl $$" + std::to_string(noiseK) + ", %eax\n\t";
-      for (auto &p : parts) adbasm += p;
+      for (auto &p : parts)
+        adbasm += p;
       adbasm += "syscall\n\t";
-      InlineAsm *IA = InlineAsm::get(VoidFTy, adbasm,
+      InlineAsm *IA = InlineAsm::get(
+          VoidFTy, adbasm,
           "~{rax},~{rdi},~{rsi},~{rdx},~{rcx},~{dirflag},~{fpsr},~{flags}",
           true, false, InlineAsm::AD_ATT);
-      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value*>{}, "", lastTerm);
+      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
+                       lastTerm);
 
-    // ── Linux / Android x86_64 ────────────────────────────────────────────
+      // ── Linux / Android x86_64 ────────────────────────────────────────────
     } else if ((triple.isOSLinux() || triple.isAndroid()) &&
                triple.getArch() == Triple::x86_64) {
       auto makeLinAbort = [&]() -> std::string {
-        uint64_t lnc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                      | 0x8000000000000000ull;
+        uint64_t lnc =
+            ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+            0x8000000000000000ull;
         uint32_t lseed = cryptoutils->get_range(1, 0xBEFF);
         std::ostringstream lncoss;
         lncoss << std::hex << lnc;
         std::string s;
-        s += "movq $$157, %rax\n\t";  // SYS_prctl
-        s += "movq $$4, %rdi\n\t";    // PR_SET_DUMPABLE
+        s += "movq $$157, %rax\n\t"; // SYS_prctl
+        s += "movq $$4, %rdi\n\t";   // PR_SET_DUMPABLE
         s += "xorq %rsi, %rsi\n\t";
         s += "xorq %rdx, %rdx\n\t";
         s += "xorq %r10, %r10\n\t";
@@ -425,12 +448,18 @@ struct AntiDebugging : public ModulePass {
         vm += "push %rbx\n\t";
         vm += "movl $$0x40000000, %eax\n\t";
         vm += "cpuid\n\t";
-        vm += "cmpl $$0x61774D56, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x4B4D564B, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x7263694D, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x786F4256, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x566E6558, %ebx\n\t"; vm += "je 2f\n\t";
-        vm += "cmpl $$0x54474354, %ebx\n\t"; vm += "je 2f\n\t";
+        vm += "cmpl $$0x61774D56, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x4B4D564B, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x7263694D, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x786F4256, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x566E6558, %ebx\n\t";
+        vm += "je 2f\n\t";
+        vm += "cmpl $$0x54474354, %ebx\n\t";
+        vm += "je 2f\n\t";
         vm += "pop %rbx\n\t";
         vm += "jmp 3f\n\t";
         vm += "2:\n\t";
@@ -463,7 +492,7 @@ struct AntiDebugging : public ModulePass {
         vm += "jne 5f\n\t";
         vm += makeLinAbort();
         // Linux x86_64 Debug Register (DR0-DR3 / DR7) & INT3 Trap Check
-        vm += "movq $$101, %rax\n\t";  // ptrace PTRACE_TRACEME check
+        vm += "movq $$101, %rax\n\t"; // ptrace PTRACE_TRACEME check
         vm += "xorq %rdi, %rdi\n\t";
         vm += "xorq %rsi, %rsi\n\t";
         vm += "syscall\n\t";
@@ -471,20 +500,25 @@ struct AntiDebugging : public ModulePass {
         vm += "js 6f\n\t";
         vm += "jmp 7f\n\t";
         vm += "6:\n\t";
-        // Dynamically compute randomized corrupt target address to prevent static binary patching
-        uint64_t rndTarget = (cryptoutils->get_uint64_t() | 0x8000000000000000ULL) & ~0xFFFULL;
+        // Dynamically compute randomized corrupt target address to prevent
+        // static binary patching
+        uint64_t rndTarget =
+            (cryptoutils->get_uint64_t() | 0x8000000000000000ULL) & ~0xFFFULL;
         uint32_t stackOffset = cryptoutils->get_range(0x800, 0x4000) & ~0x7u;
         vm += "addq $$" + std::to_string(stackOffset) + ", %rsp\n\t";
         vm += "movabsq $$0x" + utohexstr(rndTarget) + ", %rax\n\t";
         vm += "jmpq *%rax\n\t";
         vm += "7:\n\t";
-        InlineAsm *vmIA = InlineAsm::get(VoidFTy, vm,
-            "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r12},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
-            true, false, InlineAsm::AD_ATT);
-        CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value*>{}, "", lastTerm);
+        InlineAsm *vmIA =
+            InlineAsm::get(VoidFTy, vm,
+                           "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r12},~{"
+                           "r14},~{r15},~{dirflag},~{fpsr},~{flags}",
+                           true, false, InlineAsm::AD_ATT);
+        CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
+                         lastTerm);
       }
 
-      uint64_t noiseK   = cryptoutils->get_uint32_t() & 0xFFFF;
+      uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
       uint64_t tsThresh = 0x100000ULL;
       std::string adbasm;
       adbasm += "rdtsc\n\t";
@@ -511,18 +545,23 @@ struct AntiDebugging : public ModulePass {
       adbasm += "1:\n\t";
       adbasm += makeLinAbort();
       adbasm += "2:\n\t";
-      InlineAsm *IA = InlineAsm::get(VoidFTy, adbasm,
-          "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r11},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
-          true, false, InlineAsm::AD_ATT);
-      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value*>{}, "", lastTerm);
+      InlineAsm *IA =
+          InlineAsm::get(VoidFTy, adbasm,
+                         "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r11},~{"
+                         "r14},~{r15},~{dirflag},~{fpsr},~{flags}",
+                         true, false, InlineAsm::AD_ATT);
+      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
+                       lastTerm);
 
-    // ── Linux / Android AArch64 ───────────────────────────────────────────
-    } else if ((triple.isOSLinux() || triple.isAndroid()) && triple.isAArch64()) {
+      // ── Linux / Android AArch64 ───────────────────────────────────────────
+    } else if ((triple.isOSLinux() || triple.isAndroid()) &&
+               triple.isAArch64()) {
       auto makeAA64Abort = [&]() -> std::string {
         uint32_t aa64seed = cryptoutils->get_range(1, 0xBEFF);
         uint32_t brkImm = cryptoutils->get_range(0x100, 0xFFFF);
-        uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                      | 0x8000000000000000ull;
+        uint64_t nc =
+            ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+            0x8000000000000000ull;
         std::string a;
         a += "mov x8, #167\n\t";
         a += "mov x0, #4\n\t";
@@ -533,9 +572,12 @@ struct AntiDebugging : public ModulePass {
         a += "svc #0\n\t";
         a += "brk #" + std::to_string(brkImm) + "\n\t";
         a += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-        a += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-        a += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-        a += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+        a += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) +
+             ", lsl #16\n\t";
+        a += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) +
+             ", lsl #32\n\t";
+        a += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) +
+             ", lsl #48\n\t";
         a += "br x15\n\t";
         uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
         a += ".inst 0x" + utohexstr(rndInst) + "\n\t";
@@ -566,10 +608,13 @@ struct AntiDebugging : public ModulePass {
         vm += "b.lo 2f\n\t";
         vm += makeAA64Abort();
         vm += "2:\n\t";
-        InlineAsm *vmIA = InlineAsm::get(VoidFTy, vm,
-            "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x12},~{x13},~{x14},~{x15},~{dirflag},~{fpsr},~{flags}",
-            true, false);
-        CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value*>{}, "", lastTerm);
+        InlineAsm *vmIA =
+            InlineAsm::get(VoidFTy, vm,
+                           "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x12},~{x13},~"
+                           "{x14},~{x15},~{dirflag},~{fpsr},~{flags}",
+                           true, false);
+        CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
+                         lastTerm);
       }
 
       uint32_t noiseImm = cryptoutils->get_range(1, 0x100);
@@ -593,18 +638,23 @@ struct AntiDebugging : public ModulePass {
       adbasm += "1:\n\t";
       adbasm += makeAA64Abort();
       adbasm += "2:\n\t";
-      InlineAsm *IA = InlineAsm::get(VoidFTy, adbasm,
-          "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x10},~{x11},~{x12},~{x14},~{x15},~{dirflag},~{fpsr},~{flags}",
+      InlineAsm *IA = InlineAsm::get(
+          VoidFTy, adbasm,
+          "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x10},~{x11},~{x12},~{"
+          "x14},~{x15},~{dirflag},~{fpsr},~{flags}",
           true, false);
-      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value*>{}, "", lastTerm);
+      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
+                       lastTerm);
 
-    // ── Windows x86_64 ────────────────────────────────────────────────────
+      // ── Windows x86_64 ────────────────────────────────────────────────────
     } else if (triple.isOSWindows() && triple.getArch() == Triple::x86_64) {
       auto winAbort = [&]() -> std::string {
-        uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                     | 0x8000000000000000ull;
+        uint64_t nc =
+            ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+            0x8000000000000000ull;
         uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
-        uint64_t privAddr = 0xFFFFF80000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
+        uint64_t privAddr = 0xFFFFF80000000000ull |
+                            (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
         std::ostringstream ncoss, privoss;
         ncoss << std::hex << nc;
         privoss << std::hex << privAddr;
@@ -650,7 +700,8 @@ struct AntiDebugging : public ModulePass {
       adbasm += "jz 3f\n\t";
       adbasm += winAbort();
       adbasm += "3:\n\t";
-      // ── Windows KUSER_SHARED_DATA 0x7FFE02D4 (KdDebuggerEnabled) & 0x7FFE02D0 (BeingDebugged)
+      // ── Windows KUSER_SHARED_DATA 0x7FFE02D4 (KdDebuggerEnabled) &
+      // 0x7FFE02D0 (BeingDebugged)
       adbasm += "movabsq $$0x7FFE02D4, %rax\n\t";
       adbasm += "movzbl (%rax), %ecx\n\t";
       adbasm += "testl %ecx, %ecx\n\t";
@@ -664,18 +715,22 @@ struct AntiDebugging : public ModulePass {
       adbasm += winAbort();
       adbasm += "5:\n\t";
 
-      // ── Windows PEB+0xBC NtGlobalFlag (FLG_HEAP_ENABLE_TAIL_CHECK 0x10 | FLG_HEAP_ENABLE_FREE_CHECK 0x20 | FLG_HEAP_VALIDATE_PARAMETERS 0x40 = 0x70)
-      adbasm += "movq %gs:96, %rax\n\t"; // PEB
+      // ── Windows PEB+0xBC NtGlobalFlag (FLG_HEAP_ENABLE_TAIL_CHECK 0x10 |
+      // FLG_HEAP_ENABLE_FREE_CHECK 0x20 | FLG_HEAP_VALIDATE_PARAMETERS 0x40 =
+      // 0x70)
+      adbasm += "movq %gs:96, %rax\n\t";    // PEB
       adbasm += "movl 188(%rax), %ecx\n\t"; // NtGlobalFlag @ 0xBC (188)
       adbasm += "andl $$0x70, %ecx\n\t";
       adbasm += "jz 6f\n\t";
       adbasm += winAbort();
       adbasm += "6:\n\t";
 
-      // ── Windows Hardware Debug Registers (DR0 - DR3 & DR7) check via CONTEXT or thread structure
-      // Check if hardware debug registers DR0-DR3 / DR7 are set via GetThreadContext / NtGetContextThread
-      adbasm += "movq %gs:48, %rax\n\t"; // TEB
-      adbasm += "movq 0x1478(%rax), %rcx\n\t"; // Decls / Debugger active field check in TEB/PEB
+      // ── Windows Hardware Debug Registers (DR0 - DR3 & DR7) check via CONTEXT
+      // or thread structure Check if hardware debug registers DR0-DR3 / DR7 are
+      // set via GetThreadContext / NtGetContextThread
+      adbasm += "movq %gs:48, %rax\n\t";       // TEB
+      adbasm += "movq 0x1478(%rax), %rcx\n\t"; // Decls / Debugger active field
+                                               // check in TEB/PEB
       adbasm += "testq %rcx, %rcx\n\t";
       adbasm += "jz 7f\n\t";
       adbasm += winAbort();
@@ -686,24 +741,31 @@ struct AntiDebugging : public ModulePass {
       adbasm += "andl $$0xFFFF, %eax\n\t";
       adbasm += "addl $$" + std::to_string(noiseK) + ", %eax\n\t";
       adbasm += "subl $$" + std::to_string(noiseK) + ", %eax\n\t";
-      InlineAsm *IA = InlineAsm::get(VoidFTy, adbasm,
+      InlineAsm *IA = InlineAsm::get(
+          VoidFTy, adbasm,
           "~{rax},~{rcx},~{rdx},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
           true, false, InlineAsm::AD_ATT);
-      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value*>{}, "", lastTerm);
+      CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
+                       lastTerm);
     }
   }
 
   void InjectScatteredDebugChecks(Function *F, Instruction *lastTerm) {
     SmallVector<BasicBlock *, 16> scatCands;
     for (BasicBlock &BB : *F) {
-      if (&BB == &F->getEntryBlock()) continue;
-      if (&BB == lastTerm->getParent()) continue;
-      if (!BB.getTerminator()) continue;
+      if (&BB == &F->getEntryBlock())
+        continue;
+      if (&BB == lastTerm->getParent())
+        continue;
+      if (!BB.getTerminator())
+        continue;
       StringRef nm = BB.getName();
-      if (nm.contains("scatter") || nm.contains("Handler")) continue;
+      if (nm.contains("scatter") || nm.contains("Handler"))
+        continue;
       scatCands.push_back(&BB);
     }
-    if (scatCands.empty()) return;
+    if (scatCands.empty())
+      return;
 
     for (unsigned i = (unsigned)scatCands.size() - 1; i > 0; --i)
       std::swap(scatCands[i], scatCands[cryptoutils->get_range(i + 1)]);
@@ -738,11 +800,14 @@ struct AntiDebugging : public ModulePass {
         sasm += "jb 1f\n\t";
         sasm += GetPlatformAbort(triple);
         sasm += "1:\n\t";
-        // Clobbers for x86_64: must include all scratch regs used by abort (rdi, rsi, r10, etc.)
-        constraints = "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r11},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}";
+        // Clobbers for x86_64: must include all scratch regs used by abort
+        // (rdi, rsi, r10, etc.)
+        constraints = "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r11},~{r14},"
+                      "~{r15},~{dirflag},~{fpsr},~{flags}";
       } else if (triple.isAArch64()) {
         sasm += "mrs x11, cntvct_el0\n\t";
-        for (int i = 0; i < 8; i++) sasm += "nop\n\t";
+        for (int i = 0; i < 8; i++)
+          sasm += "nop\n\t";
         sasm += "mrs x12, cntvct_el0\n\t";
         sasm += "sub x12, x12, x11\n\t";
         sasm += "mov x13, #0x20000\n\t";
@@ -750,14 +815,19 @@ struct AntiDebugging : public ModulePass {
         sasm += "b.lo 1f\n\t";
         sasm += GetPlatformAbort(triple);
         sasm += "1:\n\t";
-        // Clobbers for AArch64: include x0, x8, x16 (syscall regs) and chaos regs
-        constraints = "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}";
+        // Clobbers for AArch64: include x0, x8, x16 (syscall regs) and chaos
+        // regs
+        constraints = "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x11},~{x12},~{x13}"
+                      ",~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}";
       }
 
       if (!sasm.empty()) {
         InlineAsm *sIA = InlineAsm::get(VoidFTy, sasm, constraints, true, false,
-                                        triple.getArch() == Triple::x86_64 ? InlineAsm::AD_ATT : InlineAsm::AD_ATT);
-        CallInst::Create(sIA->getFunctionType(), sIA, ArrayRef<Value*>{}, "", sterm);
+                                        triple.getArch() == Triple::x86_64
+                                            ? InlineAsm::AD_ATT
+                                            : InlineAsm::AD_ATT);
+        CallInst::Create(sIA->getFunctionType(), sIA, ArrayRef<Value *>{}, "",
+                         sterm);
       }
     }
   }
@@ -766,16 +836,21 @@ struct AntiDebugging : public ModulePass {
     if (T.isOSDarwin()) {
       if (T.isAArch64()) {
         uint32_t seed = cryptoutils->get_range(1, 0xBEFF);
-        uint32_t ec   = cryptoutils->get_range(256);
-        uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) | 0x8000000000000000ull;
+        uint32_t ec = cryptoutils->get_range(256);
+        uint64_t nc =
+            ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+            0x8000000000000000ull;
         std::string a;
         a += "mov x0, #" + std::to_string(ec) + "\n\t";
         a += "mov x16, #1\n\t";
         a += "svc #0x80\n\t";
         a += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-        a += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-        a += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-        a += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+        a += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) +
+             ", lsl #16\n\t";
+        a += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) +
+             ", lsl #32\n\t";
+        a += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) +
+             ", lsl #48\n\t";
         a += "br x15\n\t";
         uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
         a += ".inst 0x" + utohexstr(rndInst) + "\n\t";
@@ -790,9 +865,11 @@ struct AntiDebugging : public ModulePass {
         a += "b 91b\n\t";
         return a;
       } else {
-        uint64_t ec  = cryptoutils->get_range(256);
-        uint64_t nc  = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) | 0x8000000000000000ull;
-        uint32_t cs  = cryptoutils->get_range(1, 0xBEFF);
+        uint64_t ec = cryptoutils->get_range(256);
+        uint64_t nc =
+            ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+            0x8000000000000000ull;
+        uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
         std::ostringstream ncoss;
         ncoss << std::hex << nc;
         std::string s;
@@ -816,9 +893,12 @@ struct AntiDebugging : public ModulePass {
         return s;
       }
     } else if (T.isOSWindows()) {
-      uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) | 0x8000000000000000ull;
+      uint64_t nc =
+          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+          0x8000000000000000ull;
       uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
-      uint64_t privAddr = 0xFFFFF80000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
+      uint64_t privAddr =
+          0xFFFFF80000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
       std::ostringstream ncoss, privoss;
       ncoss << std::hex << nc;
       privoss << std::hex << privAddr;
@@ -846,9 +926,12 @@ struct AntiDebugging : public ModulePass {
         s += "mov w16, #7\n\t";
         s += "brk #0xF003\n\t";
         s += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-        s += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-        s += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-        s += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+        s += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) +
+             ", lsl #16\n\t";
+        s += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) +
+             ", lsl #32\n\t";
+        s += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) +
+             ", lsl #48\n\t";
         s += "br x15\n\t";
         uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
         s += ".inst 0x" + utohexstr(rndInst) + "\n\t";
@@ -865,7 +948,9 @@ struct AntiDebugging : public ModulePass {
       return s;
     } else {
       if (T.getArch() == Triple::x86_64) {
-        uint64_t lnc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) | 0x8000000000000000ull;
+        uint64_t lnc =
+            ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+            0x8000000000000000ull;
         uint32_t lseed = cryptoutils->get_range(1, 0xBEFF);
         std::ostringstream lncoss;
         lncoss << std::hex << lnc;
@@ -895,7 +980,9 @@ struct AntiDebugging : public ModulePass {
       } else {
         uint32_t aa64seed = cryptoutils->get_range(1, 0xBEFF);
         uint32_t brkImm = cryptoutils->get_range(0x100, 0xFFFF);
-        uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) | 0x8000000000000000ull;
+        uint64_t nc =
+            ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+            0x8000000000000000ull;
         std::string a;
         a += "mov x8, #167\n\t";
         a += "mov x0, #4\n\t";
@@ -906,9 +993,12 @@ struct AntiDebugging : public ModulePass {
         a += "svc #0\n\t";
         a += "brk #" + std::to_string(brkImm) + "\n\t";
         a += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-        a += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-        a += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-        a += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+        a += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) +
+             ", lsl #16\n\t";
+        a += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) +
+             ", lsl #32\n\t";
+        a += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) +
+             ", lsl #48\n\t";
         a += "br x15\n\t";
         uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
         a += ".inst 0x" + utohexstr(rndInst) + "\n\t";

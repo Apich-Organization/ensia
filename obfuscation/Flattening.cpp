@@ -52,11 +52,13 @@ bool Flattening::runOnFunction(Function &F) {
     // Flattening's LowerSwitchPass expands the CSM switch into a binary
     // comparison tree → O(N²)+ IR growth.  Skip gracefully.
     if (F.hasFnAttribute("ensia.csm.done")) {
-      if (ObfVerbose) errs() << "ControlFlowFlattening: skipping " << F.getName()
-             << " (already flattened by ChaosStateMachine)\n";
+      if (ObfVerbose)
+        errs() << "ControlFlowFlattening: skipping " << F.getName()
+               << " (already flattened by ChaosStateMachine)\n";
       return false;
     }
-    if (ObfVerbose) errs() << "Running ControlFlowFlattening On " << F.getName() << "\n";
+    if (ObfVerbose)
+      errs() << "Running ControlFlowFlattening On " << F.getName() << "\n";
     flatten(tmp);
   }
 
@@ -84,9 +86,10 @@ void Flattening::flatten(Function *f) {
 
   for (BasicBlock &BB : *f) {
     if (BB.isEHPad() || BB.isLandingPad()) {
-      if (ObfVerbose) errs() << f->getName()
-             << " Contains Exception Handing Instructions and is unsupported "
-                "for flattening in the open-source version of Ensia.\n";
+      if (ObfVerbose)
+        errs() << f->getName()
+               << " Contains Exception Handing Instructions and is unsupported "
+                  "for flattening in the open-source version of Ensia.\n";
       return;
     }
     if (!isa<BranchInst>(BB.getTerminator()) &&
@@ -158,16 +161,18 @@ void Flattening::flatten(Function *f) {
   {
     IRBuilder<> IRBEnd(loopEnd);
     AllocaInst *noiseSlot = new AllocaInst(
-        Type::getInt32Ty(f->getContext()), DL.getAllocaAddrSpace(),
-        "fla.noise", loopEnd->getParent()->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
+        Type::getInt32Ty(f->getContext()), DL.getAllocaAddrSpace(), "fla.noise",
+        loopEnd->getParent()->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
     // Write a constant, then XOR it with itself (result always 0), store back.
     // Volatile prevents the optimizer from seeing through it completely.
     Value *noiseSeed = ConstantInt::get(Type::getInt32Ty(f->getContext()),
                                         cryptoutils->get_uint32_t());
     new StoreInst(noiseSeed, noiseSlot, /*volatile=*/true, loopEnd);
-    LoadInst *noiseLoad = new LoadInst(Type::getInt32Ty(f->getContext()),
-                                       noiseSlot, "fla.nld", /*volatile=*/true, loopEnd);
-    BinaryOperator::Create(Instruction::Xor, noiseLoad, noiseLoad, "fla.nxr", loopEnd);
+    LoadInst *noiseLoad =
+        new LoadInst(Type::getInt32Ty(f->getContext()), noiseSlot, "fla.nld",
+                     /*volatile=*/true, loopEnd);
+    BinaryOperator::Create(Instruction::Xor, noiseLoad, noiseLoad, "fla.nxr",
+                           loopEnd);
   }
 
   // loopEnd jump to loopEntry
@@ -219,10 +224,10 @@ void Flattening::flatten(Function *f) {
 
       if (numCase) {
         i->getTerminator()->eraseFromParent();
-        new StoreInst(
-            numCase,
-            new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
-            i);
+        new StoreInst(numCase,
+                      new LoadInst(switchVarAddr->getAllocatedType(),
+                                   switchVarAddr, "", i),
+                      i);
         BranchInst::Create(loopEnd, i);
       } else {
         // Successor is outside switch — jump directly
@@ -254,28 +259,27 @@ void Flattening::flatten(Function *f) {
       Value *cond = br->getCondition();
 
       if (numCaseTrue && numCaseFalse) {
-        SelectInst *sel =
-            SelectInst::Create(cond, numCaseTrue, numCaseFalse, "",
-                               i->getTerminator());
+        SelectInst *sel = SelectInst::Create(cond, numCaseTrue, numCaseFalse,
+                                             "", i->getTerminator());
         i->getTerminator()->eraseFromParent();
-        new StoreInst(
-            sel,
-            new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
-            i);
+        new StoreInst(sel,
+                      new LoadInst(switchVarAddr->getAllocatedType(),
+                                   switchVarAddr, "", i),
+                      i);
         BranchInst::Create(loopEnd, i);
       } else if (numCaseTrue && !numCaseFalse) {
         i->getTerminator()->eraseFromParent();
-        new StoreInst(
-            numCaseTrue,
-            new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
-            i);
+        new StoreInst(numCaseTrue,
+                      new LoadInst(switchVarAddr->getAllocatedType(),
+                                   switchVarAddr, "", i),
+                      i);
         BranchInst::Create(loopEnd, succFalse, cond, i);
       } else if (!numCaseTrue && numCaseFalse) {
         i->getTerminator()->eraseFromParent();
-        new StoreInst(
-            numCaseFalse,
-            new LoadInst(switchVarAddr->getAllocatedType(), switchVarAddr, "", i),
-            i);
+        new StoreInst(numCaseFalse,
+                      new LoadInst(switchVarAddr->getAllocatedType(),
+                                   switchVarAddr, "", i),
+                      i);
         BranchInst::Create(succTrue, loopEnd, cond, i);
       } else {
         i->getTerminator()->eraseFromParent();
@@ -284,7 +288,9 @@ void Flattening::flatten(Function *f) {
       continue;
     }
   }
-  if (ObfVerbose) errs() << "Fixing Stack\n";
+  if (ObfVerbose)
+    errs() << "Fixing Stack\n";
   fixStack(f);
-  if (ObfVerbose) errs() << "Fixed Stack\n";
+  if (ObfVerbose)
+    errs() << "Fixed Stack\n";
 }

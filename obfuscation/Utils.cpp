@@ -34,17 +34,17 @@ bool ObfuscationMaxMode = false;
 bool ObfVerbose = false;
 bool ObfTrace = false;
 
-// ─── manuallyLowerSwitches ────────────────────────────────────────────────────
-// Replace every SwitchInst in F with a binary-search-tree of ICmp+BranchInsts.
-// Used by ChaosStateMachine and Flattening instead of the nested
-// PassBuilder/LowerSwitchPass approach, which deadlocks in LLVM 22.x when
-// invoked from inside an already-running new-PM pass (shared AnalysisManager
-// mutex).
+// ─── manuallyLowerSwitches
+// ──────────────────────────────────────────────────── Replace every SwitchInst
+// in F with a binary-search-tree of ICmp+BranchInsts. Used by ChaosStateMachine
+// and Flattening instead of the nested PassBuilder/LowerSwitchPass approach,
+// which deadlocks in LLVM 22.x when invoked from inside an already-running
+// new-PM pass (shared AnalysisManager mutex).
 
-static void lowerSwitchBST(
-    Value *cond, BasicBlock *switchBB, BasicBlock *defaultBB,
-    SmallVectorImpl<std::pair<ConstantInt *, BasicBlock *>> &cases,
-    int lo, int hi, Function *F) {
+static void
+lowerSwitchBST(Value *cond, BasicBlock *switchBB, BasicBlock *defaultBB,
+               SmallVectorImpl<std::pair<ConstantInt *, BasicBlock *>> &cases,
+               int lo, int hi, Function *F) {
   if (lo > hi) {
     BranchInst::Create(defaultBB, switchBB);
     return;
@@ -58,11 +58,11 @@ static void lowerSwitchBST(
   int mid = (lo + hi) / 2;
   IRBuilder<> IRB(switchBB);
   Value *le = IRB.CreateICmpSLE(cond, cases[mid].first);
-  BasicBlock *leftBB  = BasicBlock::Create(F->getContext(), "sw.bst.l", F);
+  BasicBlock *leftBB = BasicBlock::Create(F->getContext(), "sw.bst.l", F);
   BasicBlock *rightBB = BasicBlock::Create(F->getContext(), "sw.bst.r", F);
   BranchInst::Create(leftBB, rightBB, le, switchBB);
-  lowerSwitchBST(cond, leftBB,  defaultBB, cases, lo,    mid,   F);
-  lowerSwitchBST(cond, rightBB, defaultBB, cases, mid+1, hi,    F);
+  lowerSwitchBST(cond, leftBB, defaultBB, cases, lo, mid, F);
+  lowerSwitchBST(cond, rightBB, defaultBB, cases, mid + 1, hi, F);
 }
 
 void manuallyLowerSwitches(Function *F) {
@@ -72,8 +72,8 @@ void manuallyLowerSwitches(Function *F) {
       switches.push_back(SI);
 
   for (SwitchInst *SI : switches) {
-    BasicBlock *switchBB  = SI->getParent();
-    Value      *cond      = SI->getCondition();
+    BasicBlock *switchBB = SI->getParent();
+    Value *cond = SI->getCondition();
     BasicBlock *defaultBB = SI->getDefaultDest();
 
     SmallVector<std::pair<ConstantInt *, BasicBlock *>, 16> cases;
@@ -84,8 +84,8 @@ void manuallyLowerSwitches(Function *F) {
     });
 
     SI->eraseFromParent();
-    lowerSwitchBST(cond, switchBB, defaultBB, cases, 0,
-                   (int)cases.size() - 1, F);
+    lowerSwitchBST(cond, switchBB, defaultBB, cases, 0, (int)cases.size() - 1,
+                   F);
   }
 }
 
@@ -402,7 +402,7 @@ void writeAnnotationMetadata(Function *f, std::string annotation) {
 // Conservative rule: any user that is not one of the above four categories is
 // treated as "may be accessed from anywhere" → return false immediately.
 bool AreUsersInOneFunction(GlobalVariable *GV) {
-  SmallPtrSet<const Function *, 6>  userFunctions;
+  SmallPtrSet<const Function *, 6> userFunctions;
   SmallPtrSet<const Value *, 32> visited;
 
   // Returns false if a non-handled user class is encountered.

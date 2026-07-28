@@ -26,8 +26,8 @@
 #include "llvm/IR/NoFolder.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
-#include <cstring>  // memcpy for float/double noise
-#include <utility>  // std::pair
+#include <cstring> // memcpy for float/double noise
+#include <utility> // std::pair
 
 using namespace llvm;
 
@@ -51,14 +51,15 @@ static cl::opt<bool>
                cl::init(false), cl::Optional);
 static bool VecShuffleTemp = false;
 
-static cl::opt<bool>
-    VecICmp("vec_icmp",
-            cl::desc("[VecObf] Also lift integer comparison (icmp) instructions "
-                     "to vector comparisons"),
-            cl::init(true), cl::Optional);
+static cl::opt<bool> VecICmp(
+    "vec_icmp",
+    cl::desc("[VecObf] Also lift integer comparison (icmp) instructions "
+             "to vector comparisons"),
+    cl::init(true), cl::Optional);
 static bool VecICmpTemp = true;
 
-// ─── Width → lane count ───────────────────────────────────────────────────────
+// ─── Width → lane count
+// ───────────────────────────────────────────────────────
 
 static unsigned lanesFor(unsigned elemBits, unsigned totalBits) {
   unsigned lanes = totalBits / elemBits;
@@ -70,7 +71,8 @@ static unsigned lanesFor(unsigned elemBits, unsigned totalBits) {
 static Constant *randomNoise(Type *elemTy, unsigned elemBits) {
   if (elemTy->isIntegerTy()) {
     uint64_t v = cryptoutils->get_uint64_t();
-    if (elemBits < 64) v &= (1ULL << elemBits) - 1ULL;
+    if (elemBits < 64)
+      v &= (1ULL << elemBits) - 1ULL;
     return ConstantInt::get(elemTy, v);
   }
   if (elemTy->isFloatTy()) {
@@ -94,9 +96,8 @@ static Constant *randomNoise(Type *elemTy, unsigned elemBits) {
 
 static Value *buildNoiseVector(IRBuilder<NoFolder> &IRB, Value *realOp,
                                unsigned K, unsigned lanes, Type *elemTy) {
-  unsigned elemBits = elemTy->isIntegerTy()
-                          ? elemTy->getIntegerBitWidth()
-                          : (elemTy->isFloatTy() ? 32 : 64);
+  unsigned elemBits = elemTy->isIntegerTy() ? elemTy->getIntegerBitWidth()
+                                            : (elemTy->isFloatTy() ? 32 : 64);
   Type *vecTy = FixedVectorType::get(elemTy, lanes);
   Value *vec = UndefValue::get(vecTy);
   for (unsigned i = 0; i < lanes; i++) {
@@ -110,7 +111,7 @@ static Value *buildNoiseVector(IRBuilder<NoFolder> &IRB, Value *realOp,
 // Used for broadcast shift-amounts so no lane sees an out-of-range shift.
 
 static Value *buildUniformVector(IRBuilder<NoFolder> &IRB, Value *elem,
-                                  unsigned lanes, Type *elemTy) {
+                                 unsigned lanes, Type *elemTy) {
   Type *vecTy = FixedVectorType::get(elemTy, lanes);
   Value *vec = UndefValue::get(vecTy);
   for (unsigned i = 0; i < lanes; i++)
@@ -118,22 +119,27 @@ static Value *buildUniformVector(IRBuilder<NoFolder> &IRB, Value *elem,
   return vec;
 }
 
-// ─── Apply random shufflevector permutation ───────────────────────────────────
-// Returns {shuffled vector, new lane index for the real result}.
+// ─── Apply random shufflevector permutation
+// ─────────────────────────────────── Returns {shuffled vector, new lane index
+// for the real result}.
 
-static std::pair<Value *, unsigned>
-applyShuffleNoise(IRBuilder<NoFolder> &IRB, Value *vec, unsigned K,
-                  unsigned lanes) {
+static std::pair<Value *, unsigned> applyShuffleNoise(IRBuilder<NoFolder> &IRB,
+                                                      Value *vec, unsigned K,
+                                                      unsigned lanes) {
   // Build a random bijective permutation of [0, lanes)
   SmallVector<int, 16> perm(lanes);
-  for (unsigned i = 0; i < lanes; i++) perm[i] = (int)i;
+  for (unsigned i = 0; i < lanes; i++)
+    perm[i] = (int)i;
   for (unsigned i = lanes; i > 1; i--)
     std::swap(perm[i - 1], perm[cryptoutils->get_range(i)]);
 
   // Find where K ended up in the permuted order (inverse permutation lookup)
   unsigned newK = K;
   for (unsigned i = 0; i < lanes; i++)
-    if ((unsigned)perm[i] == K) { newK = i; break; }
+    if ((unsigned)perm[i] == K) {
+      newK = i;
+      break;
+    }
 
   Value *shuffled = IRB.CreateShuffleVector(vec, perm, "");
   return {shuffled, newK};
@@ -142,7 +148,7 @@ applyShuffleNoise(IRBuilder<NoFolder> &IRB, Value *vec, unsigned K,
 // ─── Lift a scalar BinaryOperator to vector lane K ───────────────────────────
 
 static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
-                               bool doShuffle) {
+                              bool doShuffle) {
   Type *scalarTy = bo->getType();
   unsigned op = bo->getOpcode();
   bool isShift = (op == Instruction::Shl || op == Instruction::LShr ||
@@ -177,8 +183,12 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
   Value *a = bo->getOperand(0);
   Value *b = bo->getOperand(1);
 
-  // Multi-lane cross-talk dependency: fill all lanes with a-dependent and b-dependent values
-  Constant *randOffset = scalarTy->isIntegerTy() ? ConstantInt::get(scalarTy, cryptoutils->get_uint64_t()) : nullptr;
+  // Multi-lane cross-talk dependency: fill all lanes with a-dependent and
+  // b-dependent values
+  Constant *randOffset =
+      scalarTy->isIntegerTy()
+          ? ConstantInt::get(scalarTy, cryptoutils->get_uint64_t())
+          : nullptr;
   Type *vecTy = FixedVectorType::get(scalarTy, lanes);
   Value *va = UndefValue::get(vecTy);
   Value *vb = UndefValue::get(vecTy);
@@ -200,14 +210,14 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
   }
 
   // Vector operation (same opcode as original scalar)
-  Value *vres = IRB.CreateBinOp(
-      static_cast<Instruction::BinaryOps>(op), va, vb, "");
+  Value *vres =
+      IRB.CreateBinOp(static_cast<Instruction::BinaryOps>(op), va, vb, "");
 
   // Optional shuffle noise: permute the result vector before extraction
   unsigned extractLane = K;
   if (doShuffle) {
     std::pair<Value *, unsigned> shuf = applyShuffleNoise(IRB, vres, K, lanes);
-    vres        = shuf.first;
+    vres = shuf.first;
     extractLane = shuf.second;
   }
 
@@ -220,9 +230,10 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
 // ─── Lift an ICmpInst to a vector comparison with bitmask reduction ─────────
 
 static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
-                              bool doShuffle) {
+                             bool doShuffle) {
   Type *scalarTy = ici->getOperand(0)->getType();
-  if (!scalarTy->isIntegerTy()) return false;
+  if (!scalarTy->isIntegerTy())
+    return false;
   unsigned elemBits = scalarTy->getIntegerBitWidth();
   if (elemBits != 8 && elemBits != 16 && elemBits != 32 && elemBits != 64)
     return false;
@@ -244,22 +255,24 @@ static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
   unsigned extractLane = K;
   if (doShuffle) {
     std::pair<Value *, unsigned> shuf = applyShuffleNoise(IRB, vcmp, K, lanes);
-    vcmp        = shuf.first;
+    vcmp = shuf.first;
     extractLane = shuf.second;
   }
 
-  // Bitmask Reduction: Convert <N x i1> to scalar integer mask without naive extract
-  // ZExt <N x i1> -> <N x i32>, then BitCast / Reduce OR to eliminate plain control flow instructions
+  // Bitmask Reduction: Convert <N x i1> to scalar integer mask without naive
+  // extract ZExt <N x i1> -> <N x i32>, then BitCast / Reduce OR to eliminate
+  // plain control flow instructions
   Type *i32Ty = Type::getInt32Ty(ici->getContext());
   Type *vec32Ty = FixedVectorType::get(i32Ty, lanes);
   Value *zextVec = IRB.CreateZExt(vcmp, vec32Ty);
   Value *maskVal = IRB.CreateExtractElement(zextVec, (uint64_t)extractLane, "");
-  Value *result  = IRB.CreateICmpNE(maskVal, ConstantInt::get(i32Ty, 0), "");
+  Value *result = IRB.CreateICmpNE(maskVal, ConstantInt::get(i32Ty, 0), "");
   ici->replaceAllUsesWith(result);
   return true;
 }
 
-// ─── FunctionPass ─────────────────────────────────────────────────────────────
+// ─── FunctionPass
+// ─────────────────────────────────────────────────────────────
 
 namespace {
 struct VectorObfuscation : public FunctionPass {
@@ -273,7 +286,8 @@ struct VectorObfuscation : public FunctionPass {
       return false;
 
     {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       if (!toObfuscateUint32Option(&F, "vec_prob", &VecProbRateTemp))
         VecProbRateTemp = ec.vec.probability.value_or((uint32_t)VecProbRate);
       if (!toObfuscateUint32Option(&F, "vec_width", &VecWidthTemp))
@@ -286,26 +300,30 @@ struct VectorObfuscation : public FunctionPass {
 
     if (ObfuscationMaxMode) {
       VecProbRateTemp = 80;
-      VecWidthTemp    = 256;
-      VecShuffleTemp  = true;
-      VecICmpTemp     = true;
+      VecWidthTemp = 256;
+      VecShuffleTemp = true;
+      VecICmpTemp = true;
     }
 
     VecProbRateTemp = std::min(VecProbRateTemp, (uint32_t)100);
     // Normalise width to supported SIMD widths
-    if      (VecWidthTemp < 128)  VecWidthTemp = 128;
-    else if (VecWidthTemp < 256)  VecWidthTemp = 128;
-    else if (VecWidthTemp < 512)  VecWidthTemp = 256;
-    else                          VecWidthTemp = 512;
+    if (VecWidthTemp < 128)
+      VecWidthTemp = 128;
+    else if (VecWidthTemp < 256)
+      VecWidthTemp = 128;
+    else if (VecWidthTemp < 512)
+      VecWidthTemp = 256;
+    else
+      VecWidthTemp = 512;
 
-    if (ObfVerbose) errs() << "Running VectorObfuscation On " << F.getName()
-           << " (width=" << VecWidthTemp
-           << (VecShuffleTemp ? ", shuffle" : "")
-           << ")\n";
+    if (ObfVerbose)
+      errs() << "Running VectorObfuscation On " << F.getName()
+             << " (width=" << VecWidthTemp
+             << (VecShuffleTemp ? ", shuffle" : "") << ")\n";
 
     // ── Collect eligible instructions ────────────────────────────────────────
     SmallVector<Instruction *, 64> binTargets;
-    SmallVector<ICmpInst *, 32>    cmpTargets;
+    SmallVector<ICmpInst *, 32> cmpTargets;
 
     uint32_t eligible = 0;
     for (Instruction &I : instructions(F)) {
@@ -320,7 +338,8 @@ struct VectorObfuscation : public FunctionPass {
     uint32_t maxTargets = 10000;
     if (eligible * currentProb / 100 > maxTargets) {
       currentProb = (maxTargets * 100) / eligible;
-      if (currentProb == 0) currentProb = 1;
+      if (currentProb == 0)
+        currentProb = 1;
     }
 
     for (Instruction &I : instructions(F)) {
@@ -334,22 +353,31 @@ struct VectorObfuscation : public FunctionPass {
         // Integer arithmetic + shifts
         if (T->isIntegerTy()) {
           switch (op) {
-          case Instruction::Add: case Instruction::Sub:
-          case Instruction::Mul: case Instruction::And:
-          case Instruction::Or:  case Instruction::Xor:
-          case Instruction::Shl: case Instruction::LShr:
+          case Instruction::Add:
+          case Instruction::Sub:
+          case Instruction::Mul:
+          case Instruction::And:
+          case Instruction::Or:
+          case Instruction::Xor:
+          case Instruction::Shl:
+          case Instruction::LShr:
           case Instruction::AShr:
-            eligible = true; break;
-          default: break;
+            eligible = true;
+            break;
+          default:
+            break;
           }
         }
         // Floating-point arithmetic
         if (T->isFloatTy() || T->isDoubleTy()) {
           switch (op) {
-          case Instruction::FAdd: case Instruction::FSub:
+          case Instruction::FAdd:
+          case Instruction::FSub:
           case Instruction::FMul:
-            eligible = true; break;
-          default: break;
+            eligible = true;
+            break;
+          default:
+            break;
           }
         }
         if (eligible)
@@ -364,7 +392,8 @@ struct VectorObfuscation : public FunctionPass {
       }
     }
 
-    // ── Lift and erase ────────────────────────────────────────────────────────
+    // ── Lift and erase
+    // ────────────────────────────────────────────────────────
     bool changed = false;
     SmallVector<Instruction *, 64> toErase;
 

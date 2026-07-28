@@ -16,6 +16,12 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "include/AntiHook.h"
+#include "include/CryptoUtils.h"
+#include "include/Utils.h"
+#include "include/compat/CallSite.h"
+#include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
@@ -28,13 +34,7 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/ADT/SmallString.h"
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/TargetParser/Triple.h"
-#include "include/compat/CallSite.h"
-#include "include/AntiHook.h"
-#include "include/CryptoUtils.h"
-#include "include/Utils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include <fstream>
 #include <sstream>
@@ -47,17 +47,18 @@
 #define AARCH64_SIGNATURE_BRK 0b11010100001
 
 // x86_64 common hooking opcode prefixes
-#define X86_64_JMP_REL32   0xE9u   // jmp rel32 (Substrate / MS Detours classic)
-#define X86_64_MOVABS_RAX  0x48u   // REX.W prefix → movabs rax, imm64 + jmp rax
-#define X86_64_INT3        0xCCu   // INT3 — Detours hot-patch / debugger trap
-#define X86_64_JMP_SHORT   0xEBu   // jmp rel8 — Detours compact trampoline
+#define X86_64_JMP_REL32 0xE9u  // jmp rel32 (Substrate / MS Detours classic)
+#define X86_64_MOVABS_RAX 0x48u // REX.W prefix → movabs rax, imm64 + jmp rax
+#define X86_64_INT3 0xCCu       // INT3 — Detours hot-patch / debugger trap
+#define X86_64_JMP_SHORT 0xEBu  // jmp rel8 — Detours compact trampoline
 #define X86_64_MOV_EDI_EDI_B0 0x8Bu // MOV EDI, EDI = 8B FF (Detours 2.x marker)
 #define X86_64_MOV_EDI_EDI_B1 0xFFu
-// FF 25 xx xx xx xx — JMP [RIP+disp32], the canonical Frida/ELF-PLT stub on Linux.
-// This is the most prevalent hook pattern on Linux x86_64 because the dynamic linker
-// resolves PLT entries using exactly this encoding in the .plt.sec section.
-#define X86_64_JMP_INDIR      0xFFu
-#define X86_64_JMP_INDIR_B1   0x25u
+// FF 25 xx xx xx xx — JMP [RIP+disp32], the canonical Frida/ELF-PLT stub on
+// Linux. This is the most prevalent hook pattern on Linux x86_64 because the
+// dynamic linker resolves PLT entries using exactly this encoding in the
+// .plt.sec section.
+#define X86_64_JMP_INDIR 0xFFu
+#define X86_64_JMP_INDIR_B1 0x25u
 
 // AArch64 Windows Detours-style hook opcodes (16-byte trampoline)
 // byte[0:3] can be B rel26 (same as Darwin/Linux) or LDR x17, [pc,#8]
@@ -95,17 +96,18 @@ static cl::opt<bool>
                        cl::desc("[AntiHook]Check Inline Hook for x86_64"));
 static bool CheckInlineHookX86Temp = true;
 
-static cl::opt<bool>
-    DirectSyscallExit("ah_direct_syscall", cl::init(true), cl::NotHidden,
-                      cl::desc("[AntiHook]Use direct syscall (not libc abort) "
-                               "as hook-detected handler — bypasses libc hooks"));
+static cl::opt<bool> DirectSyscallExit(
+    "ah_direct_syscall", cl::init(true), cl::NotHidden,
+    cl::desc("[AntiHook]Use direct syscall (not libc abort) "
+             "as hook-detected handler — bypasses libc hooks"));
 static bool DirectSyscallExitTemp = true;
 
-// ── Windows-specific options ──────────────────────────────────────────────────
-static cl::opt<bool>
-    CheckInlineHookWin("ah_inline_win", cl::init(true), cl::NotHidden,
-                       cl::desc("[AntiHook]Check Windows-specific prologue hook "
-                                "patterns (Detours INT3, MOV EDI EDI, etc.)"));
+// ── Windows-specific options
+// ──────────────────────────────────────────────────
+static cl::opt<bool> CheckInlineHookWin(
+    "ah_inline_win", cl::init(true), cl::NotHidden,
+    cl::desc("[AntiHook]Check Windows-specific prologue hook "
+             "patterns (Detours INT3, MOV EDI EDI, etc.)"));
 static bool CheckInlineHookWinTemp = true;
 
 namespace llvm {
@@ -156,10 +158,12 @@ struct AntiHook : public ModulePass {
         StructType::getTypeByName(M.getContext(), "struct._objc_method")) {
       // Use opaque pointer type for all ObjC API declarations
       Type *OpaquePtrTy = getOpaquePtrTy(M.getContext());
-      M.getOrInsertFunction("objc_getClass",
-                            FunctionType::get(OpaquePtrTy, {OpaquePtrTy}, false));
-      M.getOrInsertFunction("sel_registerName",
-                            FunctionType::get(OpaquePtrTy, {OpaquePtrTy}, false));
+      M.getOrInsertFunction(
+          "objc_getClass",
+          FunctionType::get(OpaquePtrTy, {OpaquePtrTy}, false));
+      M.getOrInsertFunction(
+          "sel_registerName",
+          FunctionType::get(OpaquePtrTy, {OpaquePtrTy}, false));
       FunctionType *IMPType =
           FunctionType::get(OpaquePtrTy, {OpaquePtrTy, OpaquePtrTy}, true);
       PointerType *IMPPointerType = PointerType::getUnqual(IMPType);
@@ -186,14 +190,17 @@ struct AntiHook : public ModulePass {
   bool runOnModule(Module &M) override {
     for (Function &F : M) {
       if (toObfuscate(flag, &F, "antihook")) {
-        if (ObfVerbose) errs() << "Running AntiHooking On " << F.getName() << "\n";
+        if (ObfVerbose)
+          errs() << "Running AntiHooking On " << F.getName() << "\n";
         if (!this->initialized)
           initialize(M);
         if (!toObfuscateBoolOption(&F, "ah_inline", &CheckInlineHookTemp))
           CheckInlineHookTemp = CheckInlineHook;
-        if (!toObfuscateBoolOption(&F, "ah_direct_syscall", &DirectSyscallExitTemp))
+        if (!toObfuscateBoolOption(&F, "ah_direct_syscall",
+                                   &DirectSyscallExitTemp))
           DirectSyscallExitTemp = DirectSyscallExit;
-        if (!toObfuscateBoolOption(&F, "ah_inline_x86", &CheckInlineHookX86Temp))
+        if (!toObfuscateBoolOption(&F, "ah_inline_x86",
+                                   &CheckInlineHookX86Temp))
           CheckInlineHookX86Temp = CheckInlineHookX86;
 
         // AArch64 inline hook detection (existing — covers Darwin + Linux)
@@ -207,11 +214,13 @@ struct AntiHook : public ModulePass {
             !triple.isOSWindows() && CheckInlineHookX86Temp) {
           HandleInlineHookX86_64(&F);
           // Scatter additional hook checks throughout the function body so a
-          // patcher cannot defeat detection by patching just the prologue check.
+          // patcher cannot defeat detection by patching just the prologue
+          // check.
           InjectScatteredHookChecks(&F);
         }
         // Windows inline hook detection (x86_64 and AArch64)
-        if (!toObfuscateBoolOption(&F, "ah_inline_win", &CheckInlineHookWinTemp))
+        if (!toObfuscateBoolOption(&F, "ah_inline_win",
+                                   &CheckInlineHookWinTemp))
           CheckInlineHookWinTemp = CheckInlineHookWin;
         if (triple.isOSWindows() && CheckInlineHookWinTemp) {
           if (triple.getArch() == Triple::x86_64 ||
@@ -303,7 +312,8 @@ struct AntiHook : public ModulePass {
     return true;
   }
 
-  // ── AArch64 inline hook detection ───────────────────────────────────────────
+  // ── AArch64 inline hook detection
+  // ───────────────────────────────────────────
   void HandleInlineHookAArch64(Function *F) {
     BasicBlock *A = &(F->getEntryBlock());
     BasicBlock *C = A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
@@ -369,46 +379,48 @@ struct AntiHook : public ModulePass {
     BranchInst::Create(Detect, A);
 
     LLVMContext &Ctx = F->getContext();
-    Type *Int8Ty  = Type::getInt8Ty(Ctx);
+    Type *Int8Ty = Type::getInt8Ty(Ctx);
     Type *Int64Ty = Type::getInt64Ty(Ctx);
-    Type *PtrTy   = getOpaquePtrTy(Ctx);
+    Type *PtrTy = getOpaquePtrTy(Ctx);
 
     // ── Stage 1: byte[0] == 0xE9 (jmp rel32) ──────────────────────────────
     IRBuilder<> IRBDet1(Detect);
-    Value *FPtr1  = IRBDet1.CreateBitCast(F, PtrTy);
-    Value *Byte0  = IRBDet1.CreateLoad(Int8Ty, FPtr1, "ah.b0");
-    Value *IsE9   = IRBDet1.CreateICmpEQ(
+    Value *FPtr1 = IRBDet1.CreateBitCast(F, PtrTy);
+    Value *Byte0 = IRBDet1.CreateLoad(Int8Ty, FPtr1, "ah.b0");
+    Value *IsE9 = IRBDet1.CreateICmpEQ(
         Byte0, ConstantInt::get(Int8Ty, X86_64_JMP_REL32), "ah.e9");
     IRBDet1.CreateCondBr(IsE9, B, Detect2);
 
     // ── Stage 2: byte[0]==0x48 AND byte[1]==0xB8 (movabs rax, imm64) ──────
     IRBuilder<> IRBDet2(Detect2);
-    Value *FPtrI2  = IRBDet2.CreatePtrToInt(F, Int64Ty);
-    Value *B0D2    = IRBDet2.CreateLoad(Int8Ty,
-        IRBDet2.CreateIntToPtr(FPtrI2, PtrTy), "ah.b0d2");
-    Value *B1D2    = IRBDet2.CreateLoad(Int8Ty,
+    Value *FPtrI2 = IRBDet2.CreatePtrToInt(F, Int64Ty);
+    Value *B0D2 = IRBDet2.CreateLoad(
+        Int8Ty, IRBDet2.CreateIntToPtr(FPtrI2, PtrTy), "ah.b0d2");
+    Value *B1D2 = IRBDet2.CreateLoad(
+        Int8Ty,
         IRBDet2.CreateIntToPtr(
             IRBDet2.CreateAdd(FPtrI2, ConstantInt::get(Int64Ty, 1)), PtrTy),
         "ah.b1d2");
-    Value *IsREXW  = IRBDet2.CreateICmpEQ(
+    Value *IsREXW = IRBDet2.CreateICmpEQ(
         B0D2, ConstantInt::get(Int8Ty, X86_64_MOVABS_RAX), "ah.rex");
-    Value *IsB8    = IRBDet2.CreateICmpEQ(
-        B1D2, ConstantInt::get(Int8Ty, 0xB8u), "ah.b8");
+    Value *IsB8 =
+        IRBDet2.CreateICmpEQ(B1D2, ConstantInt::get(Int8Ty, 0xB8u), "ah.b8");
     Value *IsMovAbs = IRBDet2.CreateAnd(IsREXW, IsB8, "ah.movabs");
     IRBDet2.CreateCondBr(IsMovAbs, B, Detect3);
 
     // ── Stage 3: byte[0]==0xFF AND byte[1]==0x25 (jmp [RIP+disp32]) ────────
     IRBuilder<> IRBDet3(Detect3);
-    Value *FPtrI3  = IRBDet3.CreatePtrToInt(F, Int64Ty);
-    Value *B0D3    = IRBDet3.CreateLoad(Int8Ty,
-        IRBDet3.CreateIntToPtr(FPtrI3, PtrTy), "ah.b0d3");
-    Value *B1D3    = IRBDet3.CreateLoad(Int8Ty,
+    Value *FPtrI3 = IRBDet3.CreatePtrToInt(F, Int64Ty);
+    Value *B0D3 = IRBDet3.CreateLoad(
+        Int8Ty, IRBDet3.CreateIntToPtr(FPtrI3, PtrTy), "ah.b0d3");
+    Value *B1D3 = IRBDet3.CreateLoad(
+        Int8Ty,
         IRBDet3.CreateIntToPtr(
             IRBDet3.CreateAdd(FPtrI3, ConstantInt::get(Int64Ty, 1)), PtrTy),
         "ah.b1d3");
-    Value *IsFF    = IRBDet3.CreateICmpEQ(
-        B0D3, ConstantInt::get(Int8Ty, X86_64_JMP_INDIR),   "ah.ff");
-    Value *Is25    = IRBDet3.CreateICmpEQ(
+    Value *IsFF = IRBDet3.CreateICmpEQ(
+        B0D3, ConstantInt::get(Int8Ty, X86_64_JMP_INDIR), "ah.ff");
+    Value *Is25 = IRBDet3.CreateICmpEQ(
         B1D3, ConstantInt::get(Int8Ty, X86_64_JMP_INDIR_B1), "ah.25");
     Value *IsIndir = IRBDet3.CreateAnd(IsFF, Is25, "ah.indir");
     IRBDet3.CreateCondBr(IsIndir, B, C);
@@ -418,7 +430,8 @@ struct AntiHook : public ModulePass {
     CreateCallbackAndJumpBack(&IRBB, C);
   }
 
-  // ── Windows x86_64 inline hook detection ────────────────────────────────────
+  // ── Windows x86_64 inline hook detection
+  // ────────────────────────────────────
   //
   // Detects Microsoft Detours and similar Windows user-space hooks:
   //
@@ -467,20 +480,24 @@ struct AntiHook : public ModulePass {
     IRBuilder<> IRBB(B);
 
     LLVMContext &Ctx = F->getContext();
-    Type *I8Ty  = Type::getInt8Ty(Ctx);
+    Type *I8Ty = Type::getInt8Ty(Ctx);
     Type *I64Ty = Type::getInt64Ty(Ctx);
     Type *PtrTy = getOpaquePtrTy(Ctx);
 
-    // ── Detect1: byte[0] == 0xCC (INT3) OR 0xE9 (JMP rel32) OR 0xEB (JMP short)
-    Value *FPtr  = IRBDet1.CreateBitCast(F, PtrTy);
-    Value *B0    = IRBDet1.CreateLoad(I8Ty, FPtr, "wh.b0");
-    Value *IsCC  = IRBDet1.CreateICmpEQ(B0, ConstantInt::get(I8Ty, X86_64_INT3));
-    Value *IsE9  = IRBDet1.CreateICmpEQ(B0, ConstantInt::get(I8Ty, X86_64_JMP_REL32));
-    Value *IsEB  = IRBDet1.CreateICmpEQ(B0, ConstantInt::get(I8Ty, X86_64_JMP_SHORT));
+    // ── Detect1: byte[0] == 0xCC (INT3) OR 0xE9 (JMP rel32) OR 0xEB (JMP
+    // short)
+    Value *FPtr = IRBDet1.CreateBitCast(F, PtrTy);
+    Value *B0 = IRBDet1.CreateLoad(I8Ty, FPtr, "wh.b0");
+    Value *IsCC = IRBDet1.CreateICmpEQ(B0, ConstantInt::get(I8Ty, X86_64_INT3));
+    Value *IsE9 =
+        IRBDet1.CreateICmpEQ(B0, ConstantInt::get(I8Ty, X86_64_JMP_REL32));
+    Value *IsEB =
+        IRBDet1.CreateICmpEQ(B0, ConstantInt::get(I8Ty, X86_64_JMP_SHORT));
     Value *IsSusp1 = IRBDet1.CreateOr(IRBDet1.CreateOr(IsCC, IsE9), IsEB);
     IRBDet1.CreateCondBr(IsSusp1, B, Det2);
 
-    // ── Detect2: byte[0:1] == 0x8B 0xFF (MOV EDI, EDI — Detours hot-patch marker)
+    // ── Detect2: byte[0:1] == 0x8B 0xFF (MOV EDI, EDI — Detours hot-patch
+    // marker)
     Value *FPtrInt = IRBDet2.CreatePtrToInt(F, I64Ty);
     Value *PB0 = IRBDet2.CreateIntToPtr(FPtrInt, PtrTy);
     Value *PB1 = IRBDet2.CreateIntToPtr(
@@ -495,23 +512,24 @@ struct AntiHook : public ModulePass {
     IRBDet2.CreateCondBr(IsMEDI, B, Det3);
 
     // ── Detect3: byte[0]==0x48 && byte[1]==0xB8 (MOV RAX, imm64 — Frida stub)
-    Value *D3B0 = IRBDet3.CreateLoad(I8Ty,
-        IRBDet3.CreateIntToPtr(FPtrInt, PtrTy), "wh.d3b0");
-    Value *D3B1 = IRBDet3.CreateLoad(I8Ty,
+    Value *D3B0 = IRBDet3.CreateLoad(
+        I8Ty, IRBDet3.CreateIntToPtr(FPtrInt, PtrTy), "wh.d3b0");
+    Value *D3B1 = IRBDet3.CreateLoad(
+        I8Ty,
         IRBDet3.CreateIntToPtr(
             IRBDet3.CreateAdd(FPtrInt, ConstantInt::get(I64Ty, 1)), PtrTy),
         "wh.d3b1");
-    Value *IsREXW   = IRBDet3.CreateICmpEQ(
-        D3B0, ConstantInt::get(I8Ty, X86_64_MOVABS_RAX));
-    Value *IsMovAbs = IRBDet3.CreateICmpEQ(
-        D3B1, ConstantInt::get(I8Ty, 0xB8u));
+    Value *IsREXW =
+        IRBDet3.CreateICmpEQ(D3B0, ConstantInt::get(I8Ty, X86_64_MOVABS_RAX));
+    Value *IsMovAbs = IRBDet3.CreateICmpEQ(D3B1, ConstantInt::get(I8Ty, 0xB8u));
     Value *IsLongStub = IRBDet3.CreateAnd(IsREXW, IsMovAbs);
     IRBDet3.CreateCondBr(IsLongStub, B, C);
 
     CreateCallbackAndJumpBack(&IRBB, C);
   }
 
-  // ── Windows AArch64 inline hook detection ───────────────────────────────────
+  // ── Windows AArch64 inline hook detection
+  // ───────────────────────────────────
   //
   // Detects Detours-style and manual trampolines on ARM64 Windows:
   //
@@ -552,19 +570,19 @@ struct AntiHook : public ModulePass {
     Value *FPtr = IRBDet1.CreateBitCast(F, PtrTy);
     Value *Instr0 = IRBDet1.CreateLoad(I32Ty, FPtr, "wha.i0");
     // B rel26: top 6 bits == 0b000101
-    Value *LS_B  = IRBDet1.CreateLShr(Instr0, ConstantInt::get(I32Ty, 26));
-    Value *IsB   = IRBDet1.CreateICmpEQ(
+    Value *LS_B = IRBDet1.CreateLShr(Instr0, ConstantInt::get(I32Ty, 26));
+    Value *IsB = IRBDet1.CreateICmpEQ(
         LS_B, ConstantInt::get(I32Ty, AARCH64_SIGNATURE_B));
     // BRK: top 11 bits == 0b11010100001 (= AARCH64_SIGNATURE_BRK)
     Value *LS_BRK = IRBDet1.CreateLShr(Instr0, ConstantInt::get(I32Ty, 21));
-    Value *IsBRK  = IRBDet1.CreateICmpEQ(
+    Value *IsBRK = IRBDet1.CreateICmpEQ(
         LS_BRK, ConstantInt::get(I32Ty, AARCH64_SIGNATURE_BRK));
     IRBDet1.CreateCondBr(IRBDet1.CreateOr(IsB, IsBRK), B, Det2);
 
     // ── Detect2: check for LDR X17, [PC, #8] (Detours long-jump first word)
     Value *FPtrInt = IRBDet2.CreatePtrToInt(F, I64Ty);
-    Value *Instr0v2 = IRBDet2.CreateLoad(I32Ty,
-        IRBDet2.CreateIntToPtr(FPtrInt, PtrTy), "wha.i0v2");
+    Value *Instr0v2 = IRBDet2.CreateLoad(
+        I32Ty, IRBDet2.CreateIntToPtr(FPtrInt, PtrTy), "wha.i0v2");
     Value *IsLdrX17 = IRBDet2.CreateICmpEQ(
         Instr0v2, ConstantInt::get(I32Ty, AARCH64_WIN_LDR_X17_PC8));
     IRBDet2.CreateCondBr(IsLdrX17, B, C);
@@ -572,7 +590,8 @@ struct AntiHook : public ModulePass {
     CreateCallbackAndJumpBack(&IRBB, C);
   }
 
-  // ── ObjC runtime hook detection ─────────────────────────────────────────────
+  // ── ObjC runtime hook detection
+  // ─────────────────────────────────────────────
   void HandleObjcRuntimeHook(Function *ObjcMethodImp, std::string classname,
                              std::string selname, bool classmethod) {
     Module *M = ObjcMethodImp->getParent();
@@ -621,8 +640,9 @@ struct AntiHook : public ModulePass {
       // Noise: eor x9, x9, x9 + add/sub round-trip (net zero, confuses LLIL).
       uint32_t noiseImm = cryptoutils->get_range(1, 0x1000);
       uint32_t exitCode = cryptoutils->get_range(256);
-      uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                    | 0x8000000000000000ull;
+      uint64_t nc =
+          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+          0x8000000000000000ull;
       std::string asmStr;
       asmStr += "eor x9, x9, x9\n\t";
       asmStr += "add x9, x9, #" + std::to_string(noiseImm) + "\n\t";
@@ -633,9 +653,12 @@ struct AntiHook : public ModulePass {
       asmStr += "svc #0x80\n\t";
       // ── LAYER 2: br to non-canonical address → MMU translation fault ───────
       asmStr += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-      asmStr += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-      asmStr += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-      asmStr += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+      asmStr +=
+          "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
+      asmStr +=
+          "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
+      asmStr +=
+          "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
       asmStr += "br x15\n\t";
       // Final barrier: randomized undefined opcode
       uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
@@ -652,8 +675,7 @@ struct AntiHook : public ModulePass {
       asmStr += "mov x14, x0\n\t";
       asmStr += "b 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false),
-          asmStr,
+          FunctionType::get(IRBB->getVoidTy(), false), asmStr,
           "~{x0},~{x9},~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false);
       IRBB->CreateCall(IA);
@@ -662,8 +684,9 @@ struct AntiHook : public ModulePass {
                 triple.getArch() == Triple::x86_64)) {
       uint64_t exitCode = cryptoutils->get_range(256);
       uint64_t noiseConst = cryptoutils->get_uint32_t() & 0xFFFF;
-      uint64_t nc2 = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                    | 0x8000000000000000ull;
+      uint64_t nc2 =
+          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+          0x8000000000000000ull;
       std::ostringstream nc2oss;
       nc2oss << std::hex << nc2;
       std::string asmStr;
@@ -693,11 +716,11 @@ struct AntiHook : public ModulePass {
       asmStr += "shrq $$16, %rax\n\t";
       asmStr += "movq %rax, %r14\n\t";
       asmStr += "jmp 91b\n\t";
-      InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false),
-          asmStr,
-          "~{rax},~{rcx},~{rdx},~{rdi},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
-          /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
+      InlineAsm *IA =
+          InlineAsm::get(FunctionType::get(IRBB->getVoidTy(), false), asmStr,
+                         "~{rax},~{rcx},~{rdx},~{rdi},~{r14},~{r15},~{dirflag},"
+                         "~{fpsr},~{flags}",
+                         /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
       IRBB->CreateCall(IA);
     } else if (DirectSyscallExitTemp &&
                (triple.isOSLinux() || triple.isAndroid()) &&
@@ -717,8 +740,9 @@ struct AntiHook : public ModulePass {
       //
       // Noise: RDTSC-based junk between prctl and ud2 to break timing tracers.
       uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
-      uint64_t nonCanon = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                         | 0x8000000000000000ull;
+      uint64_t nonCanon =
+          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+          0x8000000000000000ull;
       uint32_t chaosSeed = cryptoutils->get_range(1, 0xBEFF);
       std::ostringstream ncoss;
       ncoss << std::hex << nonCanon;
@@ -730,8 +754,8 @@ struct AntiHook : public ModulePass {
       asmStr += "addl $$" + std::to_string(noiseK) + ", %eax\n\t";
       asmStr += "subl $$" + std::to_string(noiseK) + ", %eax\n\t";
       // prctl(PR_SET_DUMPABLE=4, 0) — prevents core dump
-      asmStr += "movq $$157, %rax\n\t";  // SYS_prctl
-      asmStr += "movq $$4, %rdi\n\t";    // PR_SET_DUMPABLE
+      asmStr += "movq $$157, %rax\n\t"; // SYS_prctl
+      asmStr += "movq $$4, %rdi\n\t";   // PR_SET_DUMPABLE
       asmStr += "xorq %rsi, %rsi\n\t";
       asmStr += "xorq %rdx, %rdx\n\t";
       asmStr += "xorq %r10, %r10\n\t";
@@ -755,11 +779,11 @@ struct AntiHook : public ModulePass {
       asmStr += "shrq $$16, %rax\n\t";
       asmStr += "movq %rax, %r14\n\t";
       asmStr += "jmp 91b\n\t";
-      InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false),
-          asmStr,
-          "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
-          /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
+      InlineAsm *IA =
+          InlineAsm::get(FunctionType::get(IRBB->getVoidTy(), false), asmStr,
+                         "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r14},~{"
+                         "r15},~{dirflag},~{fpsr},~{flags}",
+                         /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
       IRBB->CreateCall(IA);
 
     } else if (DirectSyscallExitTemp && triple.isOSWindows() &&
@@ -780,9 +804,11 @@ struct AntiHook : public ModulePass {
       //   • The RDTSC noise before the int 0x29 confuses timing-based tracers.
       uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
       uint64_t fastFailCode = 7;
-      uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                   | 0x8000000000000000ull;
-      uint64_t privAddr = 0xFFFFF80000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
+      uint64_t nc =
+          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+          0x8000000000000000ull;
+      uint64_t privAddr =
+          0xFFFFF80000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
       uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
       std::ostringstream ncoss, privoss;
       ncoss << std::hex << nc;
@@ -818,8 +844,7 @@ struct AntiHook : public ModulePass {
       asmStr += "movq %rax, %r14\n\t";
       asmStr += "jmp 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false),
-          asmStr,
+          FunctionType::get(IRBB->getVoidTy(), false), asmStr,
           "~{rax},~{rcx},~{rdx},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
       IRBB->CreateCall(IA);
@@ -837,9 +862,11 @@ struct AntiHook : public ModulePass {
       // Like int 0x29 on x86_64, this bypasses all user-space exception
       // handling including VEH and C++ catch handlers.
       uint32_t noiseImm = cryptoutils->get_range(1, 0x100);
-      uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                    | 0x8000000000000000ull;
-      uint64_t privAddr = 0xFFFF000000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
+      uint64_t nc =
+          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+          0x8000000000000000ull;
+      uint64_t privAddr =
+          0xFFFF000000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
       uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
       std::string asmStr;
       asmStr += "mrs x9, cntvct_el0\n\t";
@@ -850,15 +877,21 @@ struct AntiHook : public ModulePass {
       asmStr += "brk #0xF003\n\t";
       // ── LAYER 2: br to privileged address ──────────────────────────────────
       asmStr += "movz x15, #" + std::to_string(privAddr & 0xFFFF) + "\n\t";
-      asmStr += "movk x15, #" + std::to_string((privAddr >> 16) & 0xFFFF) + ", lsl #16\n\t";
-      asmStr += "movk x15, #" + std::to_string((privAddr >> 32) & 0xFFFF) + ", lsl #32\n\t";
-      asmStr += "movk x15, #" + std::to_string((privAddr >> 48) & 0xFFFF) + ", lsl #48\n\t";
+      asmStr += "movk x15, #" + std::to_string((privAddr >> 16) & 0xFFFF) +
+                ", lsl #16\n\t";
+      asmStr += "movk x15, #" + std::to_string((privAddr >> 32) & 0xFFFF) +
+                ", lsl #32\n\t";
+      asmStr += "movk x15, #" + std::to_string((privAddr >> 48) & 0xFFFF) +
+                ", lsl #48\n\t";
       asmStr += "br x15\n\t";
       // ── LAYER 2b: br to non-canonical address → MMU fault ──────────────────
       asmStr += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-      asmStr += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-      asmStr += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-      asmStr += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+      asmStr +=
+          "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
+      asmStr +=
+          "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
+      asmStr +=
+          "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
       asmStr += "br x15\n\t";
       // Final barrier: randomized undefined opcode
       uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
@@ -874,8 +907,7 @@ struct AntiHook : public ModulePass {
       asmStr += "mov x14, x0\n\t";
       asmStr += "b 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false),
-          asmStr,
+          FunctionType::get(IRBB->getVoidTy(), false), asmStr,
           "~{x0},~{x9},~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false);
       IRBB->CreateCall(IA);
@@ -896,8 +928,9 @@ struct AntiHook : public ModulePass {
       // Noise: counter register read (mrs x9, cntvct_el0) as timing junk.
       uint32_t noiseImm = cryptoutils->get_range(1, 0x200);
       uint32_t brkImm = cryptoutils->get_range(0x100, 0xFFFF);
-      uint64_t nc = ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull)
-                    | 0x8000000000000000ull;
+      uint64_t nc =
+          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
+          0x8000000000000000ull;
       uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
       std::string asmStr;
       asmStr += "mrs x9, cntvct_el0\n\t";
@@ -914,9 +947,12 @@ struct AntiHook : public ModulePass {
       asmStr += "brk #" + std::to_string(brkImm) + "\n\t";
       // ── LAYER 2: br to non-canonical address → MMU translation fault ───────
       asmStr += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-      asmStr += "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-      asmStr += "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-      asmStr += "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
+      asmStr +=
+          "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
+      asmStr +=
+          "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
+      asmStr +=
+          "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
       asmStr += "br x15\n\t";
       // Final barrier: randomized undefined opcode
       uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
@@ -932,8 +968,7 @@ struct AntiHook : public ModulePass {
       asmStr += "mov x14, x0\n\t";
       asmStr += "b 91b\n\t";
       InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false),
-          asmStr,
+          FunctionType::get(IRBB->getVoidTy(), false), asmStr,
           "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x14},~{x15},"
           "~{dirflag},~{fpsr},~{flags}",
           /*hasSideEffects=*/true, false);
@@ -970,19 +1005,23 @@ struct AntiHook : public ModulePass {
     // Collect candidate BBs: skip entry and any handler/detect BBs we created
     SmallVector<BasicBlock *, 16> cands;
     for (BasicBlock &BB : *F) {
-      if (&BB == &F->getEntryBlock()) continue;
+      if (&BB == &F->getEntryBlock())
+        continue;
       StringRef nm = BB.getName();
       if (nm.contains("HookDetect") || nm.contains("Handler") ||
           nm.contains("scatter"))
         continue;
       // Need at least 2 instructions so splitBasicBlock leaves a non-empty top
       auto it = BB.begin();
-      if (it == BB.end()) continue;
+      if (it == BB.end())
+        continue;
       ++it;
-      if (it == BB.end()) continue;
+      if (it == BB.end())
+        continue;
       cands.push_back(&BB);
     }
-    if (cands.empty()) return;
+    if (cands.empty())
+      return;
 
     // Fisher-Yates shuffle with cryptoutils for per-compilation randomness
     for (unsigned i = (unsigned)cands.size() - 1; i > 0; --i)
@@ -990,10 +1029,10 @@ struct AntiHook : public ModulePass {
 
     unsigned numExtra = std::min(2u, (unsigned)cands.size());
     LLVMContext &Ctx = F->getContext();
-    Type *Int8Ty  = Type::getInt8Ty(Ctx);
+    Type *Int8Ty = Type::getInt8Ty(Ctx);
     Type *Int32Ty = Type::getInt32Ty(Ctx);
     Type *Int64Ty = Type::getInt64Ty(Ctx);
-    Type *PtrTy   = getOpaquePtrTy(Ctx);
+    Type *PtrTy = getOpaquePtrTy(Ctx);
 
     for (unsigned ci = 0; ci < numExtra; ci++) {
       BasicBlock *Orig = cands[ci];
@@ -1009,20 +1048,20 @@ struct AntiHook : public ModulePass {
       if (triple.getArch() == Triple::x86_64) {
         // x86_64: check byte[0] for E9 (jmp rel32) or CC (INT3)
         Value *FPtrI = IRB.CreatePtrToInt(F, Int64Ty);
-        Value *B0    = IRB.CreateLoad(Int8Ty,
-            IRB.CreateIntToPtr(FPtrI, PtrTy), "sc.ah.b0");
-        Value *IsE9  = IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, 0xE9u));
-        Value *IsCC  = IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, 0xCCu));
+        Value *B0 = IRB.CreateLoad(Int8Ty, IRB.CreateIntToPtr(FPtrI, PtrTy),
+                                   "sc.ah.b0");
+        Value *IsE9 = IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, 0xE9u));
+        Value *IsCC = IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, 0xCCu));
         IsHooked = IRB.CreateOr(IsE9, IsCC);
       } else if (triple.isAArch64()) {
         // AArch64: check first 4 bytes for B or BRK
         Value *FPtr = IRB.CreateBitCast(F, PtrTy);
         Value *Instr0 = IRB.CreateLoad(Int32Ty, FPtr, "sc.ah.i0");
-        Value *LS_B  = IRB.CreateLShr(Instr0, ConstantInt::get(Int32Ty, 26));
-        Value *IsB   = IRB.CreateICmpEQ(
+        Value *LS_B = IRB.CreateLShr(Instr0, ConstantInt::get(Int32Ty, 26));
+        Value *IsB = IRB.CreateICmpEQ(
             LS_B, ConstantInt::get(Int32Ty, AARCH64_SIGNATURE_B));
         Value *LS_BRK = IRB.CreateLShr(Instr0, ConstantInt::get(Int32Ty, 21));
-        Value *IsBRK  = IRB.CreateICmpEQ(
+        Value *IsBRK = IRB.CreateICmpEQ(
             LS_BRK, ConstantInt::get(Int32Ty, AARCH64_SIGNATURE_BRK));
         IsHooked = IRB.CreateOr(IsB, IsBRK);
       }

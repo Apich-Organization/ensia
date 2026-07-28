@@ -26,26 +26,27 @@
 std::mutex g_crypto_mutex;
 
 #if defined(_MSC_VER)
-#  include <intrin.h>
-#  define HAS_RDTSC 1
+#include <intrin.h>
+#define HAS_RDTSC 1
 #elif defined(__x86_64__) || defined(__i386__)
-#  include <x86intrin.h>
-#  define HAS_RDTSC 1
+#include <x86intrin.h>
+#define HAS_RDTSC 1
 #else
-#  define HAS_RDTSC 0
+#define HAS_RDTSC 0
 #endif
 
 #if defined(_WIN32)
-#  include <process.h>
-#  define GET_PID() ((uint64_t)_getpid())
+#include <process.h>
+#define GET_PID() ((uint64_t)_getpid())
 #elif defined(__unix__) || defined(__APPLE__)
-#  include <unistd.h>
-#  define GET_PID() ((uint64_t)getpid())
+#include <unistd.h>
+#define GET_PID() ((uint64_t)getpid())
 #else
-#  define GET_PID() (uint64_t)0xDEADBEEFCAFEBABEULL
+#define GET_PID() (uint64_t)0xDEADBEEFCAFEBABEULL
 #endif
 
-// ── AArch64-specific high-quality hardware entropy ────────────────────────────
+// ── AArch64-specific high-quality hardware entropy
+// ────────────────────────────
 //
 // When the compiler host IS an AArch64 machine, we tap into three independent
 // hardware entropy sources:
@@ -75,11 +76,11 @@ std::mutex g_crypto_mutex;
 // the platform-generic sources (wall clock, ASLR stack/heap, PID).
 
 #if defined(__aarch64__) || defined(_M_ARM64)
-#  define HAS_AARCH64_ENTROPY 1
+#define HAS_AARCH64_ENTROPY 1
 
-#  if defined(_WIN32)
-     // Windows ARM64 path — no POSIX signals; use QPC + RDTSC-equivalent
-#    include <windows.h>
+#if defined(_WIN32)
+// Windows ARM64 path — no POSIX signals; use QPC + RDTSC-equivalent
+#include <windows.h>
 static uint64_t aarch64_collect_entropy_a() {
   LARGE_INTEGER pc;
   QueryPerformanceCounter(&pc);
@@ -91,8 +92,8 @@ static uint64_t aarch64_collect_entropy_b() {
 }
 static uint64_t aarch64_collect_entropy_c() {
   // Try RNDR via intrinsic — MSVC provides _ReadStatusReg(ARM64_RNDR)
-#    if defined(_M_ARM64) && defined(__has_include) && __has_include(<arm64intr.h>)
-#      include <arm64intr.h>
+#if defined(_M_ARM64) && defined(__has_include) && __has_include(<arm64intr.h>)
+#include <arm64intr.h>
   // __isProcessorFeaturePresent is MSVC-specific
   if (IsProcessorFeaturePresent(PF_ARM_V8_1_ATOMIC_INSTRUCTIONS_AVAILABLE)) {
     // RNDR encoding: MRS x0, RNDR = 0xD53B2400
@@ -100,15 +101,15 @@ static uint64_t aarch64_collect_entropy_c() {
     __asm volatile(".inst 0xD53B2400" : "=r"(v));
     return v;
   }
-#    endif
+#endif
   return static_cast<uint64_t>(GetTickCount64()) * 6364136223846793005ULL;
 }
 
-#  else
-     // POSIX AArch64 path — Linux / macOS / Android / iOS
-#    include <setjmp.h>
-#    include <signal.h>
-#    include <string.h>
+#else
+// POSIX AArch64 path — Linux / macOS / Android / iOS
+#include <setjmp.h>
+#include <signal.h>
+#include <string.h>
 
 static volatile sigjmp_buf g_aarch64_ent_jmp;
 static void aarch64_ent_sigill(int) {
@@ -118,9 +119,9 @@ static void aarch64_ent_sigill(int) {
 // Read CNTVCT_EL0 — virtual timer counter (always accessible in EL0)
 static uint64_t aarch64_collect_entropy_a() {
   uint64_t v1, v2;
-  __asm__ volatile("mrs %0, cntvct_el0" : "=r"(v1) ::);
+  __asm__ volatile("mrs %0, cntvct_el0" : "=r"(v1)::);
   // Second read provides a few-tick delta that adds jitter entropy
-  __asm__ volatile("mrs %0, cntvct_el0" : "=r"(v2) ::);
+  __asm__ volatile("mrs %0, cntvct_el0" : "=r"(v2)::);
   // Knuth-mix the pair so the low-bit jitter spreads across all bits
   return v1 ^ (v2 * 6364136223846793005ULL + v1);
 }
@@ -134,21 +135,23 @@ static uint64_t aarch64_collect_entropy_b() {
   sigaction(SIGILL, &sa_new, &sa_old);
   uint64_t v = 0;
   if (sigsetjmp(const_cast<sigjmp_buf &>(g_aarch64_ent_jmp), 1) == 0) {
-    __asm__ volatile("mrs %0, cntpct_el0" : "=r"(v) ::);
+    __asm__ volatile("mrs %0, cntpct_el0" : "=r"(v)::);
   }
   sigaction(SIGILL, &sa_old, nullptr);
   if (v == 0) {
     // Fallback: read cntvct twice with a small spin delay for independent ticks
     uint64_t t1, t2;
-    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(t1) ::);
-    for (volatile int spin = 0; spin < 64; spin++);
-    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(t2) ::);
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(t1)::);
+    for (volatile int spin = 0; spin < 64; spin++)
+      ;
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(t2)::);
     v = t1 ^ (t2 << 32) ^ (t2 >> 32);
   }
   return v;
 }
 
-// Try RNDR (ARMv8.5-A FEAT_RNG) — hardware random number, falls back if not supported
+// Try RNDR (ARMv8.5-A FEAT_RNG) — hardware random number, falls back if not
+// supported
 static uint64_t aarch64_collect_entropy_c() {
   struct sigaction sa_new, sa_old;
   memset(&sa_new, 0, sizeof(sa_new));
@@ -162,22 +165,24 @@ static uint64_t aarch64_collect_entropy_c() {
     // Use raw encoding for portability across assemblers
     __asm__ volatile(".inst 0xD53B2400\n\t"
                      "mov %0, x0"
-                     : "=r"(v) : : "x0");
+                     : "=r"(v)
+                     :
+                     : "x0");
   }
   sigaction(SIGILL, &sa_old, nullptr);
 
   if (v == 0) {
     // FEAT_RNG not available; use CNTVCT-based fallback for this slot
     uint64_t t;
-    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(t) ::);
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(t)::);
     v = t * 0x9E3779B97F4A7C15ULL ^ (t >> 17);
   }
   return v;
 }
 
-#  endif // !_WIN32
+#endif // !_WIN32
 #else
-#  define HAS_AARCH64_ENTROPY 0
+#define HAS_AARCH64_ENTROPY 0
 #endif // __aarch64__
 
 using namespace llvm;
@@ -185,12 +190,10 @@ namespace llvm {
 ManagedStatic<CryptoUtils> cryptoutils;
 }
 
-CryptoUtils::CryptoUtils() {
-  s[0] = s[1] = s[2] = s[3] = 0;
-}
+CryptoUtils::CryptoUtils() { s[0] = s[1] = s[2] = s[3] = 0; }
 
 void CryptoUtils::seed_from(uint64_t a, uint64_t b, uint64_t c,
-                             uint64_t d) noexcept {
+                            uint64_t d) noexcept {
   // Each splitmix64 call avalanches 64 bits → fills one xoshiro word
   s[0] = splitmix64(a);
   s[1] = splitmix64(b);
@@ -228,7 +231,7 @@ void CryptoUtils::prng_seed() {
 
   // ── Source E: PID (process-unique on POSIX/Windows) ──────────────────────
   uint64_t pid = GET_PID();
-  pid = pid * 0x9E3779B97F4A7C15ULL;   // Fibonacci hash
+  pid = pid * 0x9E3779B97F4A7C15ULL; // Fibonacci hash
 
   // ── Source F: AArch64 hardware entropy (CNTVCT_EL0 / CNTPCT_EL0 / RNDR) ─
   // These are only collected when the compiler host is AArch64; on x86_64
@@ -258,8 +261,8 @@ void CryptoUtils::prng_seed(uint64_t seed) {
   errs() << format("CryptoUtils: seeding xoshiro256++ with: 0x%" PRIx64 "\n",
                    seed);
   // Still use splitmix64 to expand the single seed into all four words
-  seed_from(seed, seed ^ 0xDEADBEEFDEADBEEFULL,
-            seed + 0x9E3779B97F4A7C15ULL, ~seed);
+  seed_from(seed, seed ^ 0xDEADBEEFDEADBEEFULL, seed + 0x9E3779B97F4A7C15ULL,
+            ~seed);
 }
 
 uint32_t CryptoUtils::get_range(uint32_t min, uint32_t max) {
@@ -277,8 +280,8 @@ uint32_t CryptoUtils::get_range(uint32_t min, uint32_t max) {
   }
 }
 
-uint32_t CryptoUtils::scramble32(
-    uint32_t in, std::unordered_map<uint32_t, uint32_t> &VMap) {
+uint32_t CryptoUtils::scramble32(uint32_t in,
+                                 std::unordered_map<uint32_t, uint32_t> &VMap) {
   auto it = VMap.find(in);
   if (it == VMap.end()) {
     uint32_t V = get_uint32_t();

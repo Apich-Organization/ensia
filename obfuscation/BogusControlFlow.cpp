@@ -35,7 +35,9 @@ static bool targetIsX86_64(Module &M) {
 }
 static bool targetIsX86_32(Module &M) {
   StringRef triple = M.getTargetTriple().getTriple();
-  return (triple.contains("i686") || triple.contains("i386") || triple.contains("x86")) && !targetIsX86_64(M);
+  return (triple.contains("i686") || triple.contains("i386") ||
+          triple.contains("x86")) &&
+         !targetIsX86_64(M);
 }
 static bool targetIsX86(Module &M) {
   return targetIsX86_64(M) || targetIsX86_32(M);
@@ -55,24 +57,23 @@ static Value *buildHardwareTruePredicate(Module &M, IRBuilder<> &IRB) {
   if (targetIsX86(M)) {
     // CPUID leaf 1: EDX bit 25 = SSE support — always set on x86_64/modern x86
     FunctionType *AsmTy = FunctionType::get(I32Ty, {}, false);
-    const char *asmCode = targetIsX86_64(M) ?
-        "push %rbx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %rbx" :
-        "push %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %ebx";
+    const char *asmCode =
+        targetIsX86_64(M)
+            ? "push %rbx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %rbx"
+            : "push %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %ebx";
     InlineAsm *cpuidAsm = InlineAsm::get(
-        AsmTy, asmCode,
-        "=r,~{eax},~{ecx},~{edx},~{dirflag},~{fpsr},~{flags}",
+        AsmTy, asmCode, "=r,~{eax},~{ecx},~{edx},~{dirflag},~{fpsr},~{flags}",
         /*hasSideEffects=*/true, InlineAsm::AD_ATT);
-    Value *edx  = IRB.CreateCall(AsmTy, cpuidAsm, {}, "bcf.cpuid.edx");
-    Value *sse  = IRB.CreateAnd(edx, ConstantInt::get(I32Ty, 1u << 25), "bcf.sse.bit");
+    Value *edx = IRB.CreateCall(AsmTy, cpuidAsm, {}, "bcf.cpuid.edx");
+    Value *sse =
+        IRB.CreateAnd(edx, ConstantInt::get(I32Ty, 1u << 25), "bcf.sse.bit");
     return IRB.CreateICmpNE(sse, ConstantInt::get(I32Ty, 0), "bcf.hw.pred");
 
   } else if (targetIsAArch64(M)) {
     // Read virtual counter — always non-zero after the first clock cycle
     FunctionType *AsmTy = FunctionType::get(I64Ty, {}, false);
     InlineAsm *mrsAsm = InlineAsm::get(
-        AsmTy,
-        "mrs $0, cntvct_el0",
-        "=r,~{dirflag},~{fpsr},~{flags}",
+        AsmTy, "mrs $0, cntvct_el0", "=r,~{dirflag},~{fpsr},~{flags}",
         /*hasSideEffects=*/true, InlineAsm::AD_ATT);
     Value *tsc = IRB.CreateCall(AsmTy, mrsAsm, {}, "bcf.mrs.tsc");
     // (tsc | 1) is always non-zero
@@ -93,15 +94,15 @@ static Value *buildTSCNoisePredicate(Module &M, IRBuilder<> &IRB) {
 
   Type *I64Ty = Type::getInt64Ty(Ctx);
   FunctionType *AsmTy = FunctionType::get(I64Ty, {}, false);
-  InlineAsm *rdtscAsm = InlineAsm::get(
-      AsmTy,
-      "rdtsc\n\t"
-      "shl $$32, %rdx\n\t"
-      "or %rax, %rdx\n\t"
-      "mov %rdx, $0",
-      "=r,~{rax},~{rdx},~{dirflag},~{fpsr},~{flags}",
-      /*hasSideEffects=*/true, InlineAsm::AD_ATT);
-  Value *tsc   = IRB.CreateCall(AsmTy, rdtscAsm, {}, "bcf.rdtsc");
+  InlineAsm *rdtscAsm =
+      InlineAsm::get(AsmTy,
+                     "rdtsc\n\t"
+                     "shl $$32, %rdx\n\t"
+                     "or %rax, %rdx\n\t"
+                     "mov %rdx, $0",
+                     "=r,~{rax},~{rdx},~{dirflag},~{fpsr},~{flags}",
+                     /*hasSideEffects=*/true, InlineAsm::AD_ATT);
+  Value *tsc = IRB.CreateCall(AsmTy, rdtscAsm, {}, "bcf.rdtsc");
   Value *orOne = IRB.CreateOr(tsc, ConstantInt::get(I64Ty, 1LL), "bcf.tsc.or");
   return IRB.CreateICmpNE(orOne, ConstantInt::get(I64Ty, 0LL), "bcf.tsc.pred");
 }
@@ -116,52 +117,52 @@ static Value *buildEntropyChainPredicate(Module &M, IRBuilder<> &IRB,
   if (targetIsX86(M)) {
     // Tier 1: CPUID — EDX bit 25 = SSE (always 1 on x86_64)
     FunctionType *CpuidTy = FunctionType::get(I32Ty, {}, false);
-    const char *asmCode = targetIsX86_64(M) ?
-        "push %rbx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %rbx" :
-        "push %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %ebx";
-    InlineAsm *cpuidIA = InlineAsm::get(CpuidTy, asmCode,
-        "=r,~{eax},~{ecx},~{edx},~{dirflag},~{fpsr},~{flags}",
+    const char *asmCode =
+        targetIsX86_64(M)
+            ? "push %rbx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %rbx"
+            : "push %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %ebx";
+    InlineAsm *cpuidIA = InlineAsm::get(
+        CpuidTy, asmCode, "=r,~{eax},~{ecx},~{edx},~{dirflag},~{fpsr},~{flags}",
         true, InlineAsm::AD_ATT);
     Value *edx = IRB.CreateCall(CpuidTy, cpuidIA, {}, "bcf.ec.edx");
     Value *sse = IRB.CreateAnd(edx, ConstantInt::get(I32Ty, 1u << 25));
-    Value *t1  = IRB.CreateICmpNE(sse, ConstantInt::get(I32Ty, 0), "bcf.ec.t1");
+    Value *t1 = IRB.CreateICmpNE(sse, ConstantInt::get(I32Ty, 0), "bcf.ec.t1");
     result = IRB.CreateAnd(result, t1, "bcf.ec.r1");
 
     // Tier 2: RDTSC — (rdtsc | 1) != 0
     FunctionType *RdtscTy = FunctionType::get(I64Ty, {}, false);
-    InlineAsm *rdtscIA = InlineAsm::get(RdtscTy,
-        "rdtsc\n\t"
-        "shl $$32, %rdx\n\t"
-        "or %rax, %rdx\n\t"
-        "mov %rdx, $0",
-        "=r,~{rax},~{rdx},~{dirflag},~{fpsr},~{flags}",
-        true, InlineAsm::AD_ATT);
-    Value *tsc  = IRB.CreateCall(RdtscTy, rdtscIA, {}, "bcf.ec.tsc");
-    Value *or1  = IRB.CreateOr(tsc, ConstantInt::get(I64Ty, 1LL));
-    Value *t2   = IRB.CreateICmpNE(or1, ConstantInt::get(I64Ty, 0), "bcf.ec.t2");
+    InlineAsm *rdtscIA =
+        InlineAsm::get(RdtscTy,
+                       "rdtsc\n\t"
+                       "shl $$32, %rdx\n\t"
+                       "or %rax, %rdx\n\t"
+                       "mov %rdx, $0",
+                       "=r,~{rax},~{rdx},~{dirflag},~{fpsr},~{flags}", true,
+                       InlineAsm::AD_ATT);
+    Value *tsc = IRB.CreateCall(RdtscTy, rdtscIA, {}, "bcf.ec.tsc");
+    Value *or1 = IRB.CreateOr(tsc, ConstantInt::get(I64Ty, 1LL));
+    Value *t2 = IRB.CreateICmpNE(or1, ConstantInt::get(I64Ty, 0), "bcf.ec.t2");
     result = IRB.CreateAnd(result, t2, "bcf.ec.r2");
 
   } else if (targetIsAArch64(M)) {
     // Tier 1+2 combined: cntvct_el0 | 1 != 0 (virtual timer, always ticking)
     FunctionType *MrsTy = FunctionType::get(I64Ty, {}, false);
-    InlineAsm *mrsIA = InlineAsm::get(MrsTy,
-        "mrs $0, cntvct_el0",
-        "=r,~{dirflag},~{fpsr},~{flags}",
-        true, InlineAsm::AD_ATT);
+    InlineAsm *mrsIA = InlineAsm::get(MrsTy, "mrs $0, cntvct_el0",
+                                      "=r,~{dirflag},~{fpsr},~{flags}", true,
+                                      InlineAsm::AD_ATT);
     Value *tsc = IRB.CreateCall(MrsTy, mrsIA, {}, "bcf.ec.mrs");
     Value *or1 = IRB.CreateOr(tsc, ConstantInt::get(I64Ty, 1LL));
-    Value *t1  = IRB.CreateICmpNE(or1, ConstantInt::get(I64Ty, 0), "bcf.ec.t1");
+    Value *t1 = IRB.CreateICmpNE(or1, ConstantInt::get(I64Ty, 0), "bcf.ec.t1");
     result = IRB.CreateAnd(result, t1, "bcf.ec.r1");
   }
 
   // Tier 3: global-variable load != sentinel (opaque to constant folding)
   // sentinelGV is initialized to a non-sentinel value and marked volatile.
   if (sentinelGV) {
-    Value *gvLoad = IRB.CreateLoad(sentinelGV->getValueType(), sentinelGV,
-                                   true, "bcf.ec.gvload");
+    Value *gvLoad = IRB.CreateLoad(sentinelGV->getValueType(), sentinelGV, true,
+                                   "bcf.ec.gvload");
     uint32_t sentinel = 0xDEADC0DEu;
-    Value *t3 = IRB.CreateICmpNE(gvLoad,
-                                 ConstantInt::get(I32Ty, sentinel),
+    Value *t3 = IRB.CreateICmpNE(gvLoad, ConstantInt::get(I32Ty, sentinel),
                                  "bcf.ec.t3");
     result = IRB.CreateAnd(result, t3, "bcf.ec.r3");
   }
@@ -223,11 +224,11 @@ static cl::opt<bool> CreateFunctionForOpaquePredicate(
     cl::value_desc("create function"), cl::init(false), cl::Optional);
 static bool CreateFunctionForOpaquePredicateTemp = false;
 
-static cl::opt<bool> BCFNested(
-    "bcf_nested",
-    cl::desc("[BCF] Apply BCF recursively to generated bogus blocks "
-             "(fractal-style CFG obfuscation; higher compile time)"),
-    cl::init(false), cl::Optional);
+static cl::opt<bool>
+    BCFNested("bcf_nested",
+              cl::desc("[BCF] Apply BCF recursively to generated bogus blocks "
+                       "(fractal-style CFG obfuscation; higher compile time)"),
+              cl::init(false), cl::Optional);
 static bool BCFNestedTemp = false;
 
 static cl::opt<bool> BCFEntropyChain(
@@ -283,7 +284,8 @@ struct BogusControlFlow : public FunctionPass {
    */
   bool runOnFunction(Function &F) override {
     if (!toObfuscateUint32Option(&F, "bcf_loop", &ObfTimesTemp)) {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       ObfTimesTemp = ec.bcf.iterations.value_or((uint32_t)ObfTimes);
     }
 
@@ -294,13 +296,15 @@ struct BogusControlFlow : public FunctionPass {
     }
 
     if (!toObfuscateUint32Option(&F, "bcf_prob", &ObfProbRateTemp)) {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       ObfProbRateTemp = ec.bcf.probability.value_or((uint32_t)ObfProbRate);
     }
     // MaxObf: prob=100, times=3.
     if (ObfuscationMaxMode) {
       ObfProbRateTemp = 100;
-      if (ObfTimesTemp < 3) ObfTimesTemp = 3;
+      if (ObfTimesTemp < 3)
+        ObfTimesTemp = 3;
     }
 
     // Check if the number of applications is correct
@@ -312,13 +316,17 @@ struct BogusControlFlow : public FunctionPass {
 
     if (!toObfuscateUint32Option(&F, "bcf_junkasm_maxnum",
                                  &MaxNumberOfJunkAssemblyTemp)) {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
-      MaxNumberOfJunkAssemblyTemp = ec.bcf.junk_asm_max.value_or((uint32_t)MaxNumberOfJunkAssembly);
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      MaxNumberOfJunkAssemblyTemp =
+          ec.bcf.junk_asm_max.value_or((uint32_t)MaxNumberOfJunkAssembly);
     }
     if (!toObfuscateUint32Option(&F, "bcf_junkasm_minnum",
                                  &MinNumberOfJunkAssemblyTemp)) {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
-      MinNumberOfJunkAssemblyTemp = ec.bcf.junk_asm_min.value_or((uint32_t)MinNumberOfJunkAssembly);
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      MinNumberOfJunkAssemblyTemp =
+          ec.bcf.junk_asm_min.value_or((uint32_t)MinNumberOfJunkAssembly);
     }
 
     // Check if the number of applications is correct
@@ -331,7 +339,8 @@ struct BogusControlFlow : public FunctionPass {
     // If fla annotations
     if (toObfuscate(flag, &F, "bcf") && !F.isPresplitCoroutine() &&
         !readAnnotationMetadata(&F, "bcfopfunc")) {
-      if (ObfVerbose) errs() << "Running BogusControlFlow On " << F.getName() << "\n";
+      if (ObfVerbose)
+        errs() << "Running BogusControlFlow On " << F.getName() << "\n";
       bogus(F);
       doF(F);
     }
@@ -341,24 +350,29 @@ struct BogusControlFlow : public FunctionPass {
 
   void bogus(Function &F) {
     {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       if (!toObfuscateBoolOption(&F, "bcf_junkasm", &JunkAssemblyTemp))
         JunkAssemblyTemp = ec.bcf.junk_asm.value_or((bool)JunkAssembly);
       if (!toObfuscateBoolOption(&F, "bcf_onlyjunkasm", &OnlyJunkAssemblyTemp))
-        OnlyJunkAssemblyTemp = ec.bcf.only_junk_asm.value_or((bool)OnlyJunkAssembly);
+        OnlyJunkAssemblyTemp =
+            ec.bcf.only_junk_asm.value_or((bool)OnlyJunkAssembly);
       if (!toObfuscateBoolOption(&F, "bcf_nested", &BCFNestedTemp))
         BCFNestedTemp = ec.bcf.nested.value_or((bool)BCFNested);
-      if (!toObfuscateBoolOption(&F, "bcf_createfunc", &CreateFunctionForOpaquePredicateTemp))
-        CreateFunctionForOpaquePredicateTemp = ec.bcf.create_func.value_or((bool)CreateFunctionForOpaquePredicate);
+      if (!toObfuscateBoolOption(&F, "bcf_createfunc",
+                                 &CreateFunctionForOpaquePredicateTemp))
+        CreateFunctionForOpaquePredicateTemp =
+            ec.bcf.create_func.value_or((bool)CreateFunctionForOpaquePredicate);
       if (!toObfuscateBoolOption(&F, "bcf_entropy_chain", &BCFEntropyChainTemp))
-        BCFEntropyChainTemp = ec.bcf.entropy_chain.value_or((bool)BCFEntropyChain);
+        BCFEntropyChainTemp =
+            ec.bcf.entropy_chain.value_or((bool)BCFEntropyChain);
     }
     // MaxObf: override to extremes.
     // NOTE: BCFNestedTemp is intentionally NOT forced true in MaxObf mode.
     // With times=3 and prob=100, nested expansion causes exponential BB growth
-    // (each outer iteration rebuilds from the already-enlarged function), making
-    // the pass appear to freeze.  times=3 + prob=100 + entropy-chain is already
-    // the heaviest meaningful configuration.
+    // (each outer iteration rebuilds from the already-enlarged function),
+    // making the pass appear to freeze.  times=3 + prob=100 + entropy-chain is
+    // already the heaviest meaningful configuration.
     if (ObfuscationMaxMode) {
       BCFEntropyChainTemp = true;
     }
@@ -405,7 +419,10 @@ struct BogusControlFlow : public FunctionPass {
               // New blocks were created; find and enqueue them
               size_t skip = bbsBefore;
               for (BasicBlock &BB : F) {
-                if (skip > 0) { skip--; continue; }
+                if (skip > 0) {
+                  skip--;
+                  continue;
+                }
                 if (!BB.isEHPad() && !BB.isLandingPad() &&
                     !containsSwiftError(&BB) && !containsMustTailCall(&BB) &&
                     !containsCoroBeginInst(&BB) &&
@@ -650,10 +667,10 @@ struct BogusControlFlow : public FunctionPass {
               case 6: { // Shift left by 1 then right by 1 (lossy round-trip)
                 Type *Ty = i->getOperand(0)->getType();
                 Value *one = ConstantInt::get(Ty, 1);
-                op  = BinaryOperator::Create(Instruction::Shl,  i->getOperand(0),
-                                             one, "", &*i);
-                op1 = BinaryOperator::Create(Instruction::LShr, op, one,
-                                             "", &*i);
+                op = BinaryOperator::Create(Instruction::Shl, i->getOperand(0),
+                                            one, "", &*i);
+                op1 =
+                    BinaryOperator::Create(Instruction::LShr, op, one, "", &*i);
                 break;
               }
               case 7: // Mul then Sub (creates diverging dependency tree)
@@ -697,16 +714,16 @@ struct BogusControlFlow : public FunctionPass {
               case 4: { // FMul -1.0 then FNeg (double negation, net identity)
                 Type *Ty = i->getOperand(0)->getType();
                 Value *negOne = ConstantFP::get(Ty, -1.0);
-                op  = BinaryOperator::Create(Instruction::FMul, i->getOperand(0),
-                                             negOne, "", &*i);
+                op = BinaryOperator::Create(Instruction::FMul, i->getOperand(0),
+                                            negOne, "", &*i);
                 op1 = UnaryOperator::CreateFNeg(op, "", &*i);
                 break;
               }
               case 5: { // FDiv 1.0 then FMul (scale-by-one dependency)
                 Type *Ty = i->getOperand(0)->getType();
                 Value *one = ConstantFP::get(Ty, 1.0);
-                op  = BinaryOperator::Create(Instruction::FDiv, i->getOperand(0),
-                                             one, "", &*i);
+                op = BinaryOperator::Create(Instruction::FDiv, i->getOperand(0),
+                                            one, "", &*i);
                 op1 = BinaryOperator::Create(Instruction::FMul, op,
                                              i->getOperand(1), "", &*i);
                 break;
@@ -719,7 +736,8 @@ struct BogusControlFlow : public FunctionPass {
         // This block is intentionally outside isBinaryOp() because ICmpInst
         // inherits from CmpInst, not BinaryOperator.
         if (ICmpInst *currentI = dyn_cast<ICmpInst>(&*i)) {
-          if (!currentI->getOperand(0)->getType()->isIntegerTy()) continue;
+          if (!currentI->getOperand(0)->getType()->isIntegerTy())
+            continue;
           switch (cryptoutils->get_range(6)) {
           case 0:
             break;
@@ -728,44 +746,67 @@ struct BogusControlFlow : public FunctionPass {
             break;
           case 2: {
             switch (cryptoutils->get_range(10)) {
-            case 0: currentI->setPredicate(ICmpInst::ICMP_EQ);  break;
-            case 1: currentI->setPredicate(ICmpInst::ICMP_NE);  break;
-            case 2: currentI->setPredicate(ICmpInst::ICMP_UGT); break;
-            case 3: currentI->setPredicate(ICmpInst::ICMP_UGE); break;
-            case 4: currentI->setPredicate(ICmpInst::ICMP_ULT); break;
-            case 5: currentI->setPredicate(ICmpInst::ICMP_ULE); break;
-            case 6: currentI->setPredicate(ICmpInst::ICMP_SGT); break;
-            case 7: currentI->setPredicate(ICmpInst::ICMP_SGE); break;
-            case 8: currentI->setPredicate(ICmpInst::ICMP_SLT); break;
-            case 9: currentI->setPredicate(ICmpInst::ICMP_SLE); break;
+            case 0:
+              currentI->setPredicate(ICmpInst::ICMP_EQ);
+              break;
+            case 1:
+              currentI->setPredicate(ICmpInst::ICMP_NE);
+              break;
+            case 2:
+              currentI->setPredicate(ICmpInst::ICMP_UGT);
+              break;
+            case 3:
+              currentI->setPredicate(ICmpInst::ICMP_UGE);
+              break;
+            case 4:
+              currentI->setPredicate(ICmpInst::ICMP_ULT);
+              break;
+            case 5:
+              currentI->setPredicate(ICmpInst::ICMP_ULE);
+              break;
+            case 6:
+              currentI->setPredicate(ICmpInst::ICMP_SGT);
+              break;
+            case 7:
+              currentI->setPredicate(ICmpInst::ICMP_SGE);
+              break;
+            case 8:
+              currentI->setPredicate(ICmpInst::ICMP_SLT);
+              break;
+            case 9:
+              currentI->setPredicate(ICmpInst::ICMP_SLE);
+              break;
             }
             break;
           }
-          case 3: { // XOR first operand with zero (adds instruction, same value)
+          case 3: { // XOR first operand with zero (adds instruction, same
+                    // value)
             Value *xorZero = BinaryOperator::Create(
                 Instruction::Xor, currentI->getOperand(0),
-                ConstantInt::get(currentI->getOperand(0)->getType(), 0),
-                "", currentI);
+                ConstantInt::get(currentI->getOperand(0)->getType(), 0), "",
+                currentI);
             currentI->setOperand(0, xorZero);
             break;
           }
-          case 4: { // Negate both operands and swap (reverses ordering predicate)
-            Value *negLHS = BinaryOperator::CreateNeg(
-                currentI->getOperand(0), "", currentI);
-            Value *negRHS = BinaryOperator::CreateNeg(
-                currentI->getOperand(1), "", currentI);
+          case 4: { // Negate both operands and swap (reverses ordering
+                    // predicate)
+            Value *negLHS = BinaryOperator::CreateNeg(currentI->getOperand(0),
+                                                      "", currentI);
+            Value *negRHS = BinaryOperator::CreateNeg(currentI->getOperand(1),
+                                                      "", currentI);
             currentI->setOperand(0, negLHS);
             currentI->setOperand(1, negRHS);
             currentI->swapOperands();
             break;
           }
-          case 5: { // Add same random constant to both sides (constant-offset equivalence)
+          case 5: { // Add same random constant to both sides (constant-offset
+                    // equivalence)
             Type *OpTy = currentI->getOperand(0)->getType();
             Value *c = ConstantInt::get(OpTy, cryptoutils->get_uint32_t());
-            Value *lhsNew = BinaryOperator::Create(Instruction::Add,
-                currentI->getOperand(0), c, "", currentI);
-            Value *rhsNew = BinaryOperator::Create(Instruction::Add,
-                currentI->getOperand(1), c, "", currentI);
+            Value *lhsNew = BinaryOperator::Create(
+                Instruction::Add, currentI->getOperand(0), c, "", currentI);
+            Value *rhsNew = BinaryOperator::Create(
+                Instruction::Add, currentI->getOperand(1), c, "", currentI);
             currentI->setOperand(0, lhsNew);
             currentI->setOperand(1, rhsNew);
             break;
@@ -774,7 +815,8 @@ struct BogusControlFlow : public FunctionPass {
         }
         // FCmpInst mutation — same structure as ICmp above.
         if (FCmpInst *currentI = dyn_cast<FCmpInst>(&*i)) {
-          if (!currentI->getOperand(0)->getType()->isFloatingPointTy()) continue;
+          if (!currentI->getOperand(0)->getType()->isFloatingPointTy())
+            continue;
           switch (cryptoutils->get_range(6)) {
           case 0:
             break;
@@ -783,24 +825,44 @@ struct BogusControlFlow : public FunctionPass {
             break;
           case 2: {
             switch (cryptoutils->get_range(10)) {
-            case 0: currentI->setPredicate(FCmpInst::FCMP_OEQ); break;
-            case 1: currentI->setPredicate(FCmpInst::FCMP_ONE); break;
-            case 2: currentI->setPredicate(FCmpInst::FCMP_UGT); break;
-            case 3: currentI->setPredicate(FCmpInst::FCMP_UGE); break;
-            case 4: currentI->setPredicate(FCmpInst::FCMP_ULT); break;
-            case 5: currentI->setPredicate(FCmpInst::FCMP_ULE); break;
-            case 6: currentI->setPredicate(FCmpInst::FCMP_OGT); break;
-            case 7: currentI->setPredicate(FCmpInst::FCMP_OGE); break;
-            case 8: currentI->setPredicate(FCmpInst::FCMP_OLT); break;
-            case 9: currentI->setPredicate(FCmpInst::FCMP_OLE); break;
+            case 0:
+              currentI->setPredicate(FCmpInst::FCMP_OEQ);
+              break;
+            case 1:
+              currentI->setPredicate(FCmpInst::FCMP_ONE);
+              break;
+            case 2:
+              currentI->setPredicate(FCmpInst::FCMP_UGT);
+              break;
+            case 3:
+              currentI->setPredicate(FCmpInst::FCMP_UGE);
+              break;
+            case 4:
+              currentI->setPredicate(FCmpInst::FCMP_ULT);
+              break;
+            case 5:
+              currentI->setPredicate(FCmpInst::FCMP_ULE);
+              break;
+            case 6:
+              currentI->setPredicate(FCmpInst::FCMP_OGT);
+              break;
+            case 7:
+              currentI->setPredicate(FCmpInst::FCMP_OGE);
+              break;
+            case 8:
+              currentI->setPredicate(FCmpInst::FCMP_OLT);
+              break;
+            case 9:
+              currentI->setPredicate(FCmpInst::FCMP_OLE);
+              break;
             }
             break;
           }
           case 3: { // FNeg both operands and swap (flip ordering direction)
-            Value *negLHS = UnaryOperator::CreateFNeg(
-                currentI->getOperand(0), "", currentI);
-            Value *negRHS = UnaryOperator::CreateFNeg(
-                currentI->getOperand(1), "", currentI);
+            Value *negLHS = UnaryOperator::CreateFNeg(currentI->getOperand(0),
+                                                      "", currentI);
+            Value *negRHS = UnaryOperator::CreateFNeg(currentI->getOperand(1),
+                                                      "", currentI);
             currentI->setOperand(0, negLHS);
             currentI->setOperand(1, negRHS);
             currentI->swapOperands();
@@ -809,16 +871,16 @@ struct BogusControlFlow : public FunctionPass {
           case 4: { // FMul first operand by 1.0 (IEEE identity, adds node)
             Type *Ty = currentI->getOperand(0)->getType();
             Value *one = ConstantFP::get(Ty, 1.0);
-            Value *mul = BinaryOperator::Create(Instruction::FMul,
-                currentI->getOperand(0), one, "", currentI);
+            Value *mul = BinaryOperator::Create(
+                Instruction::FMul, currentI->getOperand(0), one, "", currentI);
             currentI->setOperand(0, mul);
             break;
           }
           case 5: { // FDiv first operand by 1.0 (scale-by-one noise)
             Type *Ty = currentI->getOperand(0)->getType();
             Value *one = ConstantFP::get(Ty, 1.0);
-            Value *div = BinaryOperator::Create(Instruction::FDiv,
-                currentI->getOperand(0), one, "", currentI);
+            Value *div = BinaryOperator::Create(
+                Instruction::FDiv, currentI->getOperand(0), one, "", currentI);
             currentI->setOperand(0, div);
             break;
           }
@@ -892,7 +954,8 @@ struct BogusControlFlow : public FunctionPass {
       CreateFunctionForOpaquePredicateTemp = CreateFunctionForOpaquePredicate;
     if (!toObfuscateUint32Option(&F, "bcf_cond_compl",
                                  &ConditionExpressionComplexityTemp)) {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       ConditionExpressionComplexityTemp =
           ec.bcf.complexity.value_or((uint32_t)ConditionExpressionComplexity);
     }
@@ -919,23 +982,23 @@ struct BogusControlFlow : public FunctionPass {
       }
     }
     Module &M = *F.getParent();
-    Type *I1Ty  = Type::getInt1Ty(M.getContext());
+    Type *I1Ty = Type::getInt1Ty(M.getContext());
     Type *I32Ty = Type::getInt32Ty(M.getContext());
 
     // Determine once whether hardware predicates are available for this target
     bool useHWPred = targetIsX86(M) || targetIsAArch64(M);
 
-    // Create the sentinel GlobalVariable for the entropy-chain tier-3 predicate.
-    // Initialized to a value != 0xDEADC0DE so the predicate is always true.
-    // Marked non-constant so constant propagation cannot resolve it.
+    // Create the sentinel GlobalVariable for the entropy-chain tier-3
+    // predicate. Initialized to a value != 0xDEADC0DE so the predicate is
+    // always true. Marked non-constant so constant propagation cannot resolve
+    // it.
     GlobalVariable *sentinelGV = nullptr;
     if (BCFEntropyChainTemp) {
       uint32_t initVal = cryptoutils->get_uint32_t();
       while (initVal == 0xDEADC0DEu)
         initVal = cryptoutils->get_uint32_t();
       sentinelGV = new GlobalVariable(
-          M, I32Ty, /*isConstant=*/false,
-          GlobalValue::PrivateLinkage,
+          M, I32Ty, /*isConstant=*/false, GlobalValue::PrivateLinkage,
           ConstantInt::get(I32Ty, initVal), "bcf.sentinel");
     }
 
@@ -1025,7 +1088,8 @@ struct BogusControlFlow : public FunctionPass {
         Last = IRBReal->CreateCall(opFunction);
       } else {
         Value *swPred = IRBReal->CreateICmp(pred, Last, RealRHS);
-        bool doEntropyChain = BCFEntropyChainTemp &&
+        bool doEntropyChain =
+            BCFEntropyChainTemp &&
             (ObfuscationMaxMode || cryptoutils->get_range(2) == 0);
         if (doEntropyChain) {
           Value *ecPred = buildEntropyChainPredicate(M, *IRBReal, sentinelGV);

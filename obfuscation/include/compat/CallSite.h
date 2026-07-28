@@ -19,13 +19,14 @@
 #ifndef ENSIA_COMPAT_CALLSITE_H
 #define ENSIA_COMPAT_CALLSITE_H
 
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instructions.h"
 
 namespace llvm {
 
 class CallSite {
   CallBase *CB = nullptr;
+
 public:
   CallSite() : CB(nullptr) {}
   CallSite(Instruction *I) : CB(dyn_cast_or_null<CallBase>(I)) {}
@@ -41,20 +42,33 @@ public:
   CallBase *operator->() const { return CB; }
   Instruction &operator*() const { return *CB; }
 
-  Function *getCalledFunction() const { return CB ? CB->getCalledFunction() : nullptr; }
-  Value *getCalledOperand() const { return CB ? CB->getCalledOperand() : nullptr; }
-  Value *getCalledValue() const { return CB ? CB->getCalledOperand() : nullptr; }
+  Function *getCalledFunction() const {
+    return CB ? CB->getCalledFunction() : nullptr;
+  }
+  Value *getCalledOperand() const {
+    return CB ? CB->getCalledOperand() : nullptr;
+  }
+  Value *getCalledValue() const {
+    return CB ? CB->getCalledOperand() : nullptr;
+  }
 
   unsigned getNumArgOperands() const { return CB ? CB->arg_size() : 0; }
   unsigned arg_size() const { return CB ? CB->arg_size() : 0; }
-  Value *getArgOperand(unsigned i) const { return CB ? CB->getArgOperand(i) : nullptr; }
+  Value *getArgOperand(unsigned i) const {
+    return CB ? CB->getArgOperand(i) : nullptr;
+  }
 
-  CallingConv::ID getCallingConv() const { return CB ? CB->getCallingConv() : CallingConv::C; }
+  CallingConv::ID getCallingConv() const {
+    return CB ? CB->getCallingConv() : CallingConv::C;
+  }
   Type *getType() const { return CB ? CB->getType() : nullptr; }
-  Intrinsic::ID getIntrinsicID() const { return CB ? CB->getIntrinsicID() : Intrinsic::not_intrinsic; }
+  Intrinsic::ID getIntrinsicID() const {
+    return CB ? CB->getIntrinsicID() : Intrinsic::not_intrinsic;
+  }
 
   void setCalledFunction(Value *V) {
-    if (CB) CB->setCalledOperand(V);
+    if (CB)
+      CB->setCalledOperand(V);
   }
 };
 

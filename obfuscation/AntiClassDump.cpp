@@ -18,7 +18,6 @@
 
 #include "include/AntiClassDump.h"
 #include "include/CryptoUtils.h"
-#include "llvm/TargetParser/Triple.h"
 #include "include/Utils.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -28,6 +27,7 @@
 #include "llvm/IR/Value.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include <algorithm>
 #include <deque>
@@ -50,18 +50,18 @@ static cl::opt<bool>
     RenameMethodIMP("acd-rename-methodimp", cl::init(false), cl::NotHidden,
                     cl::desc("[AntiClassDump]Rename methods imp"));
 
-static cl::opt<bool>
-    ScrambleMethodOrder("acd-scramble-methods", cl::init(false), cl::NotHidden,
-                        cl::desc("[AntiClassDump]Shuffle ObjC method list order "
-                                 "to defeat sequential class-dump enumeration"));
+static cl::opt<bool> ScrambleMethodOrder(
+    "acd-scramble-methods", cl::init(false), cl::NotHidden,
+    cl::desc("[AntiClassDump]Shuffle ObjC method list order "
+             "to defeat sequential class-dump enumeration"));
 static cl::opt<bool>
     InjectDummySelectors("acd-dummy-selectors", cl::init(false), cl::NotHidden,
                          cl::desc("[AntiClassDump]Register ghost selectors at "
                                   "+initialize time to flood selector table"));
-static cl::opt<uint32_t>
-    DummySelectorCount("acd-dummy-count", cl::init(8), cl::NotHidden,
-                       cl::desc("[AntiClassDump]Number of ghost selectors to inject "
-                                "(default 8)"));
+static cl::opt<uint32_t> DummySelectorCount(
+    "acd-dummy-count", cl::init(8), cl::NotHidden,
+    cl::desc("[AntiClassDump]Number of ghost selectors to inject "
+             "(default 8)"));
 
 namespace llvm {
 struct AntiClassDump : public ModulePass {
@@ -107,7 +107,8 @@ struct AntiClassDump : public ModulePass {
   }
 
   bool runOnModule(Module &M) override {
-    if (ObfVerbose) errs() << "Running AntiClassDump On " << M.getSourceFileName() << "\n";
+    if (ObfVerbose)
+      errs() << "Running AntiClassDump On " << M.getSourceFileName() << "\n";
     SmallVector<GlobalVariable *, 32> OLCGVs;
     for (GlobalVariable &GV : M.globals()) {
       if (GV.getName().starts_with("OBJC_LABEL_CLASS_$")) {
@@ -337,27 +338,26 @@ struct AntiClassDump : public ModulePass {
       newStructValue.emplace_back(newMethodList);
       StructType *newType =
           StructType::get(M->getContext(), ArrayRef<Type *>(newStructType));
-      Constant *newMethodStruct = ConstantStruct::get(
-          newType, ArrayRef<Constant *>(newStructValue));
+      Constant *newMethodStruct =
+          ConstantStruct::get(newType, ArrayRef<Constant *>(newStructValue));
       GlobalVariable *newMethodStructGV = new GlobalVariable(
           *M, newType, true, GlobalValue::LinkageTypes::PrivateLinkage,
           newMethodStruct, "ACDNewInstanceMethodMap");
       appendToCompilerUsed(*M, {newMethodStructGV});
       newMethodStructGV->copyAttributesFrom(methodListGV);
-      Constant *bitcastExpr = opaquepointers
-          ? cast<Constant>(newMethodStructGV)
-          : ConstantExpr::getBitCast(
-                newMethodStructGV,
-                PointerType::getUnqual(StructType::getTypeByName(
-                      M->getContext(), "struct.__method_list_t")));
-      metaclassCS->handleOperandChange(metaclassCS->getAggregateElement(5),
-                                       opaquepointers ? cast<Constant>(newMethodStructGV)
-                                                      : bitcastExpr);
+      Constant *bitcastExpr =
+          opaquepointers ? cast<Constant>(newMethodStructGV)
+                         : ConstantExpr::getBitCast(
+                               newMethodStructGV,
+                               PointerType::getUnqual(StructType::getTypeByName(
+                                   M->getContext(), "struct.__method_list_t")));
+      metaclassCS->handleOperandChange(
+          metaclassCS->getAggregateElement(5),
+          opaquepointers ? cast<Constant>(newMethodStructGV) : bitcastExpr);
       methodListGV->replaceAllUsesWith(
-          opaquepointers
-              ? cast<Constant>(newMethodStructGV)
-              : ConstantExpr::getBitCast(newMethodStructGV,
-                                         methodListGV->getType()));
+          opaquepointers ? cast<Constant>(newMethodStructGV)
+                         : ConstantExpr::getBitCast(newMethodStructGV,
+                                                    methodListGV->getType()));
       methodListGV->dropAllReferences();
       methodListGV->eraseFromParent();
       errs() << "Updated Instance Method Map of:" << class_ro->getName()
@@ -397,23 +397,25 @@ struct AntiClassDump : public ModulePass {
     methodStructContents.emplace_back(MethName);
     methodStructContents.emplace_back(MethType);
     methodStructContents.emplace_back(BitCastedIMP);
-    Constant *newMethod = ConstantStruct::get(
-        cast<StructType>(objc_method_type),
-        ArrayRef<Constant *>(methodStructContents));
-    Constant *newMethodList = ConstantArray::get(
-        AT, ArrayRef<Constant *>(newMethod));
+    Constant *newMethod =
+        ConstantStruct::get(cast<StructType>(objc_method_type),
+                            ArrayRef<Constant *>(methodStructContents));
+    Constant *newMethodList =
+        ConstantArray::get(AT, ArrayRef<Constant *>(newMethod));
     std::vector<Type *> newStructType;
     std::vector<Constant *> newStructValue;
     newStructType.emplace_back(Type::getInt32Ty(M->getContext()));
-    newStructValue.emplace_back(ConstantInt::get(Type::getInt32Ty(M->getContext()), 0x18));
+    newStructValue.emplace_back(
+        ConstantInt::get(Type::getInt32Ty(M->getContext()), 0x18));
     newStructType.emplace_back(Type::getInt32Ty(M->getContext()));
-    newStructValue.emplace_back(ConstantInt::get(Type::getInt32Ty(M->getContext()), 1));
+    newStructValue.emplace_back(
+        ConstantInt::get(Type::getInt32Ty(M->getContext()), 1));
     newStructType.emplace_back(AT);
     newStructValue.emplace_back(newMethodList);
     StructType *newType =
         StructType::get(M->getContext(), ArrayRef<Type *>(newStructType));
-    Constant *newMethodStruct = ConstantStruct::get(
-        newType, ArrayRef<Constant *>(newStructValue));
+    Constant *newMethodStruct =
+        ConstantStruct::get(newType, ArrayRef<Constant *>(newStructValue));
     GlobalVariable *newMethodStructGV = new GlobalVariable(
         *M, newType, true, GlobalValue::LinkageTypes::PrivateLinkage,
         newMethodStruct, "ACDNewClassMethodMap");
@@ -422,16 +424,15 @@ struct AntiClassDump : public ModulePass {
       newMethodStructGV->copyAttributesFrom(methodListGV);
     Constant *bitcastExpr = ConstantExpr::getBitCast(
         newMethodStructGV,
-        opaquepointers
-            ? PointerType::getUnqual(newType)
-            : PointerType::getUnqual(StructType::getTypeByName(
-                  M->getContext(), "struct.__method_list_t")));
+        opaquepointers ? PointerType::getUnqual(newType)
+                       : PointerType::getUnqual(StructType::getTypeByName(
+                             M->getContext(), "struct.__method_list_t")));
     opaquepointers ? classCS->setOperand(5, bitcastExpr)
                    : classCS->handleOperandChange(
                          classCS->getAggregateElement(5), bitcastExpr);
     if (methodListGV) {
-      methodListGV->replaceAllUsesWith(ConstantExpr::getBitCast(
-          newMethodStructGV, methodListGV->getType()));
+      methodListGV->replaceAllUsesWith(
+          ConstantExpr::getBitCast(newMethodStructGV, methodListGV->getType()));
       methodListGV->dropAllReferences();
       methodListGV->eraseFromParent();
     }

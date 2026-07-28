@@ -44,15 +44,15 @@ static cl::opt<uint32_t>
 static uint32_t ObfProbRateTemp = 50;
 
 // Stats
-STATISTIC(Add,  "Add substituted");
-STATISTIC(Sub,  "Sub substituted");
-STATISTIC(Mul,  "Mul substituted");
-STATISTIC(Shl,  "Shl substituted");
+STATISTIC(Add, "Add substituted");
+STATISTIC(Sub, "Sub substituted");
+STATISTIC(Mul, "Mul substituted");
+STATISTIC(Shl, "Shl substituted");
 STATISTIC(LShr, "LShr substituted");
 STATISTIC(AShr, "AShr substituted");
-STATISTIC(And,  "And substituted");
-STATISTIC(Or,   "Or substituted");
-STATISTIC(Xor,  "Xor substituted");
+STATISTIC(And, "And substituted");
+STATISTIC(Or, "Or substituted");
+STATISTIC(Xor, "Xor substituted");
 
 namespace {
 
@@ -64,11 +64,13 @@ struct Substitution : public FunctionPass {
 
   bool runOnFunction(Function &F) override {
     if (!toObfuscateUint32Option(&F, "sub_loop", &ObfTimesTemp)) {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       ObfTimesTemp = ec.sub.iterations.value_or((uint32_t)ObfTimes);
     }
     if (!toObfuscateUint32Option(&F, "sub_prob", &ObfProbRateTemp)) {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       ObfProbRateTemp = ec.sub.probability.value_or((uint32_t)ObfProbRate);
     }
 
@@ -86,7 +88,8 @@ struct Substitution : public FunctionPass {
     Function *tmp = &F;
     // Do we obfuscate
     if (toObfuscate(flag, tmp, "sub")) {
-      if (ObfVerbose) errs() << "Running Instruction Substitution On " << F.getName() << "\n";
+      if (ObfVerbose)
+        errs() << "Running Instruction Substitution On " << F.getName() << "\n";
       substitute(tmp);
       return true;
     }
@@ -102,13 +105,15 @@ struct Substitution : public FunctionPass {
         if (inst.isBinaryOp() && inst.getType()->isIntegerTy())
           eligible++;
 
-      if (eligible == 0) break;
+      if (eligible == 0)
+        break;
 
       uint32_t currentProb = ObfProbRateTemp;
       uint32_t maxTargets = 10000;
       if (eligible * currentProb / 100 > maxTargets) {
         currentProb = (maxTargets * 100) / eligible;
-        if (currentProb == 0) currentProb = 1;
+        if (currentProb == 0)
+          currentProb = 1;
       }
 
       SmallVector<Instruction *, 32> toErase;

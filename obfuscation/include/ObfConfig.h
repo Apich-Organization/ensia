@@ -30,41 +30,41 @@ namespace llvm {
 // Every field is optional: absent means "use the pass's own cl::opt default".
 
 struct ObfBcfConfig {
-  std::optional<bool>     enabled;
-  std::optional<uint32_t> probability;    // 0–100
+  std::optional<bool> enabled;
+  std::optional<uint32_t> probability; // 0–100
   std::optional<uint32_t> iterations;
-  std::optional<uint32_t> complexity;     // predicate depth 1–10
-  std::optional<bool>     entropy_chain;  // 3-way CPUID & RDTSC & global
-  std::optional<bool>     junk_asm;
+  std::optional<uint32_t> complexity; // predicate depth 1–10
+  std::optional<bool> entropy_chain;  // 3-way CPUID & RDTSC & global
+  std::optional<bool> junk_asm;
   std::optional<uint32_t> junk_asm_min;
   std::optional<uint32_t> junk_asm_max;
-  std::optional<bool>     nested;
-  std::optional<bool>     create_func;
-  std::optional<bool>     only_junk_asm;
+  std::optional<bool> nested;
+  std::optional<bool> create_func;
+  std::optional<bool> only_junk_asm;
 };
 
 struct ObfSubConfig {
-  std::optional<bool>     enabled;
+  std::optional<bool> enabled;
   std::optional<uint32_t> probability;
   std::optional<uint32_t> iterations;
 };
 
 struct ObfMbaConfig {
-  std::optional<bool>     enabled;
+  std::optional<bool> enabled;
   std::optional<uint32_t> probability;
-  std::optional<uint32_t> layers;         // 1–3
-  std::optional<bool>     heuristic;      // zero-noise injection
+  std::optional<uint32_t> layers; // 1–3
+  std::optional<bool> heuristic;  // zero-noise injection
 };
 
 struct ObfSplitConfig {
-  std::optional<bool>     enabled;
-  std::optional<uint32_t> splits;         // splits per BB
-  std::optional<bool>     stack_confusion;
+  std::optional<bool> enabled;
+  std::optional<uint32_t> splits; // splits per BB
+  std::optional<bool> stack_confusion;
 };
 
 struct ObfStrEncConfig {
-  std::optional<bool>      enabled;
-  std::optional<uint32_t>  probability;
+  std::optional<bool> enabled;
+  std::optional<uint32_t> probability;
   // Regex patterns matched against raw string content (i8 arrays only).
   // skip_content: if any pattern matches, do not encrypt this string literal.
   // force_content: if any pattern matches, encrypt regardless of probability.
@@ -73,14 +73,14 @@ struct ObfStrEncConfig {
 };
 
 struct ObfConstEncConfig {
-  std::optional<bool>      enabled;
-  std::optional<uint32_t>  iterations;
-  std::optional<uint32_t>  share_count;         // 2–8
-  std::optional<bool>      feistel;
-  std::optional<bool>      substitute_xor;
-  std::optional<uint32_t>  substitute_xor_prob; // 0–100
-  std::optional<bool>      globalize;
-  std::optional<uint32_t>  globalize_prob;      // 0–100
+  std::optional<bool> enabled;
+  std::optional<uint32_t> iterations;
+  std::optional<uint32_t> share_count; // 2–8
+  std::optional<bool> feistel;
+  std::optional<bool> substitute_xor;
+  std::optional<uint32_t> substitute_xor_prob; // 0–100
+  std::optional<bool> globalize;
+  std::optional<uint32_t> globalize_prob; // 0–100
   // Regex patterns matched case-insensitively against the hex value of each
   // ConstantInt (format: "0xDEADBEEF").
   // skip_value: skip encrypting constants whose value matches.
@@ -90,16 +90,16 @@ struct ObfConstEncConfig {
 };
 
 struct ObfVecConfig {
-  std::optional<bool>     enabled;
+  std::optional<bool> enabled;
   std::optional<uint32_t> probability;
-  std::optional<uint32_t> width;          // 128 | 256 | 512
-  std::optional<bool>     shuffle;
-  std::optional<bool>     lift_comparisons;
+  std::optional<uint32_t> width; // 128 | 256 | 512
+  std::optional<bool> shuffle;
+  std::optional<bool> lift_comparisons;
 };
 
 struct ObfCsmConfig {
-  std::optional<bool>     enabled;
-  std::optional<bool>     nested_dispatch;
+  std::optional<bool> enabled;
+  std::optional<bool> nested_dispatch;
   std::optional<uint32_t> warmup;
   std::optional<uint32_t> max_blocks;
 };
@@ -115,14 +115,14 @@ struct ObfIndirConfig {
 };
 
 struct ObfFwConfig {
-  std::optional<bool>     enabled;
+  std::optional<bool> enabled;
   std::optional<uint32_t> probability;
   std::optional<uint32_t> times;
 };
 
 struct ObfFcoConfig {
-  std::optional<bool>        enabled;
-  std::optional<uint64_t>    flag;
+  std::optional<bool> enabled;
+  std::optional<uint64_t> flag;
   std::optional<std::string> symbol_config_path;
 };
 
@@ -137,61 +137,63 @@ struct ObfAntiHookConfig {
 };
 
 struct ObfAntiDbgConfig {
-  std::optional<bool>     enabled;
+  std::optional<bool> enabled;
   std::optional<uint32_t> probability;
 };
 
 struct ObfAntiAcdConfig {
-  std::optional<bool>     enabled;
-  std::optional<bool>     use_initialize;
-  std::optional<bool>     rename_methodimp;
-  std::optional<bool>     scramble_methods;
-  std::optional<bool>     dummy_selectors;
+  std::optional<bool> enabled;
+  std::optional<bool> use_initialize;
+  std::optional<bool> rename_methodimp;
+  std::optional<bool> scramble_methods;
+  std::optional<bool> dummy_selectors;
   std::optional<uint32_t> dummy_count;
 };
 
 // All passes collected
 struct ObfPassConfig {
-  ObfBcfConfig      bcf;
-  ObfSubConfig      sub;
-  ObfMbaConfig      mba;
-  ObfSplitConfig    split;
-  ObfStrEncConfig   str_enc;
+  ObfBcfConfig bcf;
+  ObfSubConfig sub;
+  ObfMbaConfig mba;
+  ObfSplitConfig split;
+  ObfStrEncConfig str_enc;
   ObfConstEncConfig const_enc;
-  ObfVecConfig      vec;
-  ObfCsmConfig      csm;
-  ObfFlatConfig     flatten;
-  ObfIndirConfig    indir_branch;
-  ObfFwConfig       func_wrap;
-  ObfFcoConfig      fco;
+  ObfVecConfig vec;
+  ObfCsmConfig csm;
+  ObfFlatConfig flatten;
+  ObfIndirConfig indir_branch;
+  ObfFwConfig func_wrap;
+  ObfFcoConfig fco;
   ObfAntiHookConfig anti_hook;
-  ObfAntiDbgConfig  anti_dbg;
-  ObfAntiAcdConfig  anti_class_dump;
+  ObfAntiDbgConfig anti_dbg;
+  ObfAntiAcdConfig anti_class_dump;
 };
 
-// ── Policy rule ───────────────────────────────────────────────────────────────
+// ── Policy rule
+// ───────────────────────────────────────────────────────────────
 
 struct ObfPolicy {
-  std::string       module_regex;   // regex on module source file path
-  std::string       func_regex;     // regex on function name (empty = module-wide)
-  std::string       preset;         // optional: "low"|"mid"|"high" base for this rule
-  ObfPassConfig     overrides;      // specific per-pass overrides
+  std::string module_regex; // regex on module source file path
+  std::string func_regex;   // regex on function name (empty = module-wide)
+  std::string preset;       // optional: "low"|"mid"|"high" base for this rule
+  ObfPassConfig overrides;  // specific per-pass overrides
 };
 
-// ── Top-level config ──────────────────────────────────────────────────────────
+// ── Top-level config
+// ──────────────────────────────────────────────────────────
 
 struct ObfGlobalConfig {
-  std::string             preset;   // "none"|"low"|"mid"|"high" (max handled separately)
-  uint64_t                seed            = 0;
-  bool                    verbose         = false;
-  bool                    trace           = false;
+  std::string preset; // "none"|"low"|"mid"|"high" (max handled separately)
+  uint64_t seed = 0;
+  bool verbose = false;
+  bool trace = false;
   // When true, policy function regexes are matched against both the raw
   // (mangled) LLVM function name AND the demangled form.  This lets users
   // write patterns like "my_crate::crypto::.*" for Rust functions that appear
   // as "_ZN8my_crate6crypto..." in the IR.  Enabled by default.
-  bool                    demangle_names  = true;
-  ObfPassConfig           passes;           // global (preset + file [passes.*])
-  std::vector<ObfPolicy>  policies;         // ordered policy rules
+  bool demangle_names = true;
+  ObfPassConfig passes;            // global (preset + file [passes.*])
+  std::vector<ObfPolicy> policies; // ordered policy rules
 
   // Build a config from a preset name ("low", "mid", "high").
   static ObfPassConfig presetConfig(const std::string &name);
@@ -206,11 +208,13 @@ struct ObfGlobalConfig {
   // Load config from a TOML file.  Returns defaults on parse error.
   static ObfGlobalConfig loadFromFile(StringRef path);
 
-  // Returns a config with no fields set (passes everything through to cl::opt defaults).
+  // Returns a config with no fields set (passes everything through to cl::opt
+  // defaults).
   static ObfGlobalConfig defaults() { return {}; }
 };
 
-// Global instance — populated by createObfuscationLegacyPass() before any pass runs.
+// Global instance — populated by createObfuscationLegacyPass() before any pass
+// runs.
 extern ObfGlobalConfig GObfConfig;
 
 } // namespace llvm

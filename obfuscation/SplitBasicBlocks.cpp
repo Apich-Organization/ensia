@@ -77,28 +77,25 @@ static void injectStackConfusion(BasicBlock *BB, Function *F) {
       asmStr += "pop %" + regHi + "\n\t";
     }
 
-    FunctionType *AsmFTy = FunctionType::get(
-        Type::getVoidTy(BB->getContext()), false);
+    FunctionType *AsmFTy =
+        FunctionType::get(Type::getVoidTy(BB->getContext()), false);
     InlineAsm *IA = InlineAsm::get(AsmFTy, asmStr, constraints,
-                                   /*hasSideEffects=*/true,
-                                   InlineAsm::AD_ATT);
+                                   /*hasSideEffects=*/true, InlineAsm::AD_ATT);
     CallInst::Create(AsmFTy, IA, {}, "", insertPt);
     turnOffOptimization(F);
 
   } else if (moduleIsAArch64(F)) {
     // AArch64: stp x9, x10, [sp, #-16]!  ; (junk) ; ldp x9, x10, [sp], #16
-    std::string asmStr =
-        "stp x9, x10, [sp, #-16]!\n\t"
-        "eor x9, x9, x9\n\t"
-        "add x9, x9, #0x42\n\t"
-        "sub x9, x9, #0x42\n\t"
-        "ldp x9, x10, [sp], #16\n\t";
-    FunctionType *AsmFTy = FunctionType::get(
-        Type::getVoidTy(BB->getContext()), false);
-    InlineAsm *IA = InlineAsm::get(
-        AsmFTy, asmStr,
-        "~{x9},~{x10},~{dirflag},~{fpsr},~{flags}",
-        /*hasSideEffects=*/true, InlineAsm::AD_ATT);
+    std::string asmStr = "stp x9, x10, [sp, #-16]!\n\t"
+                         "eor x9, x9, x9\n\t"
+                         "add x9, x9, #0x42\n\t"
+                         "sub x9, x9, #0x42\n\t"
+                         "ldp x9, x10, [sp], #16\n\t";
+    FunctionType *AsmFTy =
+        FunctionType::get(Type::getVoidTy(BB->getContext()), false);
+    InlineAsm *IA = InlineAsm::get(AsmFTy, asmStr,
+                                   "~{x9},~{x10},~{dirflag},~{fpsr},~{flags}",
+                                   /*hasSideEffects=*/true, InlineAsm::AD_ATT);
     CallInst::Create(AsmFTy, IA, {}, "", insertPt);
     turnOffOptimization(F);
   }
@@ -113,11 +110,13 @@ struct SplitBasicBlock : public FunctionPass {
 
   bool runOnFunction(Function &F) override {
     {
-      auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       if (!toObfuscateUint32Option(&F, "split_num", &SplitNumTemp))
         SplitNumTemp = ec.split.splits.value_or((uint32_t)SplitNum);
       if (!toObfuscateBoolOption(&F, "split_stackconf", &StackConfusionTemp))
-        StackConfusionTemp = ec.split.stack_confusion.value_or((bool)StackConfusion);
+        StackConfusionTemp =
+            ec.split.stack_confusion.value_or((bool)StackConfusion);
     }
 
     // Check if the number of applications is correct
@@ -130,7 +129,8 @@ struct SplitBasicBlock : public FunctionPass {
 
     // Do we obfuscate
     if (toObfuscate(flag, &F, "split")) {
-      if (ObfVerbose) errs() << "Running BasicBlockSplit On " << F.getName() << "\n";
+      if (ObfVerbose)
+        errs() << "Running BasicBlockSplit On " << F.getName() << "\n";
       split(&F);
     }
 

@@ -34,23 +34,21 @@ public:
   ~CryptoUtils() = default;
   void prng_seed(uint64_t seed);
   void prng_seed();
-  template <typename T> T get() {
-    return static_cast<T>(next());
-  }
+  template <typename T> T get() { return static_cast<T>(next()); }
   // Return a value in [0, max)
   uint32_t get_range(uint32_t max) { return get_range(0, max); }
   uint32_t get_range(uint32_t min, uint32_t max);
   uint32_t get_uint32_t() { return get<uint32_t>(); }
   uint64_t get_uint64_t() { return get<uint64_t>(); }
-  uint32_t get_uint8_t()  { return get<uint8_t>(); }
+  uint32_t get_uint8_t() { return get<uint8_t>(); }
   uint32_t get_uint16_t() { return get<uint16_t>(); }
 
   uint32_t scramble32(uint32_t in,
                       std::unordered_map<uint32_t, uint32_t> &VMap);
 
 private:
-  uint64_t s[4];          // xoshiro256++ state (256 bits)
-  bool     seeded = false;
+  uint64_t s[4]; // xoshiro256++ state (256 bits)
+  bool seeded = false;
 
   static uint64_t rotl64(uint64_t x, int k) noexcept {
     return (x << k) | (x >> (64 - k));
@@ -59,13 +57,13 @@ private:
   uint64_t next() noexcept {
     std::lock_guard<std::mutex> lock(g_crypto_mutex);
     const uint64_t result = rotl64(s[0] + s[3], 23) + s[0];
-    const uint64_t t      = s[1] << 17;
+    const uint64_t t = s[1] << 17;
     s[2] ^= s[0];
     s[3] ^= s[1];
     s[1] ^= s[2];
     s[0] ^= s[3];
     s[2] ^= t;
-    s[3]  = rotl64(s[3], 45);
+    s[3] = rotl64(s[3], 45);
     return result;
   }
   // splitmix64 — used to initialise xoshiro state from a single 64-bit seed
