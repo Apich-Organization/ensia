@@ -42,21 +42,25 @@ The tool runs passes in a deliberate order to ensure stability. Here is a simpli
 
 ## **How to Use**
 
-You can use the obfuscator by passing flags to the LLVM compiler:
+You can use the obfuscator by passing flags or configuration files to the LLVM compiler:
 
-* \-mllvm \-ensia: Enable the tool.  
-* \-mllvm \-enable-medobf: A "medium" setting for production. It uses math complexity and flattening but avoids the slowest passes.  
-* \-mllvm \-enable-maxobf: Enables everything at maximum settings. This is very slow and will make your program much larger.
-* ... Please see the source code for more details.
+* `-mllvm -ensia`: Enable the obfuscation master scheduler.
+* `-mllvm -ensia-preset=<low|mid|high|max>`: Choose an obfuscation profile (`low`, `mid`, `high`, or `max`).
+* `-mllvm -ensia-config=ensia.toml`: Pass a structured TOML configuration file for module/function-level fine-grained policy control.
+* `-mllvm -enable-medobf`: Production-ready medium setting (Sub+MBA+ConstEnc+StrEnc+Flatten).
+* `-mllvm -enable-maxobf`: Enables all 15 passes at extreme parameters (red-team / stress testing mode).
 
-### **Environmental Variables**
+### **Environment Variables**
 
-You can also enable specific features by setting variables in your shell:
+You can also enable or tune features via environment variables:
 
-* STRCRY=1 (String Encryption)  
-* CSMOBF=1 (Chaos State Machine)  
-* MBAOBF=1 (MBA Math)
-* ... Please see the source code for more details.
+* `ENSIA=1` (Enable master scheduler)
+* `ENSIA_PRESET=low|mid|high|max` (Set active profile)
+* `ENSIA_CONFIG=/path/to/ensia.toml` (Set TOML configuration file)
+* `STRCRY=1` (String Encryption)
+* `CSMOBF=1` (Chaos State Machine)
+* `MBAOBF=1` (Mixed Boolean-Arithmetic Math)
+* `BCF_PROB=80`, `MBA_LAYERS=3`, `CONSTENC_FEISTEL=1`, `AH_DIRECT_SYSCALL=1` (Fine-grained pass parameters)
 
 ## **Important Warnings**
 

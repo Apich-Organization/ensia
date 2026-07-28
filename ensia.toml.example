@@ -15,7 +15,7 @@
 # ── Global settings ────────────────────────────────────────────────────────────
 
 [global]
-preset  = "mid"      # "low" | "mid" | "high" | "none"  (max is -enable-maxobf)
+preset  = "mid"      # "low" | "mid" | "high" | "max" | "none"
 seed    = 0x1337     # PRNG seed — change for reproducible but unique obfuscation
 verbose = false      # print "Running X on Y" per function (can flood stderr)
 trace   = false      # print step markers for hang diagnosis
@@ -33,6 +33,8 @@ entropy_chain = false   # 3-way AND: CPUID & RDTSC & global-var (defeats 3 analy
 junk_asm      = false   # inject no-op push/pop junk assembly at alteration sites
 junk_asm_min  = 2       # min junk instructions per site
 junk_asm_max  = 4       # max junk instructions per site
+nested        = false   # nested BCF predicate blocks
+create_func   = false   # extract predicate evaluation into a helper function
 
 [passes.substitution]
 enabled     = true
@@ -58,7 +60,7 @@ probability = 100       # % of string bytes to encrypt [1-100]
 enabled             = true
 iterations          = 1     # encryption passes per function
 share_count         = 3     # XOR key shares [2-8] — higher = more XOR chains
-feistel             = false # add 4-round Feistel nonlinear layer (26 IR instrs/constant)
+feistel             = false # add 4-round Feistel nonlinear layer (APInt supported, up to i128)
 substitute_xor      = true  # substitute XOR operators in the share-chain
 substitute_xor_prob = 40    # % of XOR ops to substitute [0-100]
 globalize           = false # replace ConstantInts with GlobalVariables
@@ -75,12 +77,15 @@ lift_comparisons = true     # lift integer comparisons to <N x i1> vector compar
 enabled         = false     # logistic-map CFF (strongest CFF, use instead of flattening)
 nested_dispatch = false     # two-level switch dispatch (more CFG explosion, slower compile)
 warmup          = 64        # logistic map warmup iterations (higher = harder to predict)
+max_blocks      = 5000      # maximum blocks before fallback
 
 [passes.flattening]
 enabled = true              # classic CFF (fallback for functions CSM couldn't handle)
 
 [passes.indirect_branch]
-enabled = true              # Knuth-hash encrypted branch targets
+enabled         = true      # Knuth-hash encrypted branch targets
+use_stack       = true      # store branch state on stack
+enc_jump_target = false     # encrypt jump targets
 
 [passes.function_wrapper]
 enabled     = false         # polymorphic proxy generation
@@ -91,13 +96,20 @@ times       = 1             # wrapper layers
 enabled = false             # dlopen/dlsym indirection for library calls
 
 [passes.anti_hooking]
-enabled = false             # inline-hook detection + fast-fail (environment-specific)
+enabled        = false      # inline-hook detection + fast-fail (environment-specific)
+inline_aarch64 = true       # AArch64 inline hook scan
+inline_x86     = true       # x86_64 inline hook scan
+direct_syscall = true       # direct kernel syscall termination
 
 [passes.anti_debugging]
-enabled = false             # ptrace/sysctl/timing anti-debug checks (environment-specific)
+enabled     = false         # ptrace/sysctl/timing anti-debug checks
+probability = 50            # % of functions to inject anti-debug checks
 
 [passes.anti_class_dump]
-enabled = false             # ObjC metadata scrambling (Darwin only)
+enabled          = false    # ObjC metadata scrambling (Darwin only)
+scramble_methods = true     # shuffle ObjC method list order
+dummy_selectors  = true     # inject ghost selectors at +initialize
+dummy_count      = 8
 
 
 # ── Per-module / per-function policy rules ──────────────────────────────────────

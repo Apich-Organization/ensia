@@ -304,8 +304,28 @@ static void LoadEnv() {
   if (auto v = getEnvU32("CSM_WARMUP"))         pc.csm.warmup = *v;
   if (auto v = getEnvU32("CSM_MAXBLOCKS"))      pc.csm.max_blocks = *v;
 
+  if (auto v = getEnvBool("INDIR_USE_STACK"))   pc.indir_branch.use_stack = *v;
+  if (auto v = getEnvBool("INDIR_ENC_JUMP"))    pc.indir_branch.enc_jump_target = *v;
+
   if (auto v = getEnvU32("FUNCWRA_PROB"))       pc.func_wrap.probability = *v;
   if (auto v = getEnvU32("FUNCWRA_TIMES"))      pc.func_wrap.times = *v;
+
+  if (auto v = getEnvU64("FCO_FLAG"))           pc.fco.flag = *v;
+
+  if (auto v = getEnvBool("AH_INLINE"))         pc.anti_hook.inline_aarch64 = *v;
+  if (auto v = getEnvBool("AH_INLINE_X86"))     pc.anti_hook.inline_x86 = *v;
+  if (auto v = getEnvBool("AH_INLINE_WIN"))     pc.anti_hook.inline_win = *v;
+  if (auto v = getEnvBool("AH_OBJC"))           pc.anti_hook.objc_runtime = *v;
+  if (auto v = getEnvBool("AH_ANTIREBIND"))     pc.anti_hook.antirebind = *v;
+  if (auto v = getEnvBool("AH_DIRECT_SYSCALL")) pc.anti_hook.direct_syscall = *v;
+
+  if (auto v = getEnvU32("ADB_PROB"))           pc.anti_dbg.probability = *v;
+
+  if (auto v = getEnvBool("ACD_USE_INIT"))      pc.anti_class_dump.use_initialize = *v;
+  if (auto v = getEnvBool("ACD_RENAME_IMP"))    pc.anti_class_dump.rename_methodimp = *v;
+  if (auto v = getEnvBool("ACD_SCRAMBLE"))      pc.anti_class_dump.scramble_methods = *v;
+  if (auto v = getEnvBool("ACD_DUMMY_SEL"))     pc.anti_class_dump.dummy_selectors = *v;
+  if (auto v = getEnvU32("ACD_DUMMY_COUNT"))    pc.anti_class_dump.dummy_count = *v;
 }
 
 // ── Config loading ────────────────────────────────────────────────────────────
@@ -508,6 +528,10 @@ struct Obfuscation : public ModulePass {
     // ── Maximum-intensity mode: all passes + extreme tuning ──────────────
     if (EnableMaxObfuscation) {
       ObfuscationMaxMode = true;
+      GObfConfig.preset = "max";
+      ObfPassConfig maxPreset = ObfGlobalConfig::presetConfig("max");
+      ObfGlobalConfig::merge(maxPreset, GObfConfig.passes);
+      GObfConfig.passes = maxPreset;
       EnableAntiClassDump         = true;
       EnableAntiHooking           = true;
       EnableAntiDebugging         = true;
@@ -527,20 +551,21 @@ struct Obfuscation : public ModulePass {
              << "    BCF:     prob=100, loop=3, entropy_chain=100%\n"
              << "    CSM:     nested_dispatch=true (2-level CFG explosion)\n"
              << "    MBA:     mba_heuristic=true\n"
-             << "    Vec:     vec_prob=80, vec_width=256, shuffle+icmp\n"
-             << "    ConstEnc:constenc_times=3, kshare=4, feistel=true\n";
+             << "    Vec:     vec_prob=90, vec_width=512, shuffle+icmp\n"
+             << "    ConstEnc:constenc_times=3, kshare=6, feistel=true\n";
     }
 
     // ── Medium-intensity mode: production-safe subset ─────────────────────
     if (EnableMedObfuscation && !EnableMaxObfuscation) {
+      GObfConfig.preset = "mid";
+      ObfPassConfig midPreset = ObfGlobalConfig::presetConfig("mid");
+      ObfGlobalConfig::merge(midPreset, GObfConfig.passes);
+      GObfConfig.passes = midPreset;
       EnableSubstitution          = true;
       EnableMBAObfuscation        = true;
       EnableConstantEncryption    = true;
       EnableStringEncryption      = true;
       EnableFlattening            = true;
-      // Medium: kshare=3 (no Feistel), sub_prob=70, constenc_times=2
-      // These are set via the per-pass option mechanism after the pass runs
-      // (or via -constenc_kshare=3 etc. on the command line).
       errs() << "[OLLVM-Next] Medium obfuscation mode: Sub+MBA+ConstEnc+"
                 "StrEnc+Flatten\n";
     }

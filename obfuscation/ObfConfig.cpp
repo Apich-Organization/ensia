@@ -54,6 +54,9 @@ static ObfPassConfig makeLowPreset() {
   c.bcf.junk_asm      = false;
   c.bcf.junk_asm_min  = 0;
   c.bcf.junk_asm_max  = 0;
+  c.bcf.nested        = false;
+  c.bcf.create_func   = false;
+  c.bcf.only_junk_asm = false;
 
   // Substitution: sparse, single pass
   c.sub.enabled     = true;
@@ -86,14 +89,14 @@ static ObfPassConfig makeLowPreset() {
   c.split.stack_confusion = false;
 
   // Heavier passes disabled — would bloat binary significantly
-  c.vec.enabled          = false;
-  c.csm.enabled          = false;
-  c.flatten.enabled      = false;
-  c.indir_branch.enabled = false;
-  c.func_wrap.enabled    = false;
-  c.fco.enabled          = false;
-  c.anti_hook.enabled    = false;
-  c.anti_dbg.enabled     = false;
+  c.vec.enabled             = false;
+  c.csm.enabled             = false;
+  c.flatten.enabled         = false;
+  c.indir_branch.enabled    = false;
+  c.func_wrap.enabled       = false;
+  c.fco.enabled             = false;
+  c.anti_hook.enabled       = false;
+  c.anti_dbg.enabled        = false;
   c.anti_class_dump.enabled = false;
 
   return c;
@@ -110,6 +113,9 @@ static ObfPassConfig makeMidPreset() {
   c.bcf.junk_asm      = false;
   c.bcf.junk_asm_min  = 2;
   c.bcf.junk_asm_max  = 4;
+  c.bcf.nested        = false;
+  c.bcf.create_func   = false;
+  c.bcf.only_junk_asm = false;
 
   // Substitution: balanced coverage, single pass
   c.sub.enabled     = true;
@@ -149,15 +155,17 @@ static ObfPassConfig makeMidPreset() {
   c.vec.lift_comparisons = true;
 
   // Classic CFF instead of CSM — more predictable size growth
-  c.csm.enabled          = false;
-  c.flatten.enabled      = true;
-  c.indir_branch.enabled = true;
+  c.csm.enabled                  = false;
+  c.flatten.enabled              = true;
+  c.indir_branch.enabled         = true;
+  c.indir_branch.use_stack       = true;
+  c.indir_branch.enc_jump_target = false;
 
   // Wrappers and anti-analysis: opt-in only
-  c.func_wrap.enabled    = false;
-  c.fco.enabled          = false;
-  c.anti_hook.enabled    = false;
-  c.anti_dbg.enabled     = false;
+  c.func_wrap.enabled       = false;
+  c.fco.enabled             = false;
+  c.anti_hook.enabled       = false;
+  c.anti_dbg.enabled        = false;
   c.anti_class_dump.enabled = false;
 
   return c;
@@ -174,6 +182,9 @@ static ObfPassConfig makeHighPreset() {
   c.bcf.junk_asm      = true;
   c.bcf.junk_asm_min  = 2;
   c.bcf.junk_asm_max  = 4;
+  c.bcf.nested        = false;
+  c.bcf.create_func   = true;
+  c.bcf.only_junk_asm = false;
 
   // Substitution: high coverage, 2 passes (stacks on top of MBA output)
   c.sub.enabled     = true;
@@ -197,7 +208,7 @@ static ObfPassConfig makeHighPreset() {
   c.const_enc.feistel              = true;
   c.const_enc.substitute_xor       = true;
   c.const_enc.substitute_xor_prob  = 60;
-  c.const_enc.globalize            = false;
+  c.const_enc.globalize            = true;
   c.const_enc.globalize_prob       = 50;
 
   // Split: 5 splits per BB with stack confusion
@@ -216,22 +227,135 @@ static ObfPassConfig makeHighPreset() {
   c.csm.enabled          = true;
   c.csm.nested_dispatch  = false;   // nested would cause exponential growth at high BCF
   c.csm.warmup           = 128;
+  c.csm.max_blocks       = 5000;
   c.flatten.enabled      = false;   // CSM stamps done functions; flatten is fallback only
 
-  c.indir_branch.enabled = true;
+  c.indir_branch.enabled         = true;
+  c.indir_branch.use_stack       = true;
+  c.indir_branch.enc_jump_target = true;
 
   // Function wrapper: moderate wrapping
-  c.func_wrap.enabled    = true;
+  c.func_wrap.enabled     = true;
   c.func_wrap.probability = 50;
-  c.func_wrap.times      = 1;
+  c.func_wrap.times       = 1;
 
   // Function call obfuscate: enabled at high
   c.fco.enabled = true;
 
-  // Anti-analysis: user opt-in (environment/platform specific)
-  c.anti_hook.enabled       = false;
-  c.anti_dbg.enabled        = false;
-  c.anti_class_dump.enabled = false;
+  // Anti-analysis: enabled at high
+  c.anti_hook.enabled        = true;
+  c.anti_hook.inline_aarch64 = true;
+  c.anti_hook.inline_x86     = true;
+  c.anti_hook.inline_win     = true;
+  c.anti_hook.objc_runtime   = true;
+  c.anti_hook.antirebind     = false;
+  c.anti_hook.direct_syscall = true;
+
+  c.anti_dbg.enabled     = true;
+  c.anti_dbg.probability = 50;
+
+  c.anti_class_dump.enabled          = true;
+  c.anti_class_dump.use_initialize   = true;
+  c.anti_class_dump.rename_methodimp = false;
+  c.anti_class_dump.scramble_methods = true;
+  c.anti_class_dump.dummy_selectors  = true;
+  c.anti_class_dump.dummy_count     = 8;
+
+  return c;
+}
+
+static ObfPassConfig makeMaxPreset() {
+  ObfPassConfig c;
+  // BCF: 100% prob, 3 iterations, 8 complexity, entropy chain, junk asm
+  c.bcf.enabled       = true;
+  c.bcf.probability   = 100;
+  c.bcf.iterations    = 3;
+  c.bcf.complexity    = 8;
+  c.bcf.entropy_chain = true;
+  c.bcf.junk_asm      = true;
+  c.bcf.junk_asm_min  = 4;
+  c.bcf.junk_asm_max  = 8;
+  c.bcf.nested        = false;
+  c.bcf.create_func   = true;
+  c.bcf.only_junk_asm = false;
+
+  // Sub: 100% prob, 3 iterations
+  c.sub.enabled     = true;
+  c.sub.probability = 100;
+  c.sub.iterations  = 3;
+
+  // MBA: 100% prob, 3 layers, heuristic
+  c.mba.enabled     = true;
+  c.mba.probability = 100;
+  c.mba.layers      = 3;
+  c.mba.heuristic   = true;
+
+  // Split: 8 splits, stack confusion
+  c.split.enabled         = true;
+  c.split.splits          = 8;
+  c.split.stack_confusion = true;
+
+  // StrEnc: 100%
+  c.str_enc.enabled     = true;
+  c.str_enc.probability = 100;
+
+  // ConstEnc: 3 iterations, 6 shares, feistel=true, subxor=true (100%), globalize=true (80%)
+  c.const_enc.enabled              = true;
+  c.const_enc.iterations           = 3;
+  c.const_enc.share_count          = 6;
+  c.const_enc.feistel              = true;
+  c.const_enc.substitute_xor       = true;
+  c.const_enc.substitute_xor_prob  = 100;
+  c.const_enc.globalize            = true;
+  c.const_enc.globalize_prob       = 80;
+
+  // Vec: 90% prob, 512-bit width, shuffle=true, lift_comparisons=true
+  c.vec.enabled          = true;
+  c.vec.probability      = 90;
+  c.vec.width            = 512;
+  c.vec.shuffle          = true;
+  c.vec.lift_comparisons = true;
+
+  // CSM: enabled, nested_dispatch=true, warmup=256, max_blocks=10000
+  c.csm.enabled          = true;
+  c.csm.nested_dispatch  = true;
+  c.csm.warmup           = 256;
+  c.csm.max_blocks       = 10000;
+  c.flatten.enabled      = true;
+
+  // IndirBranch: enabled, use_stack=true, enc_jump_target=true
+  c.indir_branch.enabled         = true;
+  c.indir_branch.use_stack       = true;
+  c.indir_branch.enc_jump_target = true;
+
+  // FuncWrap: 100% prob, 2 times
+  c.func_wrap.enabled     = true;
+  c.func_wrap.probability = 100;
+  c.func_wrap.times       = 2;
+
+  // FCO: enabled
+  c.fco.enabled = true;
+
+  // AntiHook: enabled, all features on
+  c.anti_hook.enabled        = true;
+  c.anti_hook.inline_aarch64 = true;
+  c.anti_hook.inline_x86     = true;
+  c.anti_hook.inline_win     = true;
+  c.anti_hook.objc_runtime   = true;
+  c.anti_hook.antirebind     = true;
+  c.anti_hook.direct_syscall = true;
+
+  // AntiDbg: 100% prob
+  c.anti_dbg.enabled     = true;
+  c.anti_dbg.probability = 100;
+
+  // AntiAcd: enabled, all features on
+  c.anti_class_dump.enabled          = true;
+  c.anti_class_dump.use_initialize   = true;
+  c.anti_class_dump.rename_methodimp = true;
+  c.anti_class_dump.scramble_methods = true;
+  c.anti_class_dump.dummy_selectors  = true;
+  c.anti_class_dump.dummy_count     = 16;
 
   return c;
 }
@@ -300,16 +424,34 @@ void ObfGlobalConfig::merge(ObfPassConfig &dst, const ObfPassConfig &src) {
   MERGE_OPT(flatten.enabled)
   // IndirBranch
   MERGE_OPT(indir_branch.enabled)
+  MERGE_OPT(indir_branch.use_stack)
+  MERGE_OPT(indir_branch.enc_jump_target)
   // FuncWrap
   MERGE_OPT(func_wrap.enabled)
   MERGE_OPT(func_wrap.probability)
   MERGE_OPT(func_wrap.times)
   // FCO
   MERGE_OPT(fco.enabled)
+  MERGE_OPT(fco.flag)
+  MERGE_OPT(fco.symbol_config_path)
   // Anti-*
   MERGE_OPT(anti_hook.enabled)
+  MERGE_OPT(anti_hook.inline_aarch64)
+  MERGE_OPT(anti_hook.inline_x86)
+  MERGE_OPT(anti_hook.inline_win)
+  MERGE_OPT(anti_hook.objc_runtime)
+  MERGE_OPT(anti_hook.antirebind)
+  MERGE_OPT(anti_hook.direct_syscall)
+
   MERGE_OPT(anti_dbg.enabled)
+  MERGE_OPT(anti_dbg.probability)
+
   MERGE_OPT(anti_class_dump.enabled)
+  MERGE_OPT(anti_class_dump.use_initialize)
+  MERGE_OPT(anti_class_dump.rename_methodimp)
+  MERGE_OPT(anti_class_dump.scramble_methods)
+  MERGE_OPT(anti_class_dump.dummy_selectors)
+  MERGE_OPT(anti_class_dump.dummy_count)
 }
 
 #undef MERGE_OPT
@@ -318,9 +460,12 @@ void ObfGlobalConfig::merge(ObfPassConfig &dst, const ObfPassConfig &src) {
 // ── Preset factory ────────────────────────────────────────────────────────────
 
 ObfPassConfig ObfGlobalConfig::presetConfig(const std::string &name) {
-  if (name == "low")  return makeLowPreset();
-  if (name == "mid")  return makeMidPreset();
-  if (name == "high") return makeHighPreset();
+  std::string s = name;
+  for (char &c : s) c = (char)std::tolower((unsigned char)c);
+  if (s == "low" || s == "light" || s == "1") return makeLowPreset();
+  if (s == "mid" || s == "med" || s == "medium" || s == "2") return makeMidPreset();
+  if (s == "high" || s == "3") return makeHighPreset();
+  if (s == "max" || s == "maximum" || s == "extreme" || s == "4") return makeMaxPreset();
   return {};  // "none" or unknown → all empty optionals
 }
 
@@ -503,10 +648,46 @@ static void parseCsm(const toml::table &t, ObfCsmConfig &c) {
   if (auto v = tomlU32(t["max_blocks"]))            c.max_blocks      = *v;
 }
 
+static void parseIndir(const toml::table &t, ObfIndirConfig &c) {
+  if (auto v = t["enabled"].value<bool>())         c.enabled         = *v;
+  if (auto v = t["use_stack"].value<bool>())       c.use_stack       = *v;
+  if (auto v = t["enc_jump_target"].value<bool>()) c.enc_jump_target = *v;
+}
+
 static void parseFw(const toml::table &t, ObfFwConfig &c) {
   if (auto v = t["enabled"].value<bool>())  c.enabled     = *v;
   if (auto v = tomlU32(t["probability"]))   c.probability = *v;
   if (auto v = tomlU32(t["times"]))         c.times       = *v;
+}
+
+static void parseFco(const toml::table &t, ObfFcoConfig &c) {
+  if (auto v = t["enabled"].value<bool>())                 c.enabled            = *v;
+  if (auto v = t["flag"].value<int64_t>())                 c.flag               = (uint64_t)*v;
+  if (auto v = t["symbol_config_path"].value<std::string>()) c.symbol_config_path = *v;
+}
+
+static void parseAntiHook(const toml::table &t, ObfAntiHookConfig &c) {
+  if (auto v = t["enabled"].value<bool>())        c.enabled        = *v;
+  if (auto v = t["inline_aarch64"].value<bool>()) c.inline_aarch64 = *v;
+  if (auto v = t["inline_x86"].value<bool>())     c.inline_x86     = *v;
+  if (auto v = t["inline_win"].value<bool>())     c.inline_win     = *v;
+  if (auto v = t["objc_runtime"].value<bool>())   c.objc_runtime   = *v;
+  if (auto v = t["antirebind"].value<bool>())     c.antirebind     = *v;
+  if (auto v = t["direct_syscall"].value<bool>()) c.direct_syscall = *v;
+}
+
+static void parseAntiDbg(const toml::table &t, ObfAntiDbgConfig &c) {
+  if (auto v = t["enabled"].value<bool>())  c.enabled     = *v;
+  if (auto v = tomlU32(t["probability"]))   c.probability = *v;
+}
+
+static void parseAntiAcd(const toml::table &t, ObfAntiAcdConfig &c) {
+  if (auto v = t["enabled"].value<bool>())          c.enabled          = *v;
+  if (auto v = t["use_initialize"].value<bool>())   c.use_initialize   = *v;
+  if (auto v = t["rename_methodimp"].value<bool>()) c.rename_methodimp = *v;
+  if (auto v = t["scramble_methods"].value<bool>()) c.scramble_methods = *v;
+  if (auto v = t["dummy_selectors"].value<bool>())  c.dummy_selectors  = *v;
+  if (auto v = tomlU32(t["dummy_count"]))           c.dummy_count      = *v;
 }
 
 // Parse the [passes] table.
@@ -521,17 +702,12 @@ static void parsePasses(const toml::table &passes, ObfPassConfig &pc) {
   if (auto *t = passes["chaos_state_machine"].as_table())  parseCsm(*t, pc.csm);
   if (auto *t = passes["flattening"].as_table())
     if (auto v = (*t)["enabled"].value<bool>()) pc.flatten.enabled = *v;
-  if (auto *t = passes["indirect_branch"].as_table())
-    if (auto v = (*t)["enabled"].value<bool>()) pc.indir_branch.enabled = *v;
+  if (auto *t = passes["indirect_branch"].as_table())      parseIndir(*t, pc.indir_branch);
   if (auto *t = passes["function_wrapper"].as_table())     parseFw(*t, pc.func_wrap);
-  if (auto *t = passes["function_call_obfuscate"].as_table())
-    if (auto v = (*t)["enabled"].value<bool>()) pc.fco.enabled = *v;
-  if (auto *t = passes["anti_hooking"].as_table())
-    if (auto v = (*t)["enabled"].value<bool>()) pc.anti_hook.enabled = *v;
-  if (auto *t = passes["anti_debugging"].as_table())
-    if (auto v = (*t)["enabled"].value<bool>()) pc.anti_dbg.enabled = *v;
-  if (auto *t = passes["anti_class_dump"].as_table())
-    if (auto v = (*t)["enabled"].value<bool>()) pc.anti_class_dump.enabled = *v;
+  if (auto *t = passes["function_call_obfuscate"].as_table()) parseFco(*t, pc.fco);
+  if (auto *t = passes["anti_hooking"].as_table())         parseAntiHook(*t, pc.anti_hook);
+  if (auto *t = passes["anti_debugging"].as_table())       parseAntiDbg(*t, pc.anti_dbg);
+  if (auto *t = passes["anti_class_dump"].as_table())      parseAntiAcd(*t, pc.anti_class_dump);
 }
 
 // Parse one [[policy]] entry.

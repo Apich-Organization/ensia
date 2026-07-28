@@ -222,6 +222,8 @@ struct ObfFlatConfig {
 
 struct ObfIndirConfig {
   std::optional<bool> enabled;
+  std::optional<bool> use_stack;
+  std::optional<bool> enc_jump_target;
 };
 
 struct ObfFwConfig {
@@ -231,19 +233,33 @@ struct ObfFwConfig {
 };
 
 struct ObfFcoConfig {
-  std::optional<bool> enabled;
+  std::optional<bool>        enabled;
+  std::optional<uint64_t>    flag;
+  std::optional<std::string> symbol_config_path;
 };
 
 struct ObfAntiHookConfig {
   std::optional<bool> enabled;
+  std::optional<bool> inline_aarch64;
+  std::optional<bool> inline_x86;
+  std::optional<bool> inline_win;
+  std::optional<bool> objc_runtime;
+  std::optional<bool> antirebind;
+  std::optional<bool> direct_syscall;
 };
 
 struct ObfAntiDbgConfig {
-  std::optional<bool> enabled;
+  std::optional<bool>     enabled;
+  std::optional<uint32_t> probability;
 };
 
 struct ObfAntiAcdConfig {
-  std::optional<bool> enabled;
+  std::optional<bool>     enabled;
+  std::optional<bool>     use_initialize;
+  std::optional<bool>     rename_methodimp;
+  std::optional<bool>     scramble_methods;
+  std::optional<bool>     dummy_selectors;
+  std::optional<uint32_t> dummy_count;
 };
 
 // All passes collected

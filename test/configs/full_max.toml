@@ -1,0 +1,99 @@
+# full_max.toml — Ensia config for obf_test.cpp (max preset, extreme stress test)
+#
+# Uses max as the global baseline.
+# This config is designed to exercise all passes at extreme settings.
+
+[global]
+preset = "max"
+seed = 0x1337C0DE
+verbose = true
+
+[passes.bcf]
+enabled = true
+probability = 100
+iterations = 3
+complexity = 8
+entropy_chain = true
+junk_asm = true
+junk_asm_min = 4
+junk_asm_max = 8
+
+[passes.substitution]
+enabled = true
+probability = 100
+iterations = 3
+
+[passes.mba]
+enabled = true
+probability = 100
+layers = 3
+heuristic = true
+
+[passes.split_blocks]
+enabled = true
+splits = 8
+stack_confusion = true
+
+[passes.string_encryption]
+enabled = true
+probability = 100
+
+[passes.constant_encryption]
+enabled = true
+iterations = 3
+share_count = 6
+feistel = true
+substitute_xor = true
+substitute_xor_prob = 100
+globalize = true
+globalize_prob = 80
+
+[passes.vector_obfuscation]
+enabled = true
+probability = 90
+width = 512
+shuffle = true
+lift_comparisons = true
+
+[passes.chaos_state_machine]
+enabled = true
+nested_dispatch = true
+warmup = 256
+max_blocks = 10000
+
+[passes.flattening]
+enabled = true
+
+[passes.indirect_branch]
+enabled = true
+use_stack = true
+enc_jump_target = true
+
+[passes.function_wrapper]
+enabled = true
+probability = 100
+times = 2
+
+[passes.function_call_obfuscate]
+enabled = true
+
+[passes.anti_hooking]
+enabled = true
+inline_aarch64 = true
+inline_x86 = true
+inline_win = true
+objc_runtime = true
+antirebind = true
+direct_syscall = true
+
+[passes.anti_debugging]
+enabled = true
+probability = 100
+
+[passes.anti_class_dump]
+enabled = true
+use_initialize = true
+rename_methodimp = true
+scramble_methods = true
+dummy_selectors = true
+dummy_count = 16

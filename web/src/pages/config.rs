@@ -211,7 +211,8 @@ fn GlobalSection() -> impl IntoView {
                     >
                         <option value="low">"low — minimal overhead"</option>
                         <option value="mid">"mid — balanced (recommended)"</option>
-                        <option value="high">"high — maximum protection"</option>
+                        <option value="high">"high — heavy protection"</option>
+                        <option value="max">"max — maximum anti-reversing protection"</option>
                     </select>
                 </div>
                 <div class="field-group">
