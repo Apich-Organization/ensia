@@ -490,9 +490,9 @@ struct ConstantEncryption : public ModulePass {
   // so that the IR emitter uses the same keys used for encryption.
 
   struct FeistelState {
-    uint64_t K[4][2]; // K[round][0=mulKey, 1=xorKey], both masked to half-width
-    unsigned half;    // half bit-width of the constant (bits/2)
-    uint64_t mask;    // (1 << half) - 1
+    APInt K[4][2]; // K[round][0=mulKey, 1=xorKey], both masked to half-width
+    unsigned half; // half bit-width of the constant (bits/2)
+    APInt mask;    // low half bits mask
   };
 
   // Compile-time: encrypt C using 4-round Feistel, filling fst with round keys.
@@ -501,23 +501,30 @@ struct ConstantEncryption : public ModulePass {
     unsigned bits = C->getBitWidth();
     if (bits < 16) return nullptr; // need at least 8-bit halves
     fst.half = bits / 2;
-    fst.mask = (fst.half < 64) ? ((1ULL << fst.half) - 1ULL) : UINT64_MAX;
+    fst.mask = APInt::getLowBitsSet(bits, fst.half);
 
-    uint64_t val = C->getZExtValue();
-    uint64_t L = (val >> fst.half) & fst.mask;
-    uint64_t R = val & fst.mask;
+    APInt val = C->getValue();
+    APInt L = val.lshr(fst.half) & fst.mask;
+    APInt R = val & fst.mask;
 
     for (int r = 0; r < 4; r++) {
-      // Odd multiplier so it is invertible mod 2^half
-      fst.K[r][0] = (cryptoutils->get_uint64_t() | 1ULL) & fst.mask;
-      fst.K[r][1] = cryptoutils->get_uint64_t() & fst.mask;
-      uint64_t F = ((R * fst.K[r][0]) ^ fst.K[r][1]) & fst.mask;
-      uint64_t newR = (L ^ F) & fst.mask;
+      APInt k0(bits, cryptoutils->get_uint64_t() | 1ULL);
+      APInt k1(bits, cryptoutils->get_uint64_t());
+      for (unsigned w = 64; w < bits; w += 64) {
+        k0 |= APInt(bits, cryptoutils->get_uint64_t()).shl(w);
+        k1 |= APInt(bits, cryptoutils->get_uint64_t()).shl(w);
+      }
+      k0 = (k0 | APInt(bits, 1)) & fst.mask;
+      k1 = k1 & fst.mask;
+      fst.K[r][0] = k0;
+      fst.K[r][1] = k1;
+
+      APInt F = ((R * k0) ^ k1) & fst.mask;
+      APInt newR = (L ^ F) & fst.mask;
       L = R;
       R = newR;
     }
-    uint64_t enc = ((L << fst.half) | R);
-    if (bits < 64) enc &= (1ULL << bits) - 1ULL;
+    APInt enc = (L.shl(fst.half) | R);
     return cast<ConstantInt>(ConstantInt::get(C->getType(), enc));
   }
 
@@ -573,16 +580,24 @@ struct ConstantEncryption : public ModulePass {
       return nullptr;
     }
 
-    // Generate k−1 random shares; last share = C ^ xor(r_1..r_{k-1})
-    SmallVector<uint64_t, 8> shares(k);
-    uint64_t xorAccum = C->getZExtValue();
+    // Generate k−1 random APInt shares; last share = C ^ xor(r_1..r_{k-1})
+    SmallVector<APInt, 8> shares;
+    shares.reserve(k);
+    APInt xorAccum = C->getValue();
+
     for (unsigned i = 0; i < k - 1; i++) {
-      uint64_t r = cryptoutils->get_uint64_t();
-      if (bits < 64) r &= (1ULL << bits) - 1ULL;
-      shares[i]  = r;
-      xorAccum  ^= r;
+      APInt r(bits, cryptoutils->get_uint64_t());
+      for (unsigned w = 64; w < bits; w += 64) {
+        r |= APInt(bits, cryptoutils->get_uint64_t()).shl(w);
+      }
+      r = r.zextOrTrunc(bits);
+      if (bits < 64) {
+        r &= APInt::getLowBitsSet(bits, bits);
+      }
+      shares.push_back(r);
+      xorAccum ^= r;
     }
-    shares[k - 1] = xorAccum; // last share makes XOR-of-all = C
+    shares.push_back(xorAccum); // last share makes XOR-of-all = C
 
     // Create k GlobalVariables for the shares
     SmallVector<GlobalVariable *, 8> gvs;
@@ -624,7 +639,7 @@ struct ConstantEncryption : public ModulePass {
     // This stacks two distinct layers:
     //   XOR-share obfuscation (information-theoretic security over the XOR key)
     //   + Feistel nonlinearity (multiplication defeats affine analysis)
-    FeistelState fst{};
+    FeistelState fst;
     bool useFeistel = FeistelTierTemp;
     ConstantInt *workC = origC;
     if (useFeistel) {

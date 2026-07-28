@@ -690,10 +690,13 @@ struct BogusControlFlow : public FunctionPass {
                 op = BinaryOperator::Create(Instruction::Mul, op1,
                                             i->getOperand(1), "", &*i);
                 break;
-              case 3:
+              case 3: {
+                Type *Ty = i->getOperand(0)->getType();
+                Value *one = ConstantInt::get(Ty, 1);
                 op = BinaryOperator::Create(Instruction::Shl, i->getOperand(0),
-                                            i->getOperand(1), "", &*i);
+                                            one, "", &*i);
                 break;
+              }
               case 4: // XOR operands together, then add to first
                 op = BinaryOperator::Create(Instruction::Xor, i->getOperand(0),
                                             i->getOperand(1), "", &*i);

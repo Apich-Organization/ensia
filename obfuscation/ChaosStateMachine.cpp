@@ -148,15 +148,17 @@ static Value *buildLogisticIR(IRBuilder<NoFolder> &IRB, Value *state,
   Type *I64Ty = Type::getInt64Ty(Ctx);
   Type *I32Ty = Type::getInt32Ty(Ctx);
 
-  Value *s64   = IRB.CreateZExt(state, I64Ty, "csm.s64");
-  Value *xc    = IRB.CreateAnd(s64, ConstantInt::get(I64Ty, 0xFFFF), "csm.xc");
-  Value *inv   = IRB.CreateSub(ConstantInt::get(I64Ty, 65536), xc, "csm.inv");
-  Value *prod  = IRB.CreateMul(xc, inv, "csm.prod");
-  Value *sc    = IRB.CreateMul(prod, ConstantInt::get(I64Ty, 65533), "csm.sc");
-  Value *nxt64 = IRB.CreateLShr(sc, ConstantInt::get(I64Ty, 30), "csm.nxt64");
-  Value *nxt32 = IRB.CreateTrunc(nxt64, I32Ty, "csm.nxt32");
-  Value *isZero = IRB.CreateICmpEQ(nxt32, ConstantInt::get(I32Ty, 0));
-  Value *guard  = IRB.CreateSelect(isZero, ConstantInt::get(I32Ty, CSM_FALLBACK_RESULT), nxt32,
+  Value *s64      = IRB.CreateZExt(state, I64Ty, "csm.s64");
+  Value *xc_raw   = IRB.CreateAnd(s64, ConstantInt::get(I64Ty, 0xFFFF), "csm.xc_raw");
+  Value *xcIsZero = IRB.CreateICmpEQ(xc_raw, ConstantInt::get(I64Ty, 0));
+  Value *xc       = IRB.CreateSelect(xcIsZero, ConstantInt::get(I64Ty, CSM_FALLBACK_ZERO), xc_raw, "csm.xc");
+  Value *inv      = IRB.CreateSub(ConstantInt::get(I64Ty, 65536), xc, "csm.inv");
+  Value *prod     = IRB.CreateMul(xc, inv, "csm.prod");
+  Value *sc       = IRB.CreateMul(prod, ConstantInt::get(I64Ty, 65533), "csm.sc");
+  Value *nxt64    = IRB.CreateLShr(sc, ConstantInt::get(I64Ty, 30), "csm.nxt64");
+  Value *nxt32    = IRB.CreateTrunc(nxt64, I32Ty, "csm.nxt32");
+  Value *isZero   = IRB.CreateICmpEQ(nxt32, ConstantInt::get(I32Ty, 0));
+  Value *guard    = IRB.CreateSelect(isZero, ConstantInt::get(I32Ty, CSM_FALLBACK_RESULT), nxt32,
                                    "csm.guarded");
   return guard;
 }
