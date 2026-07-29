@@ -21,6 +21,7 @@
 #include "llvm/ADT/StringRef.h"
 #include <cstdint>
 #include <optional>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -175,6 +176,8 @@ struct ObfPassConfig {
 struct ObfPolicy {
   std::string module_regex; // regex on module source file path
   std::string func_regex;   // regex on function name (empty = module-wide)
+  std::optional<std::regex> compiled_module_regex;
+  std::optional<std::regex> compiled_func_regex;
   std::string preset;       // optional: "low"|"mid"|"high" base for this rule
   ObfPassConfig overrides;  // specific per-pass overrides
 };
