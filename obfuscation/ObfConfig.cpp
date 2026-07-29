@@ -509,22 +509,34 @@ ObfPassConfig ObfGlobalConfig::resolve(StringRef module_name,
 
   for (const auto &pol : policies) {
     // Match module
-    try {
-      std::regex mod_re(pol.module_regex,
-                        std::regex::ECMAScript | std::regex::optimize);
+    if (pol.compiled_module_regex.has_value()) {
       std::string mod_str = module_name.str();
-      if (!std::regex_search(mod_str, mod_re))
+      if (!std::regex_search(mod_str, pol.compiled_module_regex.value()))
         continue;
-    } catch (const std::regex_error &) {
-      errs() << "[Ensia] invalid module regex in policy: " << pol.module_regex
-             << "\n";
-      continue;
+    } else if (!pol.module_regex.empty()) {
+      try {
+        std::regex mod_re(pol.module_regex,
+                          std::regex::ECMAScript | std::regex::optimize);
+        std::string mod_str = module_name.str();
+        if (!std::regex_search(mod_str, mod_re))
+          continue;
+      } catch (const std::regex_error &) {
+        errs() << "[Ensia] invalid module regex in policy: " << pol.module_regex
+               << "\n";
+        continue;
+      }
     }
 
     // Match function (if specified).
     // Try both the raw mangled name and the demangled form so users can write
     // human-readable patterns for Rust / C++ without knowing the mangling.
-    if (!pol.func_regex.empty()) {
+    if (pol.compiled_func_regex.has_value()) {
+      bool matched = std::regex_search(func_str, pol.compiled_func_regex.value());
+      if (!matched && !demangled_str.empty())
+        matched = std::regex_search(demangled_str, pol.compiled_func_regex.value());
+      if (!matched)
+        continue;
+    } else if (!pol.func_regex.empty()) {
       try {
         std::regex func_re(pol.func_regex,
                            std::regex::ECMAScript | std::regex::optimize);
@@ -785,10 +797,22 @@ static void parsePasses(const toml::table &passes, ObfPassConfig &pc) {
 // Parse one [[policy]] entry.
 static ObfPolicy parsePolicy(const toml::table &pt) {
   ObfPolicy pol;
-  if (auto v = pt["module"].value<std::string>())
+  if (auto v = pt["module"].value<std::string>()) {
     pol.module_regex = *v;
-  if (auto v = pt["function"].value<std::string>())
+    try {
+      pol.compiled_module_regex.emplace(*v, std::regex::ECMAScript | std::regex::optimize);
+    } catch (const std::regex_error &) {
+      errs() << "[Ensia] invalid module regex in policy: " << *v << "\n";
+    }
+  }
+  if (auto v = pt["function"].value<std::string>()) {
     pol.func_regex = *v;
+    try {
+      pol.compiled_func_regex.emplace(*v, std::regex::ECMAScript | std::regex::optimize);
+    } catch (const std::regex_error &) {
+      errs() << "[Ensia] invalid function regex in policy: " << *v << "\n";
+    }
+  }
   if (auto v = pt["preset"].value<std::string>())
     pol.preset = *v;
 
