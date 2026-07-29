@@ -1119,6 +1119,9 @@ struct BogusControlFlow : public FunctionPass {
       }
       emuFunction->eraseFromParent();
       i->eraseFromParent(); // erase the branch
+      if (IRBOp)
+        delete IRBOp;
+      delete IRBReal;
     }
     // Erase all the associated conditions we found
     for (Instruction *i : toDelete)

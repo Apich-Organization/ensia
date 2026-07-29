@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-PROJECT_DIR="/home/pana/dev/ensia"
+PROJECT_DIR="$(pwd)"
 BUILD_DIR="${PROJECT_DIR}/build"
 PLUGIN_LIB="${BUILD_DIR}/obfuscation/libEnsia.so"
 
