@@ -138,7 +138,7 @@ struct ConstantEncryption : public ModulePass {
         if (ObfVerbose)
           errs() << "Running ConstantEncryption On " << F.getName() << "\n";
         FixFunctionConstantExpr(&F);
-        std::vector<std::string> skipVal, forceVal;
+        std::vector<std::string> skipValStr, forceValStr;
         {
           auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(),
                                        F.getName());
@@ -170,8 +170,8 @@ struct ConstantEncryption : public ModulePass {
                                        &ConstToGVProbTemp))
             ConstToGVProbTemp =
                 ec.const_enc.globalize_prob.value_or((uint32_t)ConstToGVProb);
-          skipVal = ec.const_enc.skip_value;
-          forceVal = ec.const_enc.force_value;
+          skipValStr = ec.const_enc.skip_value;
+          forceValStr = ec.const_enc.force_value;
         }
         if (SubstituteXorProbTemp > 100) {
           errs() << "-constenc_subxor_prob=x must be 0 < x <= 100";
@@ -181,6 +181,25 @@ struct ConstantEncryption : public ModulePass {
           errs() << "-constenc_togv_prob=x must be 0 < x <= 100";
           return false;
         }
+
+        std::vector<std::regex> skipVal, forceVal;
+        for (const auto &pat : skipValStr) {
+          try {
+            skipVal.push_back(std::regex(pat, std::regex::ECMAScript |
+                                                  std::regex::icase |
+                                                  std::regex::optimize));
+          } catch (const std::regex_error &) {
+          }
+        }
+        for (const auto &pat : forceValStr) {
+          try {
+            forceVal.push_back(std::regex(pat, std::regex::ECMAScript |
+                                                   std::regex::icase |
+                                                   std::regex::optimize));
+          } catch (const std::regex_error &) {
+          }
+        }
+
         uint32_t times = ObfTimesTemp;
         while (times) {
           EncryptConstants(F, skipVal, forceVal);
@@ -262,35 +281,25 @@ struct ConstantEncryption : public ModulePass {
   // Checks ci's value against skip/force patterns (case-insensitive hex match).
   // Returns: -1 = skip, +1 = force, 0 = normal probability.
   static int valueGate(const ConstantInt *CI,
-                       const std::vector<std::string> &skipPats,
-                       const std::vector<std::string> &forcePats) {
+                       const std::vector<std::regex> &skipPats,
+                       const std::vector<std::regex> &forcePats) {
     if (skipPats.empty() && forcePats.empty())
       return 0;
     std::string hex = ciHex(CI);
     for (const auto &pat : skipPats) {
-      try {
-        if (std::regex_search(hex, std::regex(pat, std::regex::ECMAScript |
-                                                       std::regex::icase |
-                                                       std::regex::optimize)))
-          return -1;
-      } catch (const std::regex_error &) {
-      }
+      if (std::regex_search(hex, pat))
+        return -1;
     }
     for (const auto &pat : forcePats) {
-      try {
-        if (std::regex_search(hex, std::regex(pat, std::regex::ECMAScript |
-                                                       std::regex::icase |
-                                                       std::regex::optimize)))
-          return +1;
-      } catch (const std::regex_error &) {
-      }
+      if (std::regex_search(hex, pat))
+        return +1;
     }
     return 0;
   }
 
   void EncryptConstants(Function &F,
-                        const std::vector<std::string> &skipVal = {},
-                        const std::vector<std::string> &forceVal = {}) {
+                        const std::vector<std::regex> &skipVal = {},
+                        const std::vector<std::regex> &forceVal = {}) {
     SmallVector<std::pair<Instruction *, unsigned>, 64> targets;
     SmallVector<GlobalVariable *, 32> gvTargets;
 
