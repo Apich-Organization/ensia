@@ -18,16 +18,4 @@ separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 include_directories(${LLVM_INCLUDE_DIRS})
 
-#===============================================================================
-# Build configuration
-#===============================================================================
-# Match LLVM's C++ standard; clamp to C++20 minimum for new pass features.
-# LLVM 18-19 use C++17; LLVM 20+ use C++20.  Set 20 here so our new code
-# (if_consteval, std::span, ranges) compiles correctly.
-if("${LLVM_VERSION_MAJOR}" VERSION_GREATER_EQUAL 20)
-  set(CMAKE_CXX_STANDARD 20 CACHE STRING "")
-else()
-  set(CMAKE_CXX_STANDARD 17 CACHE STRING "")
-endif()
-
 add_subdirectory(obfuscation)

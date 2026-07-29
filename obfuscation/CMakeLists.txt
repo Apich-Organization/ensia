@@ -29,11 +29,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" CACHE STRING "Flags used by the CXX c
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -DDEBUG -g" CACHE STRING "Flags used by the CXX compiler for debug builds." FORCE)
 
 add_library(Ensia SHARED
-        # ── Core infrastructure ──────────────────────────────────────────────
         CryptoUtils.cpp
         Utils.cpp
         ObfConfig.cpp
-        # ── Original passes ──────────────────────────────────────────────────
         FunctionCallObfuscate.cpp
         BogusControlFlow.cpp
         SubstituteImpl.cpp
@@ -48,7 +46,6 @@ add_library(Ensia SHARED
         FunctionWrapper.cpp
         ConstantEncryption.cpp
         Obfuscation.cpp
-        # ── OLLVM-Next new passes ────────────────────────────────────────────
         MBAObfuscation.cpp        # Mixed Boolean-Arithmetic substitution
         ChaosStateMachine.cpp     # Logistic-map-driven control-flow flattening
         VectorObfuscation.cpp     # Scalar-to-SIMD vector lifting
