@@ -52,7 +52,7 @@ pub fn SponsorPage() -> impl IntoView {
                         <strong>"Open Collective"</strong>
                         " only."
                     </p>
-                    <div class="my-md">
+                    <div class="my-md mb-8">
                         <a
                             href="https://opencollective.com/apich-organization"
                             target="_blank"
@@ -62,7 +62,7 @@ pub fn SponsorPage() -> impl IntoView {
                             "\u{2764} Open Collective Page \u{2197}"
                         </a>
                     </div>
-                    <div class="glass-alt card-pad text-sm" style="border-left: 3px solid var(--c-primary);">
+                    <div class="glass-alt card-pad text-sm mb-8" style="border-left: 3px solid var(--c-primary);">
                         <strong>"Mandatory Requirement:"</strong>
                         <p class="mt-xs">
                             "You " <strong>"MUST"</strong> " include a note in the transaction with the following declarations:"

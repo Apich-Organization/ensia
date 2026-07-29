@@ -12,10 +12,20 @@ pub fn Nav() -> impl IntoView {
         <nav class="nav">
             <div class="nav-inner">
                 // Logo
-                <button class="nav-logo" on:click=go(Page::Home)>
+                <div
+                    class="nav-logo"
+                    role="button"
+                    tabindex="0"
+                    on:click=go(Page::Home)
+                    on:keydown=move |e: web_sys::KeyboardEvent| {
+                        if e.key() == "Enter" || e.key() == " " {
+                            page.set(Page::Home);
+                        }
+                    }
+                >
                     <span class="nav-logo-dot"></span>
                     "Ensia"
-                </button>
+                </div>
 
                 // Page links
                 <div class="nav-links">
