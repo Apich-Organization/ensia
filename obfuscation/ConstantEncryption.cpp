@@ -262,28 +262,18 @@ struct ConstantEncryption : public ModulePass {
   // Checks ci's value against skip/force patterns (case-insensitive hex match).
   // Returns: -1 = skip, +1 = force, 0 = normal probability.
   static int valueGate(const ConstantInt *CI,
-                       const std::vector<std::string> &skipPats,
-                       const std::vector<std::string> &forcePats) {
+                       const std::vector<std::regex> &skipPats,
+                       const std::vector<std::regex> &forcePats) {
     if (skipPats.empty() && forcePats.empty())
       return 0;
     std::string hex = ciHex(CI);
-    for (const auto &pat : skipPats) {
-      try {
-        if (std::regex_search(hex, std::regex(pat, std::regex::ECMAScript |
-                                                       std::regex::icase |
-                                                       std::regex::optimize)))
-          return -1;
-      } catch (const std::regex_error &) {
-      }
+    for (const auto &re : skipPats) {
+      if (std::regex_search(hex, re))
+        return -1;
     }
-    for (const auto &pat : forcePats) {
-      try {
-        if (std::regex_search(hex, std::regex(pat, std::regex::ECMAScript |
-                                                       std::regex::icase |
-                                                       std::regex::optimize)))
-          return +1;
-      } catch (const std::regex_error &) {
-      }
+    for (const auto &re : forcePats) {
+      if (std::regex_search(hex, re))
+        return +1;
     }
     return 0;
   }
@@ -324,9 +314,27 @@ struct ConstantEncryption : public ModulePass {
         currentProb = 1;
     }
 
+    std::vector<std::regex> skipRegexes;
+    for (const auto &pat : skipVal) {
+      try {
+        skipRegexes.push_back(std::regex(
+            pat, std::regex::ECMAScript | std::regex::icase | std::regex::optimize));
+      } catch (const std::regex_error &) {
+      }
+    }
+
+    std::vector<std::regex> forceRegexes;
+    for (const auto &pat : forceVal) {
+      try {
+        forceRegexes.push_back(std::regex(
+            pat, std::regex::ECMAScript | std::regex::icase | std::regex::optimize));
+      } catch (const std::regex_error &) {
+      }
+    }
+
     for (auto &T : targets) {
       const ConstantInt *CI = cast<ConstantInt>(T.first->getOperand(T.second));
-      int gate = valueGate(CI, skipVal, forceVal);
+      int gate = valueGate(CI, skipRegexes, forceRegexes);
       if (gate < 0)
         continue; // skip_value matched
       if (gate > 0 || cryptoutils->get_range(100) < currentProb)
@@ -334,7 +342,7 @@ struct ConstantEncryption : public ModulePass {
     }
     for (GlobalVariable *G : gvTargets) {
       const ConstantInt *CI = cast<ConstantInt>(G->getInitializer());
-      int gate = valueGate(CI, skipVal, forceVal);
+      int gate = valueGate(CI, skipRegexes, forceRegexes);
       if (gate < 0)
         continue; // skip_value matched
       if (gate > 0 || cryptoutils->get_range(100) < currentProb)
