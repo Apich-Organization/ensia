@@ -1100,6 +1100,34 @@ struct BogusControlFlow : public FunctionPass {
           if (hwPred)
             swPred = IRBReal->CreateAnd(swPred, hwPred, "bcf.hw.and");
         }
+
+        // Data-Flow Opaque Predicate: Mix live variables into the condition
+        if (cryptoutils->get_range(2) == 0) {
+          SmallVector<Value *, 8> liveVars;
+          for (Argument &Arg : i->getParent()->getParent()->args()) {
+            if (Arg.getType()->isIntegerTy())
+              liveVars.push_back(&Arg);
+          }
+          for (Instruction &I : i->getParent()->getParent()->getEntryBlock()) {
+            if (I.getType()->isIntegerTy() && !isa<PHINode>(&I) &&
+                !I.getName().starts_with("bcf."))
+              liveVars.push_back(&I);
+          }
+          if (!liveVars.empty()) {
+            Value *liveVar = liveVars[cryptoutils->get_range(liveVars.size())];
+            Type *T = liveVar->getType();
+            // (x * (x - 1)) & 1 == 0
+            Value *minus1 = IRBReal->CreateSub(liveVar, ConstantInt::get(T, 1));
+            Value *mul = IRBReal->CreateMul(liveVar, minus1);
+            Value *and1 = IRBReal->CreateAnd(mul, ConstantInt::get(T, 1));
+            Value *livePred = IRBReal->CreateICmpEQ(
+                and1, ConstantInt::get(T, 0), "bcf.df.pred");
+            // If swPred was true, true AND true = true. If swPred was false,
+            // false AND true = false.
+            swPred = IRBReal->CreateAnd(swPred, livePred, "bcf.df.and");
+          }
+        }
+
         Last = swPred;
       }
       emuLast = IRBEmu.CreateICmp(pred, emuLast, RealRHS);

@@ -132,7 +132,7 @@ static Value *buildLogisticIR(IRBuilder<NoFolder> &IRB, Value *state,
 }
 
 static Value *computeDataFeedback(IRBuilder<NoFolder> &IRB, Function *F,
-                                  uint32_t initSeed) {
+                                  uint32_t initSeed, BasicBlock *BB = nullptr) {
   LLVMContext &Ctx = F->getContext();
   Type *I32Ty = Type::getInt32Ty(Ctx);
   Value *dataFeedback = ConstantInt::get(I32Ty, initSeed);
@@ -149,6 +149,23 @@ static Value *computeDataFeedback(IRBuilder<NoFolder> &IRB, Function *F,
       dataFeedback = IRB.CreateXor(mul33, argVal, "csm.dfb.acc");
     }
   }
+
+  if (BB) {
+    SmallVector<Instruction *, 32> targets;
+    for (Instruction &I : *BB) {
+      if (I.getName().starts_with("csm."))
+        continue;
+      if (I.getType()->isIntegerTy() && !isa<PHINode>(&I)) {
+        targets.push_back(&I);
+      }
+    }
+    for (Instruction *I : targets) {
+      Value *val = IRB.CreateZExtOrTrunc(I, I32Ty);
+      Value *mul33 = IRB.CreateMul(dataFeedback, ConstantInt::get(I32Ty, 33));
+      dataFeedback = IRB.CreateXor(mul33, val, "csm.dfb.bb");
+    }
+  }
+
   return dataFeedback;
 }
 
@@ -294,12 +311,18 @@ struct ChaosStateMachine : public FunctionPass {
     entryBB->moveBefore(loopEntry);
     BranchInst::Create(loopEntry, entryBB);
 
+    SmallVector<std::pair<BasicBlock *, Value *>, 16> loopEndIncoming;
+    loopEndIncoming.push_back(
+        {swDefault, ConstantInt::get(I32Ty, initDfbSeed)});
+
     // ── Phase 6: chaos dispatch switch ───────────────────────────────────────
     IRBuilder<NoFolder> IRBLoop(loopEntry);
-    Value *dataFeedbackLoop = computeDataFeedback(IRBLoop, F, initDfbSeed);
+    PHINode *dfbPhiLoopEntry = IRBLoop.CreatePHI(I32Ty, 2, "csm.dfb.phi");
+    dfbPhiLoopEntry->addIncoming(dataFeedbackEntry, entryBB);
+
     Value *rawState = IRBLoop.CreateLoad(I32Ty, stateAlloca, "csm.raw");
     Value *maskValLoop = IRBLoop.CreateXor(ConstantInt::get(I32Ty, feistelK),
-                                           dataFeedbackLoop, "csm.loopmask");
+                                           dfbPhiLoopEntry, "csm.loopmask");
     Value *chaosState = IRBLoop.CreateXor(rawState, maskValLoop, "csm.decoded");
 
     SwitchInst *switchI =
@@ -329,12 +352,11 @@ struct ChaosStateMachine : public FunctionPass {
         continue;
 
       IRBuilder<NoFolder> IRB(term);
-      Value *dataFeedbackBB = computeDataFeedback(IRB, F, initDfbSeed);
-      Value *stateLoad = IRB.CreateLoad(I32Ty, stateAlloca, "csm.cur");
+      Value *dataFeedbackBB = computeDataFeedback(IRB, F, initDfbSeed, BB);
       Value *maskValBB = IRB.CreateXor(ConstantInt::get(I32Ty, feistelK),
                                        dataFeedbackBB, "csm.mask");
       Value *stateDemasked =
-          IRB.CreateXor(stateLoad, maskValBB, "csm.demasked");
+          chaosState; // use the correctly unmasked state from loopEntry
 
       if (term->getNumSuccessors() == 1) {
         BasicBlock *succ = term->getSuccessor(0);
@@ -349,6 +371,7 @@ struct ChaosStateMachine : public FunctionPass {
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
           IRB.CreateStore(nextMasked, stateAlloca);
           term->eraseFromParent();
+          loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(loopEnd, BB);
         } else {
           // Successor is an external/exit block — jump to it directly
@@ -379,6 +402,7 @@ struct ChaosStateMachine : public FunctionPass {
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
           IRB.CreateStore(nextMasked, stateAlloca);
           term->eraseFromParent();
+          loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(loopEnd, BB);
         } else if (jT >= 0 && jF < 0) {
           uint32_t caseT = caseVals[jT];
@@ -390,6 +414,7 @@ struct ChaosStateMachine : public FunctionPass {
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
           IRB.CreateStore(nextMasked, stateAlloca);
           term->eraseFromParent();
+          loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(loopEnd, succFalse, cond, BB);
         } else if (jT < 0 && jF >= 0) {
           uint32_t caseF = caseVals[jF];
@@ -401,6 +426,7 @@ struct ChaosStateMachine : public FunctionPass {
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
           IRB.CreateStore(nextMasked, stateAlloca);
           term->eraseFromParent();
+          loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(succTrue, loopEnd, cond, BB);
         } else {
           // Both targets external
@@ -409,6 +435,15 @@ struct ChaosStateMachine : public FunctionPass {
         }
       }
     }
+
+    // Now populate dfbPhiLoopEnd and dfbPhiLoopEntry
+    IRBuilder<NoFolder> IRBLoopEnd(loopEnd->getFirstNonPHI());
+    PHINode *dfbPhiLoopEnd =
+        IRBLoopEnd.CreatePHI(I32Ty, loopEndIncoming.size(), "csm.dfb.phi.end");
+    for (auto &pair : loopEndIncoming) {
+      dfbPhiLoopEnd->addIncoming(pair.second, pair.first);
+    }
+    dfbPhiLoopEntry->addIncoming(dfbPhiLoopEnd, loopEnd);
 
     // ── Phase 8: optional nested dispatch for extra path-explosion ───────────
     if (ChaosNestedDispatchTemp && numBBs >= 4) {

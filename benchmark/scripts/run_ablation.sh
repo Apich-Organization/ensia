@@ -24,11 +24,14 @@
 
 set -euo pipefail
 
+export CC=clang
+export CXX=clang++
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TESTS_DIR="${SCRIPT_DIR}/../tests"
 BUILDS_DIR="${SCRIPT_DIR}/../builds"
 RESULTS_DIR="${SCRIPT_DIR}/../results"
-ENSIA_PLUGIN="${SCRIPT_DIR}/../../../build/obfuscation/libEnsia.so"
+ENSIA_PLUGIN="${SCRIPT_DIR}/../../build/obfuscation/libEnsia.so"
 JOBS="$(nproc 2>/dev/null || echo 4)"
 SKIP_BUILD=0
 SKIP_ANGR=0
@@ -56,7 +59,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-MODES=("baseline" "csm_only" "vec_only" "csm_vec" "max")
+MODES=("baseline" "csm_only" "vec_only" "csm_vec" "bench_max")
 [[ -n "$ONLY_MODE" ]] && MODES=("$ONLY_MODE")
 
 mkdir -p "$BUILDS_DIR" "$RESULTS_DIR"

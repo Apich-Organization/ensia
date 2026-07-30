@@ -8,12 +8,11 @@
 
 static uint8_t g_output[4] = {0xCC, 0xCC, 0x00, 0x00};
 
-int main(void)
-{
-    TEST_MARK_START();
-    (void)g_output[0];
-    TEST_MARK_END();
+int main(void) {
+  TEST_MARK_START();
+  (void)g_output[0];
+  TEST_MARK_END();
 
-    test_print_result("ML-DSA-44", 1, g_output, 4);
-    return 0;
+  test_print_result("ML-DSA-44", 1, g_output, 4);
+  return 0;
 }

@@ -31,24 +31,24 @@
 #ifndef _MPI_MISC_H
 #define _MPI_MISC_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//MPI related functions
+// MPI related functions
 error_t mpiMontgomeryMul(Mpi *r, const Mpi *a, const Mpi *b, uint_t k,
-   const Mpi *p, Mpi *t);
+                         const Mpi *p, Mpi *t);
 
 error_t mpiMontgomeryRed(Mpi *r, const Mpi *a, uint_t k, const Mpi *p, Mpi *t);
 
 void mpiMulAccCore(mpi_word_t *r, const mpi_word_t *a, int_t m,
-   const mpi_word_t b);
+                   const mpi_word_t b);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

@@ -181,13 +181,9 @@ struct ConstantEncryption : public ModulePass {
           errs() << "-constenc_togv_prob=x must be 0 < x <= 100";
           return false;
         }
-        uint32_t times = ObfTimesTemp;
-        while (times) {
-          EncryptConstants(F, skipVal, forceVal);
-          if (ConstToGVTemp) {
-            Constant2GlobalVariable(F);
-          }
-          times--;
+        EncryptConstants(F, skipVal, forceVal);
+        if (ConstToGVTemp) {
+          Constant2GlobalVariable(F);
         }
       }
     if (!usedGlobals.empty()) {
@@ -313,11 +309,13 @@ struct ConstantEncryption : public ModulePass {
     }
 
     uint32_t eligible = targets.size() + gvTargets.size();
+    errs() << "[OLLVM-Next][7] ConstantEncryption: Found " << targets.size()
+           << " inst targets and " << gvTargets.size() << " GV targets.\n";
     if (eligible == 0)
       return;
 
     uint32_t currentProb = 100;
-    uint32_t maxTargets = 1000000;
+    uint32_t maxTargets = 2000;
     if (eligible * currentProb / 100 > maxTargets) {
       currentProb = (maxTargets * 100) / eligible;
       if (currentProb == 0)
@@ -498,11 +496,11 @@ struct ConstantEncryption : public ModulePass {
     APInt R = val & fst.mask;
 
     for (int r = 0; r < 4; r++) {
-      APInt k0(bits, cryptoutils->get_uint64_t() | 1ULL);
-      APInt k1(bits, cryptoutils->get_uint64_t());
+      APInt k0(bits, cryptoutils->get_uint64_t() | 1ULL, false, true);
+      APInt k1(bits, cryptoutils->get_uint64_t(), false, true);
       for (unsigned w = 64; w < bits; w += 64) {
-        k0 |= APInt(bits, cryptoutils->get_uint64_t()).shl(w);
-        k1 |= APInt(bits, cryptoutils->get_uint64_t()).shl(w);
+        k0 |= APInt(bits, cryptoutils->get_uint64_t(), false, true).shl(w);
+        k1 |= APInt(bits, cryptoutils->get_uint64_t(), false, true).shl(w);
       }
       k0 = (k0 | APInt(bits, 1)) & fst.mask;
       k1 = k1 & fst.mask;
@@ -576,9 +574,9 @@ struct ConstantEncryption : public ModulePass {
     APInt xorAccum = C->getValue();
 
     for (unsigned i = 0; i < k - 1; i++) {
-      APInt r(bits, cryptoutils->get_uint64_t());
+      APInt r(bits, cryptoutils->get_uint64_t(), false, true);
       for (unsigned w = 64; w < bits; w += 64) {
-        r |= APInt(bits, cryptoutils->get_uint64_t()).shl(w);
+        r |= APInt(bits, cryptoutils->get_uint64_t(), false, true).shl(w);
       }
       r = r.zextOrTrunc(bits);
       if (bits < 64) {

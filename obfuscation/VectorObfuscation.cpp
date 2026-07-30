@@ -41,8 +41,8 @@ static uint32_t VecProbRateTemp = 50;
 static cl::opt<uint32_t>
     VecWidth("vec_width",
              cl::desc("[VecObf] SIMD width in bits (128, 256, or 512)"),
-             cl::value_desc("bits"), cl::init(128), cl::Optional);
-static uint32_t VecWidthTemp = 128;
+             cl::value_desc("bits"), cl::init(256), cl::Optional);
+static uint32_t VecWidthTemp = 256;
 
 static cl::opt<bool>
     VecShuffle("vec_shuffle",
@@ -96,12 +96,45 @@ static Constant *randomNoise(Type *elemTy, unsigned elemBits) {
 
 static Value *buildNoiseVector(IRBuilder<NoFolder> &IRB, Value *realOp,
                                unsigned K, unsigned lanes, Type *elemTy) {
+  Type *vecTy = FixedVectorType::get(elemTy, lanes);
+
+  if (auto *EEI = dyn_cast<ExtractElementInst>(realOp)) {
+    if (auto *vTy = dyn_cast<FixedVectorType>(EEI->getVectorOperandType())) {
+      if (vTy->getNumElements() == lanes) {
+        if (auto *CIdx = dyn_cast<ConstantInt>(EEI->getIndexOperand())) {
+          unsigned srcK = CIdx->getZExtValue();
+          SmallVector<int, 16> mask(lanes);
+          for (unsigned i = 0; i < lanes; i++)
+            mask[i] = i;
+          mask[K] = srcK;
+          mask[srcK] = K;
+          return IRB.CreateShuffleVector(EEI->getVectorOperand(), mask, "");
+        }
+      }
+    }
+  }
+
   unsigned elemBits = elemTy->isIntegerTy() ? elemTy->getIntegerBitWidth()
                                             : (elemTy->isFloatTy() ? 32 : 64);
-  Type *vecTy = FixedVectorType::get(elemTy, lanes);
   Value *vec = UndefValue::get(vecTy);
+
+  Constant *randOffset =
+      elemTy->isIntegerTy()
+          ? ConstantInt::get(elemTy, cryptoutils->get_uint64_t())
+          : nullptr;
+
   for (unsigned i = 0; i < lanes; i++) {
-    Value *elem = (i == K) ? realOp : randomNoise(elemTy, elemBits);
+    Value *elem = realOp;
+    if (i != K) {
+      if (randOffset) {
+        if (i % 2 == 1)
+          elem = IRB.CreateAdd(realOp, randOffset);
+        else
+          elem = IRB.CreateXor(realOp, randOffset);
+      } else {
+        elem = randomNoise(elemTy, elemBits);
+      }
+    }
     vec = IRB.CreateInsertElement(vec, elem, (uint64_t)i, "");
   }
   return vec;
@@ -183,31 +216,52 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
   Value *a = bo->getOperand(0);
   Value *b = bo->getOperand(1);
 
-  // Multi-lane cross-talk dependency: fill all lanes with a-dependent and
-  // b-dependent values
-  Constant *randOffset =
-      scalarTy->isIntegerTy()
-          ? ConstantInt::get(scalarTy, cryptoutils->get_uint64_t())
-          : nullptr;
-  Type *vecTy = FixedVectorType::get(scalarTy, lanes);
-  Value *va = UndefValue::get(vecTy);
-  Value *vb = UndefValue::get(vecTy);
+  auto buildChainedVector = [&](Value *scalarOp,
+                                bool isShiftOperand) -> Value * {
+    Type *vecTy = FixedVectorType::get(scalarTy, lanes);
 
-  for (unsigned i = 0; i < lanes; i++) {
-    Value *elemA = a;
-    Value *elemB = b;
-    if (i != K && randOffset && scalarTy->isIntegerTy() && !isShift) {
-      if (i % 2 == 1) {
-        elemA = IRB.CreateAdd(a, randOffset);
-        elemB = IRB.CreateAdd(b, randOffset);
-      } else {
-        elemA = IRB.CreateXor(a, randOffset);
-        elemB = IRB.CreateXor(b, randOffset);
+    // Attempt to chain from a previous extractelement
+    if (!isShiftOperand) {
+      if (auto *EEI = dyn_cast<ExtractElementInst>(scalarOp)) {
+        if (auto *vTy =
+                dyn_cast<FixedVectorType>(EEI->getVectorOperandType())) {
+          if (vTy->getNumElements() == lanes) {
+            if (auto *CIdx = dyn_cast<ConstantInt>(EEI->getIndexOperand())) {
+              unsigned srcK = CIdx->getZExtValue();
+              SmallVector<int, 16> mask(lanes);
+              for (unsigned i = 0; i < lanes; i++)
+                mask[i] = i;
+              mask[K] = srcK; // Put the real value into lane K
+              mask[srcK] = K; // Swap the junk from lane K into srcK
+              // (If srcK == K, this is just an identity mask)
+              return IRB.CreateShuffleVector(EEI->getVectorOperand(), mask, "");
+            }
+          }
+        }
       }
     }
-    va = IRB.CreateInsertElement(va, elemA, (uint64_t)i, "");
-    vb = IRB.CreateInsertElement(vb, isShift ? b : elemB, (uint64_t)i, "");
-  }
+
+    // Fallback: build a new vector with junk lanes derived from the real scalar
+    Value *vec = UndefValue::get(vecTy);
+    Constant *randOffset =
+        scalarTy->isIntegerTy()
+            ? ConstantInt::get(scalarTy, cryptoutils->get_uint64_t())
+            : nullptr;
+    for (unsigned i = 0; i < lanes; i++) {
+      Value *elem = scalarOp;
+      if (i != K && randOffset && !isShiftOperand) {
+        if (i % 2 == 1)
+          elem = IRB.CreateAdd(scalarOp, randOffset);
+        else
+          elem = IRB.CreateXor(scalarOp, randOffset);
+      }
+      vec = IRB.CreateInsertElement(vec, elem, (uint64_t)i, "");
+    }
+    return vec;
+  };
+
+  Value *va = buildChainedVector(a, false);
+  Value *vb = buildChainedVector(b, isShift);
 
   // Vector operation (same opcode as original scalar)
   Value *vres =
@@ -271,6 +325,130 @@ static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
   return true;
 }
 
+// ─── Lift an FCmpInst to a vector comparison ────────────────────────────────
+static bool liftFCmpToVector(FCmpInst *fci, unsigned totalBits,
+                             bool doShuffle) {
+  Type *scalarTy = fci->getOperand(0)->getType();
+  if (!scalarTy->isFloatTy() && !scalarTy->isDoubleTy())
+    return false;
+  unsigned elemBits = scalarTy->isFloatTy() ? 32 : 64;
+
+  unsigned lanes = lanesFor(elemBits, totalBits);
+  unsigned K = cryptoutils->get_range(lanes);
+
+  IRBuilder<NoFolder> IRB(fci);
+  Value *a = fci->getOperand(0);
+  Value *b = fci->getOperand(1);
+
+  Value *va = buildNoiseVector(IRB, a, K, lanes, scalarTy);
+  Value *vb = buildNoiseVector(IRB, b, K, lanes, scalarTy);
+
+  Value *vcmp = IRB.CreateFCmp(fci->getPredicate(), va, vb, "");
+
+  unsigned extractLane = K;
+  if (doShuffle) {
+    std::pair<Value *, unsigned> shuf = applyShuffleNoise(IRB, vcmp, K, lanes);
+    vcmp = shuf.first;
+    extractLane = shuf.second;
+  }
+
+  Type *i32Ty = Type::getInt32Ty(fci->getContext());
+  Type *vec32Ty = FixedVectorType::get(i32Ty, lanes);
+  Value *zextVec = IRB.CreateZExt(vcmp, vec32Ty);
+  Value *maskVal = IRB.CreateExtractElement(zextVec, (uint64_t)extractLane, "");
+  Value *result = IRB.CreateICmpNE(maskVal, ConstantInt::get(i32Ty, 0), "");
+  fci->replaceAllUsesWith(result);
+  return true;
+}
+
+// ─── Lift a SelectInst to a vector select ───────────────────────────────────
+
+static bool liftSelectToVector(SelectInst *sel, unsigned totalBits,
+                               bool doShuffle) {
+  Type *scalarTy = sel->getType();
+  if (!scalarTy->isIntegerTy() && !scalarTy->isFloatTy() &&
+      !scalarTy->isDoubleTy())
+    return false;
+  unsigned elemBits = scalarTy->isIntegerTy()
+                          ? scalarTy->getIntegerBitWidth()
+                          : (scalarTy->isFloatTy() ? 32 : 64);
+  if (elemBits != 8 && elemBits != 16 && elemBits != 32 && elemBits != 64)
+    return false;
+
+  unsigned lanes = lanesFor(elemBits, totalBits);
+  unsigned K = cryptoutils->get_range(lanes);
+
+  IRBuilder<NoFolder> IRB(sel);
+  Value *cond = sel->getCondition();
+  Value *trueVal = sel->getTrueValue();
+  Value *falseVal = sel->getFalseValue();
+
+  Value *vCond =
+      buildUniformVector(IRB, cond, lanes, Type::getInt1Ty(sel->getContext()));
+  Value *vTrue = buildNoiseVector(IRB, trueVal, K, lanes, scalarTy);
+  Value *vFalse = buildNoiseVector(IRB, falseVal, K, lanes, scalarTy);
+
+  Value *vSel = IRB.CreateSelect(vCond, vTrue, vFalse, "");
+
+  unsigned extractLane = K;
+  if (doShuffle) {
+    std::pair<Value *, unsigned> shuf = applyShuffleNoise(IRB, vSel, K, lanes);
+    vSel = shuf.first;
+    extractLane = shuf.second;
+  }
+
+  Value *result = IRB.CreateExtractElement(vSel, (uint64_t)extractLane, "");
+  sel->replaceAllUsesWith(result);
+  return true;
+}
+
+// ─── Lift a CastInst to a vector cast ───────────────────────────────────────
+
+static bool liftCastToVector(CastInst *ci, unsigned totalBits, bool doShuffle) {
+  Type *srcTy = ci->getSrcTy();
+  Type *dstTy = ci->getDestTy();
+  if (!srcTy->isIntegerTy() || !dstTy->isIntegerTy())
+    return false; // only integer casts for now (ZExt, SExt, Trunc)
+
+  unsigned srcBits = srcTy->getIntegerBitWidth();
+  unsigned dstBits = dstTy->getIntegerBitWidth();
+  if (srcBits != 8 && srcBits != 16 && srcBits != 32 && srcBits != 64)
+    return false;
+  if (dstBits != 8 && dstBits != 16 && dstBits != 32 && dstBits != 64)
+    return false;
+
+  unsigned op = ci->getOpcode();
+  if (op != Instruction::ZExt && op != Instruction::SExt &&
+      op != Instruction::Trunc)
+    return false;
+
+  // We use the wider type to determine lanes, so the vector doesn't exceed
+  // totalBits
+  unsigned maxBits = std::max(srcBits, dstBits);
+  unsigned lanes = lanesFor(maxBits, totalBits);
+  unsigned K = cryptoutils->get_range(lanes);
+
+  IRBuilder<NoFolder> IRB(ci);
+  Value *srcVal = ci->getOperand(0);
+
+  Value *vSrc = buildNoiseVector(IRB, srcVal, K, lanes, srcTy);
+  Type *vDstTy = FixedVectorType::get(dstTy, lanes);
+
+  Value *vCast =
+      IRB.CreateCast(static_cast<Instruction::CastOps>(op), vSrc, vDstTy, "");
+
+  unsigned extractLane = K;
+  if (doShuffle) {
+    std::pair<Value *, unsigned> shuf = applyShuffleNoise(IRB, vCast, K, lanes);
+    vCast = shuf.first;
+    extractLane = shuf.second;
+  }
+
+  Value *result = IRB.CreateExtractElement(vCast, (uint64_t)extractLane, "");
+  ci->replaceAllUsesWith(result);
+  return true;
+}
+
 // ─── FunctionPass
 // ─────────────────────────────────────────────────────────────
 
@@ -321,16 +499,27 @@ struct VectorObfuscation : public FunctionPass {
              << " (width=" << VecWidthTemp
              << (VecShuffleTemp ? ", shuffle" : "") << ")\n";
 
-    // ── Collect eligible instructions ────────────────────────────────────────
     SmallVector<Instruction *, 64> binTargets;
     SmallVector<ICmpInst *, 32> cmpTargets;
+    SmallVector<FCmpInst *, 32> fcmpTargets;
+    SmallVector<SelectInst *, 32> selTargets;
+    SmallVector<CastInst *, 32> castTargets;
 
     uint32_t eligible = 0;
     for (Instruction &I : instructions(F)) {
-      if (BinaryOperator *BO = dyn_cast<BinaryOperator>(&I)) {
+      if (dyn_cast<BinaryOperator>(&I)) {
         eligible++;
       } else if (VecICmpTemp && dyn_cast<ICmpInst>(&I)) {
         eligible++;
+      } else if (VecICmpTemp && dyn_cast<FCmpInst>(&I)) {
+        eligible++;
+      } else if (dyn_cast<SelectInst>(&I)) {
+        eligible++;
+      } else if (CastInst *CI = dyn_cast<CastInst>(&I)) {
+        if (CI->getOpcode() == Instruction::ZExt ||
+            CI->getOpcode() == Instruction::SExt ||
+            CI->getOpcode() == Instruction::Trunc)
+          eligible++;
       }
     }
 
@@ -383,12 +572,23 @@ struct VectorObfuscation : public FunctionPass {
         if (eligible)
           binTargets.push_back(BO);
 
-      } else if (VecICmpTemp) {
+      } else if (VecICmpTemp && dyn_cast<ICmpInst>(&I)) {
         if (ICmpInst *ICI = dyn_cast<ICmpInst>(&I)) {
           // Only lift if operand type is a liftable integer width
           if (ICI->getOperand(0)->getType()->isIntegerTy())
             cmpTargets.push_back(ICI);
         }
+      } else if (VecICmpTemp && dyn_cast<FCmpInst>(&I)) {
+        if (FCmpInst *FCI = dyn_cast<FCmpInst>(&I)) {
+          fcmpTargets.push_back(FCI);
+        }
+      } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
+        selTargets.push_back(SI);
+      } else if (CastInst *CI = dyn_cast<CastInst>(&I)) {
+        if (CI->getOpcode() == Instruction::ZExt ||
+            CI->getOpcode() == Instruction::SExt ||
+            CI->getOpcode() == Instruction::Trunc)
+          castTargets.push_back(CI);
       }
     }
 
@@ -407,6 +607,24 @@ struct VectorObfuscation : public FunctionPass {
     for (ICmpInst *ICI : cmpTargets) {
       if (liftICmpToVector(ICI, VecWidthTemp, VecShuffleTemp)) {
         toErase.push_back(ICI);
+        changed = true;
+      }
+    }
+    for (FCmpInst *FCI : fcmpTargets) {
+      if (liftFCmpToVector(FCI, VecWidthTemp, VecShuffleTemp)) {
+        toErase.push_back(FCI);
+        changed = true;
+      }
+    }
+    for (SelectInst *SI : selTargets) {
+      if (liftSelectToVector(SI, VecWidthTemp, VecShuffleTemp)) {
+        toErase.push_back(SI);
+        changed = true;
+      }
+    }
+    for (CastInst *CI : castTargets) {
+      if (liftCastToVector(CI, VecWidthTemp, VecShuffleTemp)) {
+        toErase.push_back(CI);
         changed = true;
       }
     }

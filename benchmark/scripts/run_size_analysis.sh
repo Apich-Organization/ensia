@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_ROOT="${1:-${SCRIPT_DIR}/../builds}"
 OUTPUT_CSV="${2:-${SCRIPT_DIR}/../results/size_analysis.csv}"
-MODES=("baseline" "csm_only" "vec_only" "csm_vec" "max")
+MODES=("baseline" "csm_only" "vec_only" "csm_vec" "bench_max")
 
 mkdir -p "$(dirname "$OUTPUT_CSV")"
 

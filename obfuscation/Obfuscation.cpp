@@ -944,6 +944,16 @@ struct Obfuscation : public ModulePass {
     for (Function *F : toDelete)
       F->eraseFromParent();
 
+    // ── 12. LTO Evasion ────────────────────────────────────────────────────
+    // Mark all functions with optnone and noinline so that LTO's whole-program
+    // pipeline doesn't optimize away our obfuscation.
+    for (Function &F : M) {
+      if (F.isDeclaration())
+        continue;
+      F.addFnAttr(Attribute::OptimizeNone);
+      F.addFnAttr(Attribute::NoInline);
+    }
+
     timer->stopTimer();
     errs() << "OLLVM-Next done.  Wall time: "
            << format("%.5f", timer->getTotalTime().getWallTime()) << "s\n";
@@ -1009,9 +1019,10 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
             // env vars are honoured before the pass checks EnableIRObfusaction.
             PB.registerOptimizerLastEPCallback([](ModulePassManager &MPM,
                                                   OptimizationLevel,
-                                                  ThinOrFullLTOPhase) {
+                                                  ThinOrFullLTOPhase Phase) {
               static bool s_ep_added = false;
-              if (s_ep_added)
+              if (s_ep_added || Phase == ThinOrFullLTOPhase::ThinLTOPreLink ||
+                  Phase == ThinOrFullLTOPhase::FullLTOPreLink)
                 return;
               LoadEnv();
               loadObfConfig();
@@ -1020,6 +1031,19 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
               s_ep_added = true;
               MPM.addPass(ObfuscationPass());
             });
+
+            PB.registerFullLinkTimeOptimizationLastEPCallback(
+                [](ModulePassManager &MPM, OptimizationLevel) {
+                  static bool s_lto_ep_added = false;
+                  if (s_lto_ep_added)
+                    return;
+                  LoadEnv();
+                  loadObfConfig();
+                  if (!EnableIRObfusaction)
+                    return;
+                  s_lto_ep_added = true;
+                  MPM.addPass(ObfuscationPass());
+                });
 
             // ── Explicit -passes=ensia[<inner-opts>]
             // ───────────────────────────── Also supports the classic explicit

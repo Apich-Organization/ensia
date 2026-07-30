@@ -89,10 +89,72 @@ static Value *injectNoise(IRBuilder<NoFolder> &IRB, Value *base, Value *a,
                           Value *b, unsigned k) {
   Type *T = base->getType();
   Value *result = base;
+  BasicBlock *BB = IRB.GetInsertBlock();
+  BasicBlock::iterator IP = IRB.GetInsertPoint();
+
+  // Find up to 8 live integers before IP (including args and entry block)
+  SmallVector<Value *, 8> liveVars;
+  Function *F =
+      IRB.GetInsertBlock() ? IRB.GetInsertBlock()->getParent() : nullptr;
+  if (F) {
+    for (Argument &Arg : F->args()) {
+      if (Arg.getType() == T)
+        liveVars.push_back(&Arg);
+    }
+    BasicBlock &entryBB = F->getEntryBlock();
+    if (&entryBB != BB) {
+      for (Instruction &I : entryBB) {
+        if (I.getType() == T && !isa<PHINode>(&I) &&
+            !I.getName().starts_with("mba."))
+          liveVars.push_back(&I);
+      }
+    }
+  }
+  if (BB) {
+    for (auto IT = BB->begin(); IT != BB->end() && IT != IP; ++IT) {
+      Instruction &I = *IT;
+      if (I.getType() == T && !isa<PHINode>(&I) &&
+          !I.getName().starts_with("mba."))
+        liveVars.push_back(&I);
+    }
+  }
+
   for (unsigned i = 0; i < k; i++) {
     Constant *r = ConstantInt::get(T, cryptoutils->get_uint64_t());
     Value *z = buildZeroTerm(IRB, a, b, cryptoutils->get_range(8));
-    // Randomise whether we Add or Sub the noise (both preserve correctness)
+
+    // Always mix in a live variable opaque predicate if available, to strongly
+    // tie data-flow
+    if (!liveVars.empty()) {
+      Value *L = liveVars[cryptoutils->get_range(liveVars.size())];
+      Value *opZero;
+      switch (cryptoutils->get_range(4)) {
+      case 0: { // (L * (L - 1)) & 1 == 0  (non-linear algebraic)
+        Value *Lminus1 = IRB.CreateSub(L, ConstantInt::get(T, 1));
+        Value *mul = IRB.CreateMul(L, Lminus1);
+        opZero = IRB.CreateAnd(mul, ConstantInt::get(T, 1), "mba.op.zero1");
+        break;
+      }
+      case 1: { // (L + L) & 1 == 0
+        Value *add = IRB.CreateAdd(L, L);
+        opZero = IRB.CreateAnd(add, ConstantInt::get(T, 1), "mba.op.zero2");
+        break;
+      }
+      case 2: { // L & ~L == 0
+        Value *notL = IRB.CreateNot(L);
+        opZero = IRB.CreateAnd(L, notL, "mba.op.zero3");
+        break;
+      }
+      default: { // (L | ~L) + 1 == 0
+        Value *notL = IRB.CreateNot(L);
+        Value *orL = IRB.CreateOr(L, notL);
+        opZero = IRB.CreateAdd(orL, ConstantInt::get(T, 1), "mba.op.zero4");
+        break;
+      }
+      }
+      z = IRB.CreateOr(z, opZero);
+    }
+
     Value *noise = IRB.CreateMul(r, z);
     if (cryptoutils->get_range(2))
       result = IRB.CreateAdd(result, noise);
@@ -179,6 +241,8 @@ void mbaAdd(BinaryOperator *bo) {
   }
   if (MBAHeuristicTemp && res)
     res = injectNoise(IRB, res, a, b, 1 + cryptoutils->get_range(3));
+  if (Instruction *I = dyn_cast_or_null<Instruction>(res))
+    I->setName("mba.add");
   bo->replaceAllUsesWith(res);
 }
 
@@ -267,6 +331,8 @@ void mbaSub(BinaryOperator *bo) {
   }
   if (MBAHeuristicTemp && res)
     res = injectNoise(IRB, res, a, b, 1 + cryptoutils->get_range(2));
+  if (Instruction *I = dyn_cast_or_null<Instruction>(res))
+    I->setName("mba.sub");
   bo->replaceAllUsesWith(res);
 }
 
@@ -331,6 +397,8 @@ void mbaXor(BinaryOperator *bo) {
   }
   if (MBAHeuristicTemp && res)
     res = injectNoise(IRB, res, a, b, 1 + cryptoutils->get_range(3));
+  if (Instruction *I = dyn_cast_or_null<Instruction>(res))
+    I->setName("mba.xor");
   bo->replaceAllUsesWith(res);
 }
 
@@ -416,6 +484,8 @@ void mbaAnd(BinaryOperator *bo) {
   }
   if (MBAHeuristicTemp && res)
     res = injectNoise(IRB, res, a, b, 1 + cryptoutils->get_range(2));
+  if (Instruction *I = dyn_cast_or_null<Instruction>(res))
+    I->setName("mba.and");
   bo->replaceAllUsesWith(res);
 }
 
@@ -478,6 +548,8 @@ void mbaOr(BinaryOperator *bo) {
   }
   if (MBAHeuristicTemp && res)
     res = injectNoise(IRB, res, a, b, 1 + cryptoutils->get_range(2));
+  if (Instruction *I = dyn_cast_or_null<Instruction>(res))
+    I->setName("mba.or");
   bo->replaceAllUsesWith(res);
 }
 
@@ -546,6 +618,8 @@ void mbaMul(BinaryOperator *bo) {
   }
   if (MBAHeuristicTemp && res)
     res = injectNoise(IRB, res, a, b, cryptoutils->get_range(2));
+  if (Instruction *I = dyn_cast_or_null<Instruction>(res))
+    I->setName("mba.mul");
   bo->replaceAllUsesWith(res);
 }
 
@@ -673,18 +747,21 @@ struct MBAObfuscation : public FunctionPass {
         break;
 
       uint32_t currentProb = MBAProbRateTemp;
-      uint32_t maxTargets = 10000;
-      if (eligible * currentProb / 100 > maxTargets) {
-        currentProb = (maxTargets * 100) / eligible;
-        if (currentProb == 0)
-          currentProb = 1;
-      }
+      uint32_t maxTargets =
+          (layer == 0) ? 1500 : 30; // Bound the exponential growth
 
-      SmallVector<BinaryOperator *, 32> targets;
+      SmallVector<BinaryOperator *, 32> allOps;
       for (Instruction &I : instructions(F))
         if (BinaryOperator *BO = dyn_cast<BinaryOperator>(&I))
-          if (cryptoutils->get_range(100) < currentProb)
-            targets.push_back(BO);
+          allOps.push_back(BO);
+
+      SmallVector<BinaryOperator *, 32> targets;
+      for (BinaryOperator *BO : allOps) {
+        if (targets.size() >= maxTargets)
+          break;
+        if (cryptoutils->get_range(100) < currentProb)
+          targets.push_back(BO);
+      }
 
       for (BinaryOperator *BO : targets) {
         if (cryptoutils->get_range(100) < 30) {

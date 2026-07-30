@@ -9,33 +9,34 @@
  */
 #define SCRYPT_SUPPORT ENABLED
 #define PBKDF2_SUPPORT ENABLED
-#define HMAC_SUPPORT   ENABLED
+#define HMAC_SUPPORT ENABLED
 #define SHA256_SUPPORT ENABLED
 
-#include "../common/test_harness.h"
-#include "../../kdf/scrypt.h"
 #include "../../hash/sha256.h"
+#include "../../kdf/scrypt.h"
+#include "../common/test_harness.h"
 
 static uint8_t g_output[32];
 
-int main(void)
-{
-    error_t err;
-    static const uint8_t s_zeros[32] = {0};
+int main(void) {
+  error_t err;
+  static const uint8_t s_zeros[32] = {0};
 
-    /* scrypt takes a NUL-terminated password string */
-    static const char s_password[] = "benchmark_password";
+  /* scrypt takes a NUL-terminated password string */
+  static const char s_password[] = "benchmark_password";
 
-    TEST_MARK_START();
-    err = scrypt(s_password,
-                 TV_HKDF_SALT, sizeof(TV_HKDF_SALT),
-                 16u, 1u, 1u,          /* N=16, r=1, p=1 */
-                 g_output, sizeof(g_output));
-    TEST_MARK_END();
+  TEST_MARK_START();
+  err = scrypt(s_password, TV_HKDF_SALT, sizeof(TV_HKDF_SALT), 16u, 1u,
+               1u, /* N=16, r=1, p=1 */
+               g_output, sizeof(g_output));
+  TEST_MARK_END();
 
-    if (err != NO_ERROR) { test_print_result("SCRYPT", 0, NULL, 0); return 1; }
+  if (err != NO_ERROR) {
+    test_print_result("SCRYPT", 0, NULL, 0);
+    return 1;
+  }
 
-    int ok = (ct_memcmp(g_output, s_zeros, 32) != 0);
-    test_print_result("SCRYPT", ok, g_output, 32);
-    return ok ? 0 : 1;
+  int ok = (ct_memcmp(g_output, s_zeros, 32) != 0);
+  test_print_result("SCRYPT", ok, g_output, 32);
+  return ok ? 0 : 1;
 }

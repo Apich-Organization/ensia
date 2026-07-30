@@ -92,3 +92,14 @@ benchmark/tests/build_baseline/
 benchmark/tests/build_csm_only/
 benchmark/tests/build_csm_vec/
 benchmark/tests/build_max/
+benchmark/tests/build_vec_only/
+test.c
+test_bcfobf
+test_cff
+test_clean
+test_constenc
+test_csmobf
+test_mbaobf
+test_obf
+test_sub
+test_vobf

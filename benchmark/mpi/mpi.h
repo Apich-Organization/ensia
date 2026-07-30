@@ -31,86 +31,85 @@
 #ifndef _MPI_H
 #define _MPI_H
 
-//Dependencies
-#include <stdio.h>
+// Dependencies
 #include "core/crypto.h"
+#include <stdio.h>
 
-//Maximum size of a multiple precision integer, in bits
+// Maximum size of a multiple precision integer, in bits
 #ifndef MPI_MAX_BITS
-   #define MPI_MAX_BITS 4096
+#define MPI_MAX_BITS 4096
 #elif (MPI_MAX_BITS < 0)
-   #error MPI_MAX_BITS parameter is not valid
+#error MPI_MAX_BITS parameter is not valid
 #endif
 
-//Size of the MPI base type, in bits
+// Size of the MPI base type, in bits
 #ifndef MPI_BITS_PER_WORD
-   #define MPI_BITS_PER_WORD 32
-#elif (MPI_BITS_PER_WORD != 8 || MPI_BITS_PER_WORD != 16 || MPI_BITS_PER_WORD != 32)
-   #error MPI_BITS_PER_WORD parameter is not valid
+#define MPI_BITS_PER_WORD 32
+#elif (MPI_BITS_PER_WORD != 8 || MPI_BITS_PER_WORD != 16 ||                    \
+       MPI_BITS_PER_WORD != 32)
+#error MPI_BITS_PER_WORD parameter is not valid
 #endif
 
-//Maximum size of a multiple precision integer, in words
-#define MPI_MAX_WORDS ((MPI_MAX_BITS + MPI_BITS_PER_WORD - 1) / MPI_BITS_PER_WORD)
+// Maximum size of a multiple precision integer, in words
+#define MPI_MAX_WORDS                                                          \
+  ((MPI_MAX_BITS + MPI_BITS_PER_WORD - 1) / MPI_BITS_PER_WORD)
 
-//Size of the MPI base type, in bytes
+// Size of the MPI base type, in bytes
 #define MPI_BYTES_PER_WORD (MPI_BITS_PER_WORD / 8)
 
-//MPI base types
+// MPI base types
 #if (MPI_BITS_PER_WORD == 8)
-   #define mpi_word_t uint8_t
-   #define mpi_sword_t int8_t
-   #define mpi_dword_t uint16_t
+#define mpi_word_t uint8_t
+#define mpi_sword_t int8_t
+#define mpi_dword_t uint16_t
 #elif (MPI_BITS_PER_WORD == 16)
-   #define mpi_word_t uint16_t
-   #define mpi_sword_t int16_t
-   #define mpi_dword_t uint32_t
+#define mpi_word_t uint16_t
+#define mpi_sword_t int16_t
+#define mpi_dword_t uint32_t
 #elif (MPI_BITS_PER_WORD == 32)
-   #define mpi_word_t uint32_t
-   #define mpi_sword_t int32_t
-   #define mpi_dword_t uint64_t
+#define mpi_word_t uint32_t
+#define mpi_sword_t int32_t
+#define mpi_dword_t uint64_t
 #endif
 
-//Error code checking
-#define MPI_CHECK(f) if((error = f) != NO_ERROR) goto end
+// Error code checking
+#define MPI_CHECK(f)                                                           \
+  if ((error = f) != NO_ERROR)                                                 \
+  goto end
 
-//Miscellaneous macros
+// Miscellaneous macros
 #define mpiIsEven(a) !mpiGetBitValue(a, 0)
 #define mpiIsOdd(a) mpiGetBitValue(a, 0)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief MPI import/export format
  **/
 
-typedef enum
-{
-   MPI_FORMAT_LITTLE_ENDIAN = 0,
-   MPI_FORMAT_BIG_ENDIAN    = 1
+typedef enum {
+  MPI_FORMAT_LITTLE_ENDIAN = 0,
+  MPI_FORMAT_BIG_ENDIAN = 1
 } MpiFormat;
-
 
 /**
  * @brief Arbitrary precision integer
  **/
 
-typedef struct
-{
-   int_t sign;
-   uint_t size;
+typedef struct {
+  int_t sign;
+  uint_t size;
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   mpi_word_t *data;
+  mpi_word_t *data;
 #else
-   mpi_word_t data[MPI_MAX_WORDS];
+  mpi_word_t data[MPI_MAX_WORDS];
 #endif
 } Mpi;
 
-
-//MPI related functions
+// MPI related functions
 void mpiInit(Mpi *r);
 void mpiFree(Mpi *r);
 
@@ -131,18 +130,18 @@ error_t mpiCopy(Mpi *r, const Mpi *a);
 error_t mpiSetValue(Mpi *r, mpi_sword_t a);
 
 error_t mpiRand(Mpi *r, uint_t length, const PrngAlgo *prngAlgo,
-   void *prngContext);
+                void *prngContext);
 
 error_t mpiRandRange(Mpi *r, const Mpi *p, const PrngAlgo *prngAlgo,
-   void *prngContext);
+                     void *prngContext);
 
 error_t mpiCheckProbablePrime(const Mpi *a);
 
 error_t mpiImport(Mpi *r, const uint8_t *input, size_t length,
-   MpiFormat format);
+                  MpiFormat format);
 
 error_t mpiExport(const Mpi *a, uint8_t *output, size_t length,
-   MpiFormat format);
+                  MpiFormat format);
 
 error_t mpiAdd(Mpi *r, const Mpi *a, const Mpi *b);
 error_t mpiAddInt(Mpi *r, const Mpi *a, mpi_sword_t b);
@@ -174,7 +173,7 @@ error_t mpiExpModRegular(Mpi *r, const Mpi *a, const Mpi *e, const Mpi *p);
 
 void mpiDump(FILE *stream, const char_t *prepend, const Mpi *a);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

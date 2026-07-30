@@ -167,7 +167,7 @@ static void shlSubstituteChain(BinaryOperator *bo) {
   if (k >= width)
     return;
   Type *T = bo->getType();
-  APInt rVal(width, cryptoutils->get_uint64_t());
+  APInt rVal(width, cryptoutils->get_uint64_t(), false, true);
   ConstantInt *r = cast<ConstantInt>(ConstantInt::get(T, rVal));
   // (a + r) << k
   BinaryOperator *aPr =
@@ -213,7 +213,7 @@ static void lshrSubstituteXorRound(BinaryOperator *bo) {
   if (k >= width)
     return;
   Type *T = bo->getType();
-  APInt rVal(width, cryptoutils->get_uint64_t());
+  APInt rVal(width, cryptoutils->get_uint64_t(), false, true);
   ConstantInt *r = cast<ConstantInt>(ConstantInt::get(T, rVal));
   // (a ^ r) >>u k
   BinaryOperator *xorOp =
@@ -256,7 +256,7 @@ static void ashrSubstituteXorRound(BinaryOperator *bo) {
     return;
   Type *T = bo->getType();
 
-  APInt rVal(width, cryptoutils->get_uint64_t());
+  APInt rVal(width, cryptoutils->get_uint64_t(), false, true);
   ConstantInt *r = cast<ConstantInt>(ConstantInt::get(T, rVal));
 
   // (a ^ r) >>s k
@@ -287,8 +287,8 @@ static void ashrSubstituteDoubleRound(BinaryOperator *bo) {
     return;
   Type *T = bo->getType();
 
-  APInt r1Val(width, cryptoutils->get_uint64_t());
-  APInt r2Val(width, cryptoutils->get_uint64_t());
+  APInt r1Val(width, cryptoutils->get_uint64_t(), false, true);
+  APInt r2Val(width, cryptoutils->get_uint64_t(), false, true);
 
   ConstantInt *r1 = cast<ConstantInt>(ConstantInt::get(T, r1Val));
   ConstantInt *r2 = cast<ConstantInt>(ConstantInt::get(T, r2Val));
@@ -426,7 +426,8 @@ static void addDoubleNeg(BinaryOperator *bo) {
 // Implementation of  r = rand (); a = b + r; a = a + c; a = a - r
 static void addRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
-      bo->getType(), cryptoutils->get_uint64_t());
+      bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
+                           cryptoutils->get_uint64_t(), false, true));
   BinaryOperator *op =
       BinaryOperator::Create(Instruction::Add, bo->getOperand(0), co, "", bo);
   op = BinaryOperator::Create(Instruction::Add, op, bo->getOperand(1), "", bo);
@@ -437,7 +438,8 @@ static void addRand(BinaryOperator *bo) {
 // Implementation of r = rand (); a = b - r; a = a + b; a = a + r
 static void addRand2(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
-      bo->getType(), cryptoutils->get_uint64_t());
+      bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
+                           cryptoutils->get_uint64_t(), false, true));
   BinaryOperator *op =
       BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), co, "", bo);
   op = BinaryOperator::Create(Instruction::Add, op, bo->getOperand(1), "", bo);
@@ -487,7 +489,8 @@ static void subNeg(BinaryOperator *bo) {
 // Implementation of  r = rand (); a = b + r; a = a - c; a = a - r
 static void subRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
-      bo->getType(), cryptoutils->get_uint64_t());
+      bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
+                           cryptoutils->get_uint64_t(), false, true));
   BinaryOperator *op =
       BinaryOperator::Create(Instruction::Add, bo->getOperand(0), co, "", bo);
   op = BinaryOperator::Create(Instruction::Sub, op, bo->getOperand(1), "", bo);
@@ -498,7 +501,8 @@ static void subRand(BinaryOperator *bo) {
 // Implementation of  r = rand (); a = b - r; a = a - c; a = a + r
 static void subRand2(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
-      bo->getType(), cryptoutils->get_uint64_t());
+      bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
+                           cryptoutils->get_uint64_t(), false, true));
   BinaryOperator *op =
       BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), co, "", bo);
   op = BinaryOperator::Create(Instruction::Sub, op, bo->getOperand(1), "", bo);
@@ -574,7 +578,8 @@ static void andSubstitution3(BinaryOperator *bo) {
 // Implementation of a = a & b <=> ~(~a | ~b) & (r | ~r)
 static void andSubstitutionRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
-      bo->getType(), cryptoutils->get_uint64_t());
+      bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
+                           cryptoutils->get_uint64_t(), false, true));
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(0), "", bo);
   BinaryOperator *op1 = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
   BinaryOperator *opr = BinaryOperator::CreateNot(co, "", bo);
@@ -639,7 +644,8 @@ static void orSubstitution3(BinaryOperator *bo) {
 // ~r))) | (~(~a | ~b) & (r | ~r))
 static void orSubstitutionRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
-      bo->getType(), cryptoutils->get_uint64_t());
+      bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
+                           cryptoutils->get_uint64_t(), false, true));
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(0), "", bo);
   BinaryOperator *op1 = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
   BinaryOperator *op2 = BinaryOperator::CreateNot(co, "", bo);
@@ -721,7 +727,8 @@ static void xorSubstitution3(BinaryOperator *bo) {
 // & r | b & ~r) note : r is a random number
 static void xorSubstitutionRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
-      bo->getType(), cryptoutils->get_uint64_t());
+      bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
+                           cryptoutils->get_uint64_t(), false, true));
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(0), "", bo);
   op = BinaryOperator::Create(Instruction::And, co, op, "", bo);
   BinaryOperator *opr = BinaryOperator::CreateNot(co, "", bo);
@@ -827,8 +834,9 @@ static void mulSubstitution3(BinaryOperator *bo) {
 static void mulSubstitution4(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
-  ConstantInt *r =
-      (ConstantInt *)ConstantInt::get(T, cryptoutils->get_uint64_t());
+  ConstantInt *r = (ConstantInt *)ConstantInt::get(
+      T,
+      APInt(T->getIntegerBitWidth(), cryptoutils->get_uint64_t(), false, true));
   BinaryOperator *aPr = BinaryOperator::Create(Instruction::Add, a, r, "", bo);
   BinaryOperator *bPr = BinaryOperator::Create(Instruction::Add, b, r, "", bo);
   BinaryOperator *m1 =
@@ -902,8 +910,9 @@ static void addChainedMBA(BinaryOperator *bo) {
 static void addRotateDecompose(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
-  ConstantInt *r =
-      (ConstantInt *)ConstantInt::get(T, cryptoutils->get_uint64_t());
+  ConstantInt *r = (ConstantInt *)ConstantInt::get(
+      T,
+      APInt(T->getIntegerBitWidth(), cryptoutils->get_uint64_t(), false, true));
   ConstantInt *c2 = (ConstantInt *)ConstantInt::get(T, 2);
   BinaryOperator *ar = BinaryOperator::Create(Instruction::Xor, a, r, "", bo);
   BinaryOperator *br = BinaryOperator::Create(Instruction::Xor, b, r, "", bo);
@@ -934,8 +943,9 @@ static void xorSplitRotate(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
   ConstantInt *c2 = (ConstantInt *)ConstantInt::get(T, 2);
-  ConstantInt *r =
-      (ConstantInt *)ConstantInt::get(T, cryptoutils->get_uint64_t());
+  ConstantInt *r = (ConstantInt *)ConstantInt::get(
+      T,
+      APInt(T->getIntegerBitWidth(), cryptoutils->get_uint64_t(), false, true));
   // a ^ b = (a - b) + 2*(~a & b)
   BinaryOperator *notA = BinaryOperator::CreateNot(a, "", bo);
   BinaryOperator *andNB =
@@ -986,10 +996,12 @@ static void addNegComplement(BinaryOperator *bo) {
 static void addRandPair(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
-  ConstantInt *r1 =
-      cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
-  ConstantInt *r2 =
-      cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
+  ConstantInt *r1 = cast<ConstantInt>(
+      ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
+                                cryptoutils->get_uint64_t(), false, true)));
+  ConstantInt *r2 = cast<ConstantInt>(
+      ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
+                                cryptoutils->get_uint64_t(), false, true)));
   BinaryOperator *aPr1 =
       BinaryOperator::Create(Instruction::Add, a, r1, "", bo);
   BinaryOperator *bPr2 =
@@ -1076,8 +1088,9 @@ static void subDoubleNeg(BinaryOperator *bo) {
 static void subRandPair(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
-  ConstantInt *r =
-      cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
+  ConstantInt *r = cast<ConstantInt>(
+      ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
+                                cryptoutils->get_uint64_t(), false, true)));
   BinaryOperator *aPr = BinaryOperator::Create(Instruction::Add, a, r, "", bo);
   BinaryOperator *bPr = BinaryOperator::Create(Instruction::Add, b, r, "", bo);
   bo->replaceAllUsesWith(
@@ -1101,8 +1114,9 @@ static void andViaXorOr(BinaryOperator *bo) {
 static void andNotNot(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
-  ConstantInt *r =
-      cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
+  ConstantInt *r = cast<ConstantInt>(
+      ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
+                                cryptoutils->get_uint64_t(), false, true)));
   BinaryOperator *notR = BinaryOperator::CreateNot(r, "", bo);
   // ~a = (a ^ r) ^ ~r
   BinaryOperator *axr = BinaryOperator::Create(Instruction::Xor, a, r, "", bo);
@@ -1125,8 +1139,9 @@ static void andNotNot(BinaryOperator *bo) {
 static void andFourTerm(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
-  ConstantInt *r =
-      cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
+  ConstantInt *r = cast<ConstantInt>(
+      ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
+                                cryptoutils->get_uint64_t(), false, true)));
   BinaryOperator *notR = BinaryOperator::CreateNot(r, "", bo);
   BinaryOperator *ar =
       BinaryOperator::Create(Instruction::And, a, r, "", bo); // a & r
@@ -1184,8 +1199,9 @@ static void orNotNor(BinaryOperator *bo) {
 static void orMerge(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
-  ConstantInt *r =
-      cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
+  ConstantInt *r = cast<ConstantInt>(
+      ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
+                                cryptoutils->get_uint64_t(), false, true)));
   BinaryOperator *sum = BinaryOperator::Create(Instruction::Add, a, b, "", bo);
   BinaryOperator *sumR =
       BinaryOperator::Create(Instruction::Add, sum, r, "", bo);
@@ -1203,8 +1219,9 @@ static void orMerge(BinaryOperator *bo) {
 static void orFourTerm(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
-  ConstantInt *r =
-      cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
+  ConstantInt *r = cast<ConstantInt>(
+      ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
+                                cryptoutils->get_uint64_t(), false, true)));
   // ~a = (a ^ r) ^ (r ^ -1) ... but just use NOT for correctness + chain length
   BinaryOperator *notA = BinaryOperator::CreateNot(a, "", bo);
   BinaryOperator *notB = BinaryOperator::CreateNot(b, "", bo);
@@ -1266,10 +1283,12 @@ static void xorHighLow(BinaryOperator *bo) {
 static void xorDoubleRand(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   Type *T = bo->getType();
-  ConstantInt *r1 =
-      cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
-  ConstantInt *r2 =
-      cast<ConstantInt>(ConstantInt::get(T, cryptoutils->get_uint64_t()));
+  ConstantInt *r1 = cast<ConstantInt>(
+      ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
+                                cryptoutils->get_uint64_t(), false, true)));
+  ConstantInt *r2 = cast<ConstantInt>(
+      ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
+                                cryptoutils->get_uint64_t(), false, true)));
   // r1^r2 compile-time constant
   uint64_t r12val = r1->getZExtValue() ^ r2->getZExtValue();
   ConstantInt *r12 = cast<ConstantInt>(ConstantInt::get(T, r12val));
