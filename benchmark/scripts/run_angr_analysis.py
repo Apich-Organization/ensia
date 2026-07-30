@@ -42,6 +42,9 @@ import sys
 import time
 import threading
 import glob
+import logging
+
+logging.getLogger('angr.calling_conventions').setLevel(logging.ERROR)
 
 # ---------------------------------------------------------------------------
 # Dependency guard
@@ -189,14 +192,19 @@ def analyse_binary(binary_path: str, timeout: int, z3_counter: Z3Counter) -> dic
                 exit_addrs.append(sym.rebased_addr)
 
         # ── Set up SimulationManager ──────────────────────────────────────
-        state = proj.factory.blank_state(
-            addr=main_addr,
+        state = proj.factory.call_state(
+            main_addr,
             add_options={
-                angr.options.ZERO_FILL_UNCONSTRAINED_MEMORY,
-                angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS,
                 angr.options.SIMPLIFY_EXPRS,
             }
         )
+
+        # Make test vectors symbolic so angr actually explores states
+        for sym in proj.loader.main_object.symbols:
+            if sym.name and sym.name.startswith("TV_"):
+                sym_size = sym.size if sym.size > 0 else 16
+                sym_var = claripy.BVS(sym.name, sym_size * 8)
+                state.memory.store(sym.rebased_addr, sym_var)
 
         simgr = proj.factory.simulation_manager(state)
 
@@ -302,7 +310,7 @@ def main():
     ap = argparse.ArgumentParser(description="Ensia benchmark angr analysis")
     ap.add_argument("--build-dir",     required=True, help="CMake build directory")
     ap.add_argument("--mode",          default="baseline",
-                    choices=["baseline", "csm_only", "vec_only", "csm_vec", "max"])
+                    choices=["baseline", "csm_only", "vec_only", "csm_vec", "bench_max"])
     ap.add_argument("--timeout",       type=int, default=DEFAULT_TIMEOUT,
                     help=f"Per-binary timeout in seconds (default: {DEFAULT_TIMEOUT})")
     ap.add_argument("--output",        default="angr_results.csv",

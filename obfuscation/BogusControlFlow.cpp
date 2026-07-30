@@ -407,7 +407,12 @@ struct BogusControlFlow : public FunctionPass {
             for (BasicBlock &BB : F)
               bbsBefore++;
           }
-          addBogusFlow(basicBlock, F);
+
+          if (ObfuscationMaxMode || cryptoutils->get_range(2) == 0) {
+            addStateExplosion(basicBlock, F);
+          } else {
+            addBogusFlow(basicBlock, F);
+          }
 
           // In nested mode: add newly created blocks back to the queue
           // (but only blocks from the original set to avoid infinite recursion)
@@ -460,6 +465,75 @@ struct BogusControlFlow : public FunctionPass {
         if (AI->isSwiftError())
           return true;
     return false;
+  }
+
+  /* addStateExplosion
+   *
+   * Adds a branch that depends on a symbolic condition (live variable),
+   * forcing symbolic execution engines like angr to fork states exponentially.
+   */
+  void addStateExplosion(BasicBlock *basicBlock, Function &F) {
+    BasicBlock::iterator i1 = basicBlock->begin();
+    if (basicBlock->getFirstNonPHIOrDbgOrLifetime() != basicBlock->end())
+      i1 = basicBlock->getFirstNonPHIOrDbgOrLifetime();
+
+    if (F.hasFnAttribute("probe-stack") && basicBlock->isEntryBlock()) {
+      while ((i1 != basicBlock->end()) && isa<AllocaInst>(i1))
+        i1++;
+      if (i1 == basicBlock->end())
+        return;
+    }
+
+    BasicBlock *originalBB = basicBlock->splitBasicBlock(i1, "originalBB");
+
+    BasicBlock *junkBB1 =
+        BasicBlock::Create(F.getContext(), "stateExp1", &F, originalBB);
+    BasicBlock *junkBB2 =
+        BasicBlock::Create(F.getContext(), "stateExp2", &F, originalBB);
+
+    IRBuilder<> IRB1(junkBB1);
+    InlineAsm *IA1 = InlineAsm::get(
+        FunctionType::get(Type::getVoidTy(F.getContext()), false), "nop", "",
+        true, false);
+    IRB1.CreateCall(IA1, {});
+    IRB1.CreateBr(originalBB);
+
+    IRBuilder<> IRB2(junkBB2);
+    InlineAsm *IA2 = InlineAsm::get(
+        FunctionType::get(Type::getVoidTy(F.getContext()), false), "nop\nnop",
+        "", true, false);
+    IRB2.CreateCall(IA2, {});
+    IRB2.CreateBr(originalBB);
+
+    basicBlock->getTerminator()->eraseFromParent();
+
+    SmallVector<Value *, 8> liveVars;
+    for (Argument &Arg : F.args()) {
+      if (Arg.getType()->isIntegerTy())
+        liveVars.push_back(&Arg);
+    }
+    for (Instruction &I : F.getEntryBlock()) {
+      if (I.getType()->isIntegerTy() && !isa<PHINode>(&I) &&
+          !I.getName().starts_with("bcf."))
+        liveVars.push_back(&I);
+    }
+
+    IRBuilder<> IRB(basicBlock);
+    Value *cond = IRB.getTrue();
+    if (!liveVars.empty()) {
+      Value *liveVar = liveVars[cryptoutils->get_range(liveVars.size())];
+      Value *and1 =
+          IRB.CreateAnd(liveVar, ConstantInt::get(liveVar->getType(), 1));
+      cond = IRB.CreateICmpEQ(and1, ConstantInt::get(liveVar->getType(), 0));
+    } else {
+      cond = IRB.CreateICmpEQ(
+          ConstantInt::get(Type::getInt32Ty(F.getContext()),
+                           cryptoutils->get_range(2)),
+          ConstantInt::get(Type::getInt32Ty(F.getContext()), 0));
+    }
+
+    IRB.CreateCondBr(cond, junkBB1, junkBB2);
+    turnOffOptimization(basicBlock->getParent());
   }
 
   /* addBogusFlow

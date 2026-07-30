@@ -33,6 +33,7 @@
 
 // Dependencies
 #include "core/crypto.h"
+#include "mpi/mpi.h"
 
 // C++ guard
 #ifdef __cplusplus
