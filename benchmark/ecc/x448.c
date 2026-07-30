@@ -28,19 +28,18 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
-#include "ecc/ec.h"
-#include "ecc/curve448.h"
+// Dependencies
 #include "ecc/x448.h"
+#include "core/crypto.h"
 #include "debug.h"
+#include "ecc/curve448.h"
+#include "ecc/ec.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (X448_SUPPORT == ENABLED)
-
 
 /**
  * @brief X448 function (scalar multiplication on Curve448)
@@ -50,135 +49,132 @@
  * @return Error code
  **/
 
-__weak_func error_t x448(uint8_t *r, const uint8_t *k, const uint8_t *u)
-{
-   int_t i;
-   uint32_t b;
-   uint32_t swap;
+__weak_func error_t x448(uint8_t *r, const uint8_t *k, const uint8_t *u) {
+  int_t i;
+  uint32_t b;
+  uint32_t swap;
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   X448State *state;
+  X448State *state;
 #else
-   X448State state[1];
+  X448State state[1];
 #endif
 
-   //Check parameters
-   if(r == NULL || k == NULL || u == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (r == NULL || k == NULL || u == NULL)
+    return ERROR_INVALID_PARAMETER;
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate working state
-   state = cryptoAllocMem(sizeof(X448State));
-   //Failed to allocate memory?
-   if(state == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate working state
+  state = cryptoAllocMem(sizeof(X448State));
+  // Failed to allocate memory?
+  if (state == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Copy scalar
-   for(i = 0; i < 14; i++)
-   {
-      state->k[i] = LOAD32LE(k + i * 4);
-   }
+  // Copy scalar
+  for (i = 0; i < 14; i++) {
+    state->k[i] = LOAD32LE(k + i * 4);
+  }
 
-   //Set the two least significant bits of the first byte to 0, and the most
-   //significant bit of the last byte to 1
-   state->k[0] &= 0xFFFFFFFC;
-   state->k[13] |= 0x80000000;
+  // Set the two least significant bits of the first byte to 0, and the most
+  // significant bit of the last byte to 1
+  state->k[0] &= 0xFFFFFFFC;
+  state->k[13] |= 0x80000000;
 
-   //Copy input u-coordinate
-   curve448Import(state->u, u);
+  // Copy input u-coordinate
+  curve448Import(state->u, u);
 
-   //Implementations must accept non-canonical values and process them as
-   //if they had been reduced modulo the field prime (refer to RFC 7748,
-   //section 5)
-   curve448Canonicalize(state->u, state->u);
+  // Implementations must accept non-canonical values and process them as
+  // if they had been reduced modulo the field prime (refer to RFC 7748,
+  // section 5)
+  curve448Canonicalize(state->u, state->u);
 
-   //Set X1 = 1
-   curve448SetInt(state->x1, 1);
-   //Set Z1 = 0
-   curve448SetInt(state->z1, 0);
-   //Set X2 = U
-   curve448Copy(state->x2, state->u);
-   //Set Z2 = 1
-   curve448SetInt(state->z2, 1);
+  // Set X1 = 1
+  curve448SetInt(state->x1, 1);
+  // Set Z1 = 0
+  curve448SetInt(state->z1, 0);
+  // Set X2 = U
+  curve448Copy(state->x2, state->u);
+  // Set Z2 = 1
+  curve448SetInt(state->z2, 1);
 
-   //Set swap = 0
-   swap = 0;
+  // Set swap = 0
+  swap = 0;
 
-   //Montgomery ladder
-   for(i = CURVE448_BIT_LEN - 1; i >= 0; i--)
-   {
-      //The scalar is processed in a left-to-right fashion
-      b = (state->k[i / 32] >> (i % 32)) & 1;
+  // Montgomery ladder
+  for (i = CURVE448_BIT_LEN - 1; i >= 0; i--) {
+    // The scalar is processed in a left-to-right fashion
+    b = (state->k[i / 32] >> (i % 32)) & 1;
 
-      //Conditional swap
-      curve448Swap(state->x1, state->x2, swap ^ b);
-      curve448Swap(state->z1, state->z2, swap ^ b);
+    // Conditional swap
+    curve448Swap(state->x1, state->x2, swap ^ b);
+    curve448Swap(state->z1, state->z2, swap ^ b);
 
-      //Save current bit value
-      swap = b;
+    // Save current bit value
+    swap = b;
 
-      //Compute T1 = X2 + Z2
-      curve448Add(state->t1, state->x2, state->z2);
-      //Compute X2 = X2 - Z2
-      curve448Sub(state->x2, state->x2, state->z2);
-      //Compute Z2 = X1 + Z1
-      curve448Add(state->z2, state->x1, state->z1);
-      //Compute X1 = X1 - Z1
-      curve448Sub(state->x1, state->x1, state->z1);
-      //Compute T1 = T1 * X1
-      curve448Mul(state->t1, state->t1, state->x1);
-      //Compute X2 = X2 * Z2
-      curve448Mul(state->x2, state->x2, state->z2);
-      //Compute Z2 = Z2 * Z2
-      curve448Sqr(state->z2, state->z2);
-      //Compute X1 = X1 * X1
-      curve448Sqr(state->x1, state->x1);
-      //Compute T2 = Z2 - X1
-      curve448Sub(state->t2, state->z2, state->x1);
-      //Compute Z1 = T2 * a24
-      curve448MulInt(state->z1, state->t2, CURVE448_A24);
-      //Compute Z1 = Z1 + X1
-      curve448Add(state->z1, state->z1, state->x1);
-      //Compute Z1 = Z1 * T2
-      curve448Mul(state->z1, state->z1, state->t2);
-      //Compute X1 = X1 * Z2
-      curve448Mul(state->x1, state->x1, state->z2);
-      //Compute Z2 = T1 - X2
-      curve448Sub(state->z2, state->t1, state->x2);
-      //Compute Z2 = Z2 * Z2
-      curve448Sqr(state->z2, state->z2);
-      //Compute Z2 = Z2 * U
-      curve448Mul(state->z2, state->z2, state->u);
-      //Compute X2 = X2 + T1
-      curve448Add(state->x2, state->x2, state->t1);
-      //Compute X2 = X2 * X2
-      curve448Sqr(state->x2, state->x2);
-   }
+    // Compute T1 = X2 + Z2
+    curve448Add(state->t1, state->x2, state->z2);
+    // Compute X2 = X2 - Z2
+    curve448Sub(state->x2, state->x2, state->z2);
+    // Compute Z2 = X1 + Z1
+    curve448Add(state->z2, state->x1, state->z1);
+    // Compute X1 = X1 - Z1
+    curve448Sub(state->x1, state->x1, state->z1);
+    // Compute T1 = T1 * X1
+    curve448Mul(state->t1, state->t1, state->x1);
+    // Compute X2 = X2 * Z2
+    curve448Mul(state->x2, state->x2, state->z2);
+    // Compute Z2 = Z2 * Z2
+    curve448Sqr(state->z2, state->z2);
+    // Compute X1 = X1 * X1
+    curve448Sqr(state->x1, state->x1);
+    // Compute T2 = Z2 - X1
+    curve448Sub(state->t2, state->z2, state->x1);
+    // Compute Z1 = T2 * a24
+    curve448MulInt(state->z1, state->t2, CURVE448_A24);
+    // Compute Z1 = Z1 + X1
+    curve448Add(state->z1, state->z1, state->x1);
+    // Compute Z1 = Z1 * T2
+    curve448Mul(state->z1, state->z1, state->t2);
+    // Compute X1 = X1 * Z2
+    curve448Mul(state->x1, state->x1, state->z2);
+    // Compute Z2 = T1 - X2
+    curve448Sub(state->z2, state->t1, state->x2);
+    // Compute Z2 = Z2 * Z2
+    curve448Sqr(state->z2, state->z2);
+    // Compute Z2 = Z2 * U
+    curve448Mul(state->z2, state->z2, state->u);
+    // Compute X2 = X2 + T1
+    curve448Add(state->x2, state->x2, state->t1);
+    // Compute X2 = X2 * X2
+    curve448Sqr(state->x2, state->x2);
+  }
 
-   //Conditional swap
-   curve448Swap(state->x1, state->x2, swap);
-   curve448Swap(state->z1, state->z2, swap);
+  // Conditional swap
+  curve448Swap(state->x1, state->x2, swap);
+  curve448Swap(state->z1, state->z2, swap);
 
-   //Retrieve affine representation
-   curve448Inv(state->u, state->z1);
-   curve448Mul(state->u, state->u, state->x1);
+  // Retrieve affine representation
+  curve448Inv(state->u, state->z1);
+  curve448Mul(state->u, state->u, state->x1);
 
-   //Reduce non-canonical values
-   curve448Canonicalize(state->u, state->u);
+  // Reduce non-canonical values
+  curve448Canonicalize(state->u, state->u);
 
-   //Copy output u-coordinate
-   curve448Export(state->u, r);
+  // Copy output u-coordinate
+  curve448Export(state->u, r);
 
-   //Erase working state
-   osMemset(state, 0, sizeof(X448State));
+  // Erase working state
+  osMemset(state, 0, sizeof(X448State));
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Release working state
-   cryptoFreeMem(state);
+  // Release working state
+  cryptoFreeMem(state);
 #endif
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
 
 #endif

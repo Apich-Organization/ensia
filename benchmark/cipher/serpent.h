@@ -31,45 +31,42 @@
 #ifndef _SERPENT_H
 #define _SERPENT_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Serpent block size
+// Serpent block size
 #define SERPENT_BLOCK_SIZE 16
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define SERPENT_CIPHER_ALGO (&serpentCipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Serpent algorithm context
  **/
 
-typedef struct
-{
-   uint32_t k[33][4];
+typedef struct {
+  uint32_t k[33][4];
 } SerpentContext;
 
-
-//Serpent related constants
+// Serpent related constants
 extern const CipherAlgo serpentCipherAlgo;
 
-//Serpent related functions
+// Serpent related functions
 error_t serpentInit(SerpentContext *context, const uint8_t *key, size_t keyLen);
 
 void serpentEncryptBlock(SerpentContext *context, const uint8_t *input,
-   uint8_t *output);
+                         uint8_t *output);
 
 void serpentDecryptBlock(SerpentContext *context, const uint8_t *input,
-   uint8_t *output);
+                         uint8_t *output);
 
 void serpentDeinit(SerpentContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

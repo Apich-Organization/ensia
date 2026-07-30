@@ -31,27 +31,27 @@
 #ifndef _MD5_CRYPT_H
 #define _MD5_CRYPT_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Number of rounds
+// Number of rounds
 #define MD5_CRYPT_ROUNDS 1000
 
-//Maximum length of the salt string
+// Maximum length of the salt string
 #define MD5_CRYPT_MAX_SALT_LEN 8
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//MD5-crypt related functions
+// MD5-crypt related functions
 error_t md5Crypt(const char_t *password, const char_t *salt, char_t *output,
-   size_t *outputLen);
+                 size_t *outputLen);
 
 size_t md5CryptEncodeBase64(const uint8_t *input, uint8_t *output);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

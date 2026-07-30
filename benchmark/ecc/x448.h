@@ -31,37 +31,34 @@
 #ifndef _X448_H
 #define _X448_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "ecc/curve448.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief X448 working state
  **/
 
-typedef struct
-{
-   uint32_t k[14];
-   int32_t u[16];
-   int32_t x1[16];
-   int32_t z1[16];
-   int32_t x2[16];
-   int32_t z2[16];
-   int32_t t1[16];
-   int32_t t2[16];
+typedef struct {
+  uint32_t k[14];
+  int32_t u[16];
+  int32_t x1[16];
+  int32_t z1[16];
+  int32_t x2[16];
+  int32_t z2[16];
+  int32_t t1[16];
+  int32_t t2[16];
 } X448State;
 
-
-//X448 related functions
+// X448 related functions
 error_t x448(uint8_t *r, const uint8_t *k, const uint8_t *u);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

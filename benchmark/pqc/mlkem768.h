@@ -31,39 +31,39 @@
 #ifndef _MLKEM768_H
 #define _MLKEM768_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Public key length
+// Public key length
 #define MLKEM768_PUBLIC_KEY_LEN 1184
-//Secret key length
+// Secret key length
 #define MLKEM768_SECRET_KEY_LEN 2400
-//Ciphertext length
+// Ciphertext length
 #define MLKEM768_CIPHERTEXT_LEN 1088
-//Shared secret length
+// Shared secret length
 #define MLKEM768_SHARED_SECRET_LEN 32
 
-//Common interface for key encapsulation mechanisms (KEM)
+// Common interface for key encapsulation mechanisms (KEM)
 #define MLKEM768_KEM_ALGO (&mlkem768KemAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//ML-KEM-768 related constants
+// ML-KEM-768 related constants
 extern const KemAlgo mlkem768KemAlgo;
 
-//ML-KEM-768 related functions
+// ML-KEM-768 related functions
 error_t mlkem768GenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *pk, uint8_t *sk);
+                                uint8_t *pk, uint8_t *sk);
 
 error_t mlkem768Encapsulate(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *ct, uint8_t *ss, const uint8_t *pk);
+                            uint8_t *ct, uint8_t *ss, const uint8_t *pk);
 
 error_t mlkem768Decapsulate(uint8_t *ss, const uint8_t *ct, const uint8_t *sk);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

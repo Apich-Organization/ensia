@@ -28,37 +28,34 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "hash/blake2s224.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (BLAKE2S224_SUPPORT == ENABLED)
 
-//BLAKE2s-224 object identifier (1.3.6.1.4.1.1722.12.2.2.7)
-const uint8_t BLAKE2S224_OID[11] = {0x43, 0x06, 0x01, 0x04, 0x01, 0x8D, 0x3A, 0x0C, 0x02, 0x02, 0x07};
+// BLAKE2s-224 object identifier (1.3.6.1.4.1.1722.12.2.2.7)
+const uint8_t BLAKE2S224_OID[11] = {0x43, 0x06, 0x01, 0x04, 0x01, 0x8D,
+                                    0x3A, 0x0C, 0x02, 0x02, 0x07};
 
-//Common interface for hash algorithms
-const HashAlgo blake2s224HashAlgo =
-{
-   "BLAKE2s-224",
-   BLAKE2S224_OID,
-   sizeof(BLAKE2S224_OID),
-   sizeof(Blake2s224Context),
-   BLAKE2S224_BLOCK_SIZE,
-   BLAKE2S224_DIGEST_SIZE,
-   BLAKE2S224_MIN_PAD_SIZE,
-   FALSE,
-   (HashAlgoCompute) blake2s224Compute,
-   (HashAlgoInit) blake2s224Init,
-   (HashAlgoUpdate) blake2s224Update,
-   (HashAlgoFinal) blake2s224Final,
-   NULL
-};
-
+// Common interface for hash algorithms
+const HashAlgo blake2s224HashAlgo = {"BLAKE2s-224",
+                                     BLAKE2S224_OID,
+                                     sizeof(BLAKE2S224_OID),
+                                     sizeof(Blake2s224Context),
+                                     BLAKE2S224_BLOCK_SIZE,
+                                     BLAKE2S224_DIGEST_SIZE,
+                                     BLAKE2S224_MIN_PAD_SIZE,
+                                     FALSE,
+                                     (HashAlgoCompute)blake2s224Compute,
+                                     (HashAlgoInit)blake2s224Init,
+                                     (HashAlgoUpdate)blake2s224Update,
+                                     (HashAlgoFinal)blake2s224Final,
+                                     NULL};
 
 /**
  * @brief Digest a message using BLAKE2s-224
@@ -68,24 +65,20 @@ const HashAlgo blake2s224HashAlgo =
  * @return Error code
  **/
 
-error_t blake2s224Compute(const void *data, size_t length, uint8_t *digest)
-{
-   //Compute the unkeyed hash with BLAKE2s-224
-   return blake2sCompute(NULL, 0, data, length, digest, BLAKE2S224_DIGEST_SIZE);
+error_t blake2s224Compute(const void *data, size_t length, uint8_t *digest) {
+  // Compute the unkeyed hash with BLAKE2s-224
+  return blake2sCompute(NULL, 0, data, length, digest, BLAKE2S224_DIGEST_SIZE);
 }
-
 
 /**
  * @brief Initialize BLAKE2s-224 hash computation
  * @param[in] context Pointer to the BLAKE2s context to initialize
  **/
 
-void blake2s224Init(Blake2s224Context *context)
-{
-   //Initialize the hashing context
-   blake2sInit(context, NULL, 0, BLAKE2S224_DIGEST_SIZE);
+void blake2s224Init(Blake2s224Context *context) {
+  // Initialize the hashing context
+  blake2sInit(context, NULL, 0, BLAKE2S224_DIGEST_SIZE);
 }
-
 
 /**
  * @brief Update BLAKE2s-224 hash computation
@@ -94,12 +87,11 @@ void blake2s224Init(Blake2s224Context *context)
  * @param[in] length Length of the buffer
  **/
 
-void blake2s224Update(Blake2s224Context *context, const void *data, size_t length)
-{
-   //Digest the data
-   blake2sUpdate(context, data, length);
+void blake2s224Update(Blake2s224Context *context, const void *data,
+                      size_t length) {
+  // Digest the data
+  blake2sUpdate(context, data, length);
 }
-
 
 /**
  * @brief Finish BLAKE2s-224 hash computation
@@ -107,10 +99,9 @@ void blake2s224Update(Blake2s224Context *context, const void *data, size_t lengt
  * @param[out] digest Calculated digest
  **/
 
-void blake2s224Final(Blake2s224Context *context, uint8_t *digest)
-{
-   //Generate the message digest
-   blake2sFinal(context, digest);
+void blake2s224Final(Blake2s224Context *context, uint8_t *digest) {
+  // Generate the message digest
+  blake2sFinal(context, digest);
 }
 
 #endif

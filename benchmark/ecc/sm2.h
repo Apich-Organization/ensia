@@ -31,72 +31,69 @@
 #ifndef _SM2_H
 #define _SM2_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "ecc/ecdsa.h"
 #include "hash/hash_algorithms.h"
 
-//SM2 identifiers
+// SM2 identifiers
 #define SM2_DEFAULT_ID "1234567812345678"
 #define SM2_TLS13_ID "TLSv1.3+GM+Cipher+Suite"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Working state (SM2 signature generation)
  **/
 
-typedef struct
-{
-   HashContext hashContext;
-   uint8_t buffer[32];
-   uint32_t e[8];
-   uint32_t k[8];
-   uint32_t r[8];
-   uint32_t t[8];
-   EcPoint3 pa;
-   EcPoint3 p1;
+typedef struct {
+  HashContext hashContext;
+  uint8_t buffer[32];
+  uint32_t e[8];
+  uint32_t k[8];
+  uint32_t r[8];
+  uint32_t t[8];
+  EcPoint3 pa;
+  EcPoint3 p1;
 } Sm2GenerateSignatureState;
-
 
 /**
  * @brief Working state (SM2 signature verification)
  **/
 
-typedef struct
-{
-   HashContext hashContext;
-   uint8_t buffer[32];
-   uint32_t e[8];
-   uint32_t r[8];
-   uint32_t t[8];
-   EcPoint3 pa;
-   EcPoint3 p1;
+typedef struct {
+  HashContext hashContext;
+  uint8_t buffer[32];
+  uint32_t e[8];
+  uint32_t r[8];
+  uint32_t t[8];
+  EcPoint3 pa;
+  EcPoint3 p1;
 } Sm2VerifySignatureState;
 
-
-//SM2 related constants
+// SM2 related constants
 extern const uint8_t SM2_WITH_SM3_OID[8];
 
-//SM2 related functions
+// SM2 related functions
 error_t sm2GenerateSignature(const PrngAlgo *prngAlgo, void *prngContext,
-   const EcPrivateKey *privateKey, const HashAlgo *hashAlgo, const char_t *id,
-   size_t idLen, const void *message, size_t messageLen,
-   EcdsaSignature *signature);
+                             const EcPrivateKey *privateKey,
+                             const HashAlgo *hashAlgo, const char_t *id,
+                             size_t idLen, const void *message,
+                             size_t messageLen, EcdsaSignature *signature);
 
 error_t sm2VerifySignature(const EcPublicKey *publicKey,
-   const HashAlgo *hashAlgo, const char_t *id, size_t idLen,
-   const void *message, size_t messageLen, const EcdsaSignature *signature);
+                           const HashAlgo *hashAlgo, const char_t *id,
+                           size_t idLen, const void *message, size_t messageLen,
+                           const EcdsaSignature *signature);
 
 error_t sm2ComputeZa(const HashAlgo *hashAlgo, HashContext *hashContext,
-   const EcCurve *curve, const EcPoint3 *pa, const char_t *ida, size_t idaLen,
-   uint8_t *za);
+                     const EcCurve *curve, const EcPoint3 *pa,
+                     const char_t *ida, size_t idaLen, uint8_t *za);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

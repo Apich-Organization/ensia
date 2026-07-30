@@ -33,37 +33,34 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "hash/sha3_256.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (SHA3_256_SUPPORT == ENABLED)
 
-//SHA3-256 object identifier (2.16.840.1.101.3.4.2.8)
-const uint8_t SHA3_256_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x08};
+// SHA3-256 object identifier (2.16.840.1.101.3.4.2.8)
+const uint8_t SHA3_256_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65,
+                                 0x03, 0x04, 0x02, 0x08};
 
-//Common interface for hash algorithms
-const HashAlgo sha3_256HashAlgo =
-{
-   "SHA3-256",
-   SHA3_256_OID,
-   sizeof(SHA3_256_OID),
-   sizeof(Sha3_256Context),
-   SHA3_256_BLOCK_SIZE,
-   SHA3_256_DIGEST_SIZE,
-   SHA3_256_MIN_PAD_SIZE,
-   FALSE,
-   (HashAlgoCompute) sha3_256Compute,
-   (HashAlgoInit) sha3_256Init,
-   (HashAlgoUpdate) sha3_256Update,
-   (HashAlgoFinal) sha3_256Final,
-   NULL
-};
-
+// Common interface for hash algorithms
+const HashAlgo sha3_256HashAlgo = {"SHA3-256",
+                                   SHA3_256_OID,
+                                   sizeof(SHA3_256_OID),
+                                   sizeof(Sha3_256Context),
+                                   SHA3_256_BLOCK_SIZE,
+                                   SHA3_256_DIGEST_SIZE,
+                                   SHA3_256_MIN_PAD_SIZE,
+                                   FALSE,
+                                   (HashAlgoCompute)sha3_256Compute,
+                                   (HashAlgoInit)sha3_256Init,
+                                   (HashAlgoUpdate)sha3_256Update,
+                                   (HashAlgoFinal)sha3_256Final,
+                                   NULL};
 
 /**
  * @brief Digest a message using SHA3-256
@@ -73,57 +70,53 @@ const HashAlgo sha3_256HashAlgo =
  * @return Error code
  **/
 
-error_t sha3_256Compute(const void *data, size_t length, uint8_t *digest)
-{
+error_t sha3_256Compute(const void *data, size_t length, uint8_t *digest) {
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   Sha3_256Context *context;
+  Sha3_256Context *context;
 #else
-   Sha3_256Context context[1];
+  Sha3_256Context context[1];
 #endif
 
-   //Check parameters
-   if(data == NULL && length != 0)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (data == NULL && length != 0)
+    return ERROR_INVALID_PARAMETER;
 
-   if(digest == NULL)
-      return ERROR_INVALID_PARAMETER;
+  if (digest == NULL)
+    return ERROR_INVALID_PARAMETER;
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate a memory buffer to hold the SHA3-256 context
-   context = cryptoAllocMem(sizeof(Sha3_256Context));
-   //Failed to allocate memory?
-   if(context == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate a memory buffer to hold the SHA3-256 context
+  context = cryptoAllocMem(sizeof(Sha3_256Context));
+  // Failed to allocate memory?
+  if (context == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Initialize the SHA3-256 context
-   sha3_256Init(context);
-   //Digest the message
-   sha3_256Update(context, data, length);
-   //Finalize the SHA3-256 message digest
-   sha3_256Final(context, digest);
+  // Initialize the SHA3-256 context
+  sha3_256Init(context);
+  // Digest the message
+  sha3_256Update(context, data, length);
+  // Finalize the SHA3-256 message digest
+  sha3_256Final(context, digest);
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Free previously allocated memory
-   cryptoFreeMem(context);
+  // Free previously allocated memory
+  cryptoFreeMem(context);
 #endif
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Initialize SHA3-256 message digest context
  * @param[in] context Pointer to the SHA3-256 context to initialize
  **/
 
-void sha3_256Init(Sha3_256Context *context)
-{
-   //The capacity of the sponge is twice the digest length
-   keccakInit(context, 2 * 256);
+void sha3_256Init(Sha3_256Context *context) {
+  // The capacity of the sponge is twice the digest length
+  keccakInit(context, 2 * 256);
 }
-
 
 /**
  * @brief Update the SHA3-256 context with a portion of the message being hashed
@@ -132,12 +125,10 @@ void sha3_256Init(Sha3_256Context *context)
  * @param[in] length Length of the buffer
  **/
 
-void sha3_256Update(Sha3_256Context *context, const void *data, size_t length)
-{
-   //Absorb the input data
-   keccakAbsorb(context, data, length);
+void sha3_256Update(Sha3_256Context *context, const void *data, size_t length) {
+  // Absorb the input data
+  keccakAbsorb(context, data, length);
 }
-
 
 /**
  * @brief Finish the SHA3-256 message digest
@@ -145,12 +136,11 @@ void sha3_256Update(Sha3_256Context *context, const void *data, size_t length)
  * @param[out] digest Calculated digest
  **/
 
-void sha3_256Final(Sha3_256Context *context, uint8_t *digest)
-{
-   //Finish absorbing phase (padding byte is 0x06 for SHA-3)
-   keccakFinal(context, KECCAK_SHA3_PAD);
-   //Extract data from the squeezing phase
-   keccakSqueeze(context, digest, SHA3_256_DIGEST_SIZE);
+void sha3_256Final(Sha3_256Context *context, uint8_t *digest) {
+  // Finish absorbing phase (padding byte is 0x06 for SHA-3)
+  keccakFinal(context, KECCAK_SHA3_PAD);
+  // Extract data from the squeezing phase
+  keccakSqueeze(context, digest, SHA3_256_DIGEST_SIZE);
 }
 
 #endif

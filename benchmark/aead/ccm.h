@@ -31,32 +31,32 @@
 #ifndef _CCM_H
 #define _CCM_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//CCM related functions
+// CCM related functions
 error_t ccmEncrypt(const CipherAlgo *cipher, void *context, const uint8_t *n,
-   size_t nLen, const uint8_t *a, size_t aLen, const uint8_t *p, uint8_t *c,
-   size_t length, uint8_t *t, size_t tLen);
+                   size_t nLen, const uint8_t *a, size_t aLen, const uint8_t *p,
+                   uint8_t *c, size_t length, uint8_t *t, size_t tLen);
 
 error_t ccmDecrypt(const CipherAlgo *cipher, void *context, const uint8_t *n,
-   size_t nLen, const uint8_t *a, size_t aLen, const uint8_t *c, uint8_t *p,
-   size_t length, const uint8_t *t, size_t tLen);
+                   size_t nLen, const uint8_t *a, size_t aLen, const uint8_t *c,
+                   uint8_t *p, size_t length, const uint8_t *t, size_t tLen);
 
 error_t ccmFormatBlock0(size_t q, const uint8_t *n, size_t nLen, size_t aLen,
-   size_t tLen, uint8_t *b);
+                        size_t tLen, uint8_t *b);
 
 void ccmXorBlock(uint8_t *x, const uint8_t *a, const uint8_t *b, size_t n);
 
 void ccmFormatCounter0(const uint8_t *n, size_t nLen, uint8_t *ctr);
 void ccmIncCounter(uint8_t *ctr, size_t n);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

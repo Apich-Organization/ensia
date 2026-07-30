@@ -31,32 +31,32 @@
 #ifndef _SHA_CRYPT_H
 #define _SHA_CRYPT_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Minimum number of rounds
+// Minimum number of rounds
 #define SHA_CRYPT_MIN_ROUNDS 1000
-//Maximum number of rounds
+// Maximum number of rounds
 #define SHA_CRYPT_MAX_ROUNDS 999999999
-//Default number of rounds
+// Default number of rounds
 #define SHA_CRYPT_DEFAULT_ROUNDS 5000
 
-//Maximum length of the salt string
+// Maximum length of the salt string
 #define SHA_CRYPT_MAX_SALT_LEN 16
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//SHA-crypt related functions
+// SHA-crypt related functions
 error_t shaCrypt(const HashAlgo *hashAlgo, const char_t *password,
-   const char_t *salt, char_t *output, size_t *outputLen);
+                 const char_t *salt, char_t *output, size_t *outputLen);
 
 size_t shaCryptEncodeBase64(const HashAlgo *hashAlgo, const uint8_t *input,
-   uint8_t *output);
+                            uint8_t *output);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

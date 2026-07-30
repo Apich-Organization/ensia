@@ -31,26 +31,27 @@
 #ifndef _HKDF_H
 #define _HKDF_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//HKDF related functions
+// HKDF related functions
 error_t hkdf(const HashAlgo *hash, const uint8_t *ikm, size_t ikmLen,
-   const uint8_t *salt, size_t saltLen, const uint8_t *info, size_t infoLen,
-   uint8_t *okm, size_t okmLen);
+             const uint8_t *salt, size_t saltLen, const uint8_t *info,
+             size_t infoLen, uint8_t *okm, size_t okmLen);
 
 error_t hkdfExtract(const HashAlgo *hash, const uint8_t *ikm, size_t ikmLen,
-   const uint8_t *salt, size_t saltLen, uint8_t *prk);
+                    const uint8_t *salt, size_t saltLen, uint8_t *prk);
 
 error_t hkdfExpand(const HashAlgo *hash, const uint8_t *prk, size_t prkLen,
-   const uint8_t *info, size_t infoLen, uint8_t *okm, size_t okmLen);
+                   const uint8_t *info, size_t infoLen, uint8_t *okm,
+                   size_t okmLen);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

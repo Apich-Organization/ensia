@@ -31,50 +31,47 @@
 #ifndef _ASCON_XOF128_H
 #define _ASCON_XOF128_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "lwc/ascon.h"
 
-//Common interface for XOF algorithms
+// Common interface for XOF algorithms
 #define ASCON_XOF128_XOF_ALGO (&asconXof128XofAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Ascon-XOF128 algorithm context
  **/
 
-typedef struct
-{
-   AsconState state;
-   uint8_t buffer[8];
-   size_t length;
+typedef struct {
+  AsconState state;
+  uint8_t buffer[8];
+  size_t length;
 } AsconXof128Context;
 
-
-//Ascon-XOF128 related constants
+// Ascon-XOF128 related constants
 extern const uint8_t ASCON_XOF128_OID[1];
 extern const XofAlgo asconXof128XofAlgo;
 
-//Ascon-XOF128 related functions
+// Ascon-XOF128 related functions
 error_t asconXof128Compute(const void *input, size_t inputLen, uint8_t *output,
-   size_t outputLen);
+                           size_t outputLen);
 
 void asconXof128Init(AsconXof128Context *context);
 
 void asconXof128Absorb(AsconXof128Context *context, const void *input,
-   size_t length);
+                       size_t length);
 
 void asconXof128Final(AsconXof128Context *context);
 
 void asconXof128Squeeze(AsconXof128Context *context, uint8_t *output,
-   size_t length);
+                        size_t length);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

@@ -28,32 +28,29 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "pqc/sntrup761.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (SNTRUP761_SUPPORT == ENABLED)
 
-//Dependencies (liboqs)
+// Dependencies (liboqs)
 #include <oqs/oqs.h>
 
-//Common interface for key encapsulation mechanisms (KEM)
-const KemAlgo sntrup761KemAlgo =
-{
-   "sntrup761",
-   SNTRUP761_PUBLIC_KEY_LEN,
-   SNTRUP761_SECRET_KEY_LEN,
-   SNTRUP761_CIPHERTEXT_LEN,
-   SNTRUP761_SHARED_SECRET_LEN,
-   (KemAlgoGenerateKeyPair) sntrup761GenerateKeyPair,
-   (KemAlgoEncapsulate) sntrup761Encapsulate,
-   (KemAlgoDecapsulate) sntrup761Decapsulate
-};
-
+// Common interface for key encapsulation mechanisms (KEM)
+const KemAlgo sntrup761KemAlgo = {
+    "sntrup761",
+    SNTRUP761_PUBLIC_KEY_LEN,
+    SNTRUP761_SECRET_KEY_LEN,
+    SNTRUP761_CIPHERTEXT_LEN,
+    SNTRUP761_SHARED_SECRET_LEN,
+    (KemAlgoGenerateKeyPair)sntrup761GenerateKeyPair,
+    (KemAlgoEncapsulate)sntrup761Encapsulate,
+    (KemAlgoDecapsulate)sntrup761Decapsulate};
 
 /**
  * @brief Key pair generation
@@ -65,17 +62,15 @@ const KemAlgo sntrup761KemAlgo =
  **/
 
 error_t sntrup761GenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *pk, uint8_t *sk)
-{
-   OQS_STATUS status;
+                                 uint8_t *pk, uint8_t *sk) {
+  OQS_STATUS status;
 
-   //Key pair generation
-   status = OQS_KEM_ntruprime_sntrup761_keypair(pk, sk);
+  // Key pair generation
+  status = OQS_KEM_ntruprime_sntrup761_keypair(pk, sk);
 
-   //Return status code
-   return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
+  // Return status code
+  return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
 }
-
 
 /**
  * @brief Encapsulation algorithm
@@ -88,17 +83,15 @@ error_t sntrup761GenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
  **/
 
 error_t sntrup761Encapsulate(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *ct, uint8_t *ss, const uint8_t *pk)
-{
-   OQS_STATUS status;
+                             uint8_t *ct, uint8_t *ss, const uint8_t *pk) {
+  OQS_STATUS status;
 
-   //Encapsulation algorithm
-   status = OQS_KEM_ntruprime_sntrup761_encaps(ct, ss, pk);
+  // Encapsulation algorithm
+  status = OQS_KEM_ntruprime_sntrup761_encaps(ct, ss, pk);
 
-   //Return status code
-   return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
+  // Return status code
+  return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
 }
-
 
 /**
  * @brief Decapsulation algorithm
@@ -108,15 +101,15 @@ error_t sntrup761Encapsulate(const PrngAlgo *prngAlgo, void *prngContext,
  * @return Error code
  **/
 
-error_t sntrup761Decapsulate(uint8_t *ss, const uint8_t *ct, const uint8_t *sk)
-{
-   OQS_STATUS status;
+error_t sntrup761Decapsulate(uint8_t *ss, const uint8_t *ct,
+                             const uint8_t *sk) {
+  OQS_STATUS status;
 
-   //Decapsulation algorithm
-   status = OQS_KEM_ntruprime_sntrup761_decaps(ss, ct, sk);
+  // Decapsulation algorithm
+  status = OQS_KEM_ntruprime_sntrup761_decaps(ss, ct, sk);
 
-   //Return status code
-   return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
+  // Return status code
+  return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
 }
 
 #endif

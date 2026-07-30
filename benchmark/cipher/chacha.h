@@ -31,40 +31,37 @@
 #ifndef _CHACHA_H
 #define _CHACHA_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief ChaCha algorithm context
  **/
 
-typedef struct
-{
-   uint_t nr;
-   uint32_t state[16];
-   uint8_t keystream[64];
-   size_t pos;
+typedef struct {
+  uint_t nr;
+  uint32_t state[16];
+  uint8_t keystream[64];
+  size_t pos;
 } ChachaContext;
 
-
-//ChaCha related functions
+// ChaCha related functions
 error_t chachaInit(ChachaContext *context, uint_t nr, const uint8_t *key,
-   size_t keyLen, const uint8_t *nonce, size_t nonceLen);
+                   size_t keyLen, const uint8_t *nonce, size_t nonceLen);
 
-void chachaCipher(ChachaContext *context, const uint8_t *input,
-   uint8_t *output, size_t length);
+void chachaCipher(ChachaContext *context, const uint8_t *input, uint8_t *output,
+                  size_t length);
 
 void chachaProcessBlock(ChachaContext *context);
 
 void chachaDeinit(ChachaContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

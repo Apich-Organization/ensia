@@ -31,24 +31,24 @@
 #ifndef _CTR_H
 #define _CTR_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//CTR encryption and decryption routines
+// CTR encryption and decryption routines
 error_t ctrEncrypt(const CipherAlgo *cipher, void *context, uint_t m,
-   uint8_t *t, const uint8_t *p, uint8_t *c, size_t length);
+                   uint8_t *t, const uint8_t *p, uint8_t *c, size_t length);
 
 error_t ctrDecrypt(const CipherAlgo *cipher, void *context, uint_t m,
-   uint8_t *t, const uint8_t *c, uint8_t *p, size_t length);
+                   uint8_t *t, const uint8_t *c, uint8_t *p, size_t length);
 
 void ctrIncBlock(uint8_t *ctr, uint32_t inc, size_t blockSize, size_t m);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

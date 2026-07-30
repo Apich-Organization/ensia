@@ -31,42 +31,38 @@
 #ifndef _ZUC_H
 #define _ZUC_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief ZUC algorithm context
  **/
 
-typedef struct
-{
-   uint32_t r1;
-   uint32_t r2;
-   uint32_t s[16];
-   uint32_t ks;
-   size_t n;
+typedef struct {
+  uint32_t r1;
+  uint32_t r2;
+  uint32_t s[16];
+  uint32_t ks;
+  size_t n;
 } ZucContext;
 
-
-//ZUC related functions
+// ZUC related functions
 error_t zucInit(ZucContext *context, const uint8_t *key, size_t keyLen,
-   const uint8_t *iv, size_t ivLen);
+                const uint8_t *iv, size_t ivLen);
 
-void zucGenerateKeyStream(ZucContext *context, uint32_t *output,
-   size_t length);
+void zucGenerateKeyStream(ZucContext *context, uint32_t *output, size_t length);
 
 void zucCipher(ZucContext *context, const uint8_t *input, uint8_t *output,
-   size_t length);
+               size_t length);
 
 void zucDeinit(ZucContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

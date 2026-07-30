@@ -31,16 +31,16 @@
 #ifndef _RSA_MISC_H
 #define _RSA_MISC_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "pkc/rsa.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//RSA related functions
+// RSA related functions
 error_t rsaep(const RsaPublicKey *key, const Mpi *m, Mpi *c);
 error_t rsadp(const RsaPrivateKey *key, const Mpi *c, Mpi *m);
 
@@ -48,34 +48,36 @@ error_t rsasp1(const RsaPrivateKey *key, const Mpi *m, Mpi *s);
 error_t rsavp1(const RsaPublicKey *key, const Mpi *s, Mpi *m);
 
 error_t emePkcs1v15Encode(const PrngAlgo *prngAlgo, void *prngContext,
-   const uint8_t *message, size_t messageLen, uint8_t *em, size_t k);
+                          const uint8_t *message, size_t messageLen,
+                          uint8_t *em, size_t k);
 
 uint32_t emePkcs1v15Decode(uint8_t *em, size_t k, size_t *messageLen);
 
 error_t emeOaepEncode(const PrngAlgo *prngAlgo, void *prngContext,
-   const HashAlgo *hash, const char_t *label, const uint8_t *message,
-   size_t messageLen, uint8_t *em, size_t k);
+                      const HashAlgo *hash, const char_t *label,
+                      const uint8_t *message, size_t messageLen, uint8_t *em,
+                      size_t k);
 
 uint32_t emeOaepDecode(const HashAlgo *hash, const char_t *label, uint8_t *em,
-   size_t k, size_t *messageLen);
+                       size_t k, size_t *messageLen);
 
-error_t emsaPkcs1v15Encode(const HashAlgo *hash,
-   const uint8_t *digest, uint8_t *em, size_t emLen);
+error_t emsaPkcs1v15Encode(const HashAlgo *hash, const uint8_t *digest,
+                           uint8_t *em, size_t emLen);
 
 error_t emsaPkcs1v15Verify(const HashAlgo *hash, const uint8_t *digest,
-   const uint8_t *em, size_t emLen);
+                           const uint8_t *em, size_t emLen);
 
 error_t emsaPssEncode(const PrngAlgo *prngAlgo, void *prngContext,
-   const HashAlgo *hash, size_t saltLen, const uint8_t *digest,
-   uint8_t *em, uint_t emBits);
+                      const HashAlgo *hash, size_t saltLen,
+                      const uint8_t *digest, uint8_t *em, uint_t emBits);
 
 error_t emsaPssVerify(const HashAlgo *hash, size_t saltLen,
-   const uint8_t *digest, uint8_t *em, uint_t emBits);
+                      const uint8_t *digest, uint8_t *em, uint_t emBits);
 
 void mgf1(const HashAlgo *hash, HashContext *hashContext, const uint8_t *seed,
-   size_t seedLen, uint8_t *data, size_t dataLen);
+          size_t seedLen, uint8_t *data, size_t dataLen);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

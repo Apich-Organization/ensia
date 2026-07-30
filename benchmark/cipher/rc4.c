@@ -28,31 +28,27 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher/rc4.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (RC4_SUPPORT == ENABLED)
 
-//Common interface for encryption algorithms
-const CipherAlgo rc4CipherAlgo =
-{
-   "RC4",
-   sizeof(Rc4Context),
-   CIPHER_ALGO_TYPE_STREAM,
-   0,
-   (CipherAlgoInit) rc4Init,
-   (CipherAlgoEncryptStream) rc4Cipher,
-   (CipherAlgoDecryptStream) rc4Cipher,
-   NULL,
-   NULL,
-   (CipherAlgoDeinit) rc4Deinit
-};
-
+// Common interface for encryption algorithms
+const CipherAlgo rc4CipherAlgo = {"RC4",
+                                  sizeof(Rc4Context),
+                                  CIPHER_ALGO_TYPE_STREAM,
+                                  0,
+                                  (CipherAlgoInit)rc4Init,
+                                  (CipherAlgoEncryptStream)rc4Cipher,
+                                  (CipherAlgoDecryptStream)rc4Cipher,
+                                  NULL,
+                                  NULL,
+                                  (CipherAlgoDeinit)rc4Deinit};
 
 /**
  * @brief Initialize an RC4 context using the supplied key
@@ -62,42 +58,38 @@ const CipherAlgo rc4CipherAlgo =
  * @return Error code
  **/
 
-error_t rc4Init(Rc4Context *context, const uint8_t *key, size_t length)
-{
-   uint_t i;
-   uint_t j;
-   uint8_t temp;
+error_t rc4Init(Rc4Context *context, const uint8_t *key, size_t length) {
+  uint_t i;
+  uint_t j;
+  uint8_t temp;
 
-   //Check parameters
-   if(context == NULL || key == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (context == NULL || key == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Clear context
-   context->i = 0;
-   context->j = 0;
+  // Clear context
+  context->i = 0;
+  context->j = 0;
 
-   //Initialize the S array with identity permutation
-   for(i = 0; i < 256; i++)
-   {
-      context->s[i] = i;
-   }
+  // Initialize the S array with identity permutation
+  for (i = 0; i < 256; i++) {
+    context->s[i] = i;
+  }
 
-   //S is then processed for 256 iterations
-   for(i = 0, j = 0; i < 256; i++)
-   {
-      //Randomize the permutations using the supplied key
-      j = (j + context->s[i] + key[i % length]) % 256;
+  // S is then processed for 256 iterations
+  for (i = 0, j = 0; i < 256; i++) {
+    // Randomize the permutations using the supplied key
+    j = (j + context->s[i] + key[i % length]) % 256;
 
-      //Swap the values of S[i] and S[j]
-      temp = context->s[i];
-      context->s[i] = context->s[j];
-      context->s[j] = temp;
-   }
+    // Swap the values of S[i] and S[j]
+    temp = context->s[i];
+    context->s[i] = context->s[j];
+    context->s[j] = temp;
+  }
 
-   //RC4 context successfully initialized
-   return NO_ERROR;
+  // RC4 context successfully initialized
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Encrypt/decrypt data with the RC4 algorithm
@@ -108,57 +100,52 @@ error_t rc4Init(Rc4Context *context, const uint8_t *key, size_t length)
  **/
 
 void rc4Cipher(Rc4Context *context, const uint8_t *input, uint8_t *output,
-   size_t length)
-{
-   uint8_t temp;
+               size_t length) {
+  uint8_t temp;
 
-   //Restore context
-   uint_t i = context->i;
-   uint_t j = context->j;
-   uint8_t *s = context->s;
+  // Restore context
+  uint_t i = context->i;
+  uint_t j = context->j;
+  uint8_t *s = context->s;
 
-   //Encryption loop
-   while(length > 0)
-   {
-      //Adjust indices
-      i = (i + 1) % 256;
-      j = (j + s[i]) % 256;
+  // Encryption loop
+  while (length > 0) {
+    // Adjust indices
+    i = (i + 1) % 256;
+    j = (j + s[i]) % 256;
 
-      //Swap the values of S[i] and S[j]
-      temp = s[i];
-      s[i] = s[j];
-      s[j] = temp;
+    // Swap the values of S[i] and S[j]
+    temp = s[i];
+    s[i] = s[j];
+    s[j] = temp;
 
-      //Valid input and output?
-      if(input != NULL && output != NULL)
-      {
-         //XOR the input data with the RC4 stream
-         *output = *input ^ s[(s[i] + s[j]) % 256];
+    // Valid input and output?
+    if (input != NULL && output != NULL) {
+      // XOR the input data with the RC4 stream
+      *output = *input ^ s[(s[i] + s[j]) % 256];
 
-         //Increment data pointers
-         input++;
-         output++;
-      }
+      // Increment data pointers
+      input++;
+      output++;
+    }
 
-      //Remaining bytes to process
-      length--;
-   }
+    // Remaining bytes to process
+    length--;
+  }
 
-   //Save context
-   context->i = i;
-   context->j = j;
+  // Save context
+  context->i = i;
+  context->j = j;
 }
-
 
 /**
  * @brief Release RC4 context
  * @param[in] context Pointer to the RC4 context
  **/
 
-void rc4Deinit(Rc4Context *context)
-{
-   //Clear RC4 context
-   osMemset(context, 0, sizeof(Rc4Context));
+void rc4Deinit(Rc4Context *context) {
+  // Clear RC4 context
+  osMemset(context, 0, sizeof(Rc4Context));
 }
 
 #endif

@@ -26,42 +26,40 @@
  *
  * @section Description
  *
- * Triple DES is an encryption algorithm designed to encipher and decipher blocks
- * of 64 bits under control of a 192-bit key. Refer to FIPS 46-3 for more details
+ * Triple DES is an encryption algorithm designed to encipher and decipher
+ * blocks of 64 bits under control of a 192-bit key. Refer to FIPS 46-3 for more
+ * details
  *
  * @author Oryx Embedded SARL (www.oryx-embedded.com)
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher/des3.h"
 #include "cipher/des.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (DES3_SUPPORT == ENABLED)
 
-//DES-EDE3-CBC OID (1.2.840.113549.3.7)
-const uint8_t DES_EDE3_CBC_OID[8] = {0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x03, 0x07};
+// DES-EDE3-CBC OID (1.2.840.113549.3.7)
+const uint8_t DES_EDE3_CBC_OID[8] = {0x2A, 0x86, 0x48, 0x86,
+                                     0xF7, 0x0D, 0x03, 0x07};
 
-//Common interface for encryption algorithms
-const CipherAlgo des3CipherAlgo =
-{
-   "3DES",
-   sizeof(Des3Context),
-   CIPHER_ALGO_TYPE_BLOCK,
-   DES3_BLOCK_SIZE,
-   (CipherAlgoInit) des3Init,
-   NULL,
-   NULL,
-   (CipherAlgoEncryptBlock) des3EncryptBlock,
-   (CipherAlgoDecryptBlock) des3DecryptBlock,
-   (CipherAlgoDeinit) des3Deinit
-};
-
+// Common interface for encryption algorithms
+const CipherAlgo des3CipherAlgo = {"3DES",
+                                   sizeof(Des3Context),
+                                   CIPHER_ALGO_TYPE_BLOCK,
+                                   DES3_BLOCK_SIZE,
+                                   (CipherAlgoInit)des3Init,
+                                   NULL,
+                                   NULL,
+                                   (CipherAlgoEncryptBlock)des3EncryptBlock,
+                                   (CipherAlgoDecryptBlock)des3DecryptBlock,
+                                   (CipherAlgoDeinit)des3Deinit};
 
 /**
  * @brief Initialize a Triple DES context using the supplied key
@@ -72,48 +70,39 @@ const CipherAlgo des3CipherAlgo =
  **/
 
 __weak_func error_t des3Init(Des3Context *context, const uint8_t *key,
-   size_t keyLen)
-{
-   //Check parameters
-   if(context == NULL || key == NULL)
-      return ERROR_INVALID_PARAMETER;
+                             size_t keyLen) {
+  // Check parameters
+  if (context == NULL || key == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Check key length
-   if(keyLen == 8)
-   {
-      //This option provides backward compatibility with DES, because the
-      //first and second DES operations cancel out
-      desInit(&context->k1, key, 8);
-      desInit(&context->k2, key, 8);
-      desInit(&context->k3, key, 8);
-   }
-   else if(keyLen == 16)
-   {
-      //If the key length is 128 bits including parity, the first 8 bytes of the
-      //encoding represent the key used for the two outer DES operations, and
-      //the second 8 bytes represent the key used for the inner DES operation
-      desInit(&context->k1, key, 8);
-      desInit(&context->k2, key + 8, 8);
-      desInit(&context->k3, key, 8);
-   }
-   else if(keyLen == 24)
-   {
-      //If the key length is 192 bits including parity, then 3 independent DES
-      //keys are represented, in the order in which they are used for encryption
-      desInit(&context->k1, key, 8);
-      desInit(&context->k2, key + 8, 8);
-      desInit(&context->k3, key + 16, 8);
-   }
-   else
-   {
-      //The length of the key is not valid
-      return ERROR_INVALID_KEY_LENGTH;
-   }
+  // Check key length
+  if (keyLen == 8) {
+    // This option provides backward compatibility with DES, because the
+    // first and second DES operations cancel out
+    desInit(&context->k1, key, 8);
+    desInit(&context->k2, key, 8);
+    desInit(&context->k3, key, 8);
+  } else if (keyLen == 16) {
+    // If the key length is 128 bits including parity, the first 8 bytes of the
+    // encoding represent the key used for the two outer DES operations, and
+    // the second 8 bytes represent the key used for the inner DES operation
+    desInit(&context->k1, key, 8);
+    desInit(&context->k2, key + 8, 8);
+    desInit(&context->k3, key, 8);
+  } else if (keyLen == 24) {
+    // If the key length is 192 bits including parity, then 3 independent DES
+    // keys are represented, in the order in which they are used for encryption
+    desInit(&context->k1, key, 8);
+    desInit(&context->k2, key + 8, 8);
+    desInit(&context->k3, key + 16, 8);
+  } else {
+    // The length of the key is not valid
+    return ERROR_INVALID_KEY_LENGTH;
+  }
 
-   //Successful initialization
-   return NO_ERROR;
+  // Successful initialization
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Encrypt a 8-byte block using Triple DES algorithm
@@ -123,16 +112,14 @@ __weak_func error_t des3Init(Des3Context *context, const uint8_t *key,
  **/
 
 __weak_func void des3EncryptBlock(Des3Context *context, const uint8_t *input,
-   uint8_t *output)
-{
-   //The first pass is a DES encryption
-   desEncryptBlock(&context->k1, input, output);
-   //The second pass is a DES decryption of the first ciphertext result
-   desDecryptBlock(&context->k2, output, output);
-   //The third pass is a DES encryption of the second pass result
-   desEncryptBlock(&context->k3, output, output);
+                                  uint8_t *output) {
+  // The first pass is a DES encryption
+  desEncryptBlock(&context->k1, input, output);
+  // The second pass is a DES decryption of the first ciphertext result
+  desDecryptBlock(&context->k2, output, output);
+  // The third pass is a DES encryption of the second pass result
+  desEncryptBlock(&context->k3, output, output);
 }
-
 
 /**
  * @brief Decrypt a 8-byte block using Triple DES algorithm
@@ -142,26 +129,23 @@ __weak_func void des3EncryptBlock(Des3Context *context, const uint8_t *input,
  **/
 
 __weak_func void des3DecryptBlock(Des3Context *context, const uint8_t *input,
-   uint8_t *output)
-{
-   //The first pass is a DES decryption
-   desDecryptBlock(&context->k3, input, output);
-   //The second pass is a DES encryption of the first pass result
-   desEncryptBlock(&context->k2, output, output);
-   //The third pass is a DES decryption of the second ciphertext result
-   desDecryptBlock(&context->k1, output, output);
+                                  uint8_t *output) {
+  // The first pass is a DES decryption
+  desDecryptBlock(&context->k3, input, output);
+  // The second pass is a DES encryption of the first pass result
+  desEncryptBlock(&context->k2, output, output);
+  // The third pass is a DES decryption of the second ciphertext result
+  desDecryptBlock(&context->k1, output, output);
 }
-
 
 /**
  * @brief Release Triple DES context
  * @param[in] context Pointer to the Triple DES context
  **/
 
-__weak_func void des3Deinit(Des3Context *context)
-{
-   //Clear Triple DES context
-   osMemset(context, 0, sizeof(Des3Context));
+__weak_func void des3Deinit(Des3Context *context) {
+  // Clear Triple DES context
+  osMemset(context, 0, sizeof(Des3Context));
 }
 
 #endif

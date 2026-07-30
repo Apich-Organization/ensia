@@ -31,55 +31,52 @@
 #ifndef _DES3_H
 #define _DES3_H
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher/des.h"
+#include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef DES3_PRIVATE_CONTEXT
-   #define DES3_PRIVATE_CONTEXT
+#define DES3_PRIVATE_CONTEXT
 #endif
 
-//Triple DES block size
+// Triple DES block size
 #define DES3_BLOCK_SIZE 8
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define DES3_CIPHER_ALGO (&des3CipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Triple DES algorithm context
  **/
 
-typedef struct
-{
-   DesContext k1;
-   DesContext k2;
-   DesContext k3;
-   DES3_PRIVATE_CONTEXT
+typedef struct {
+  DesContext k1;
+  DesContext k2;
+  DesContext k3;
+  DES3_PRIVATE_CONTEXT
 } Des3Context;
 
-
-//Triple DES related constants
+// Triple DES related constants
 extern const uint8_t DES_EDE3_CBC_OID[8];
 extern const CipherAlgo des3CipherAlgo;
 
-//Triple DES related functions
+// Triple DES related functions
 error_t des3Init(Des3Context *context, const uint8_t *key, size_t keyLen);
 
 void des3EncryptBlock(Des3Context *context, const uint8_t *input,
-   uint8_t *output);
+                      uint8_t *output);
 
 void des3DecryptBlock(Des3Context *context, const uint8_t *input,
-   uint8_t *output);
+                      uint8_t *output);
 
 void des3Deinit(Des3Context *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

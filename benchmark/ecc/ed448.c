@@ -28,68 +28,58 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
-#include "ecc/ec.h"
-#include "ecc/curve448.h"
+// Dependencies
 #include "ecc/ed448.h"
+#include "core/crypto.h"
 #include "debug.h"
+#include "ecc/curve448.h"
+#include "ecc/ec.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (ED448_SUPPORT == ENABLED)
 
-//Base point B
-static const Ed448Point ED448_B =
-{
-   {
-      0x070CC05E, 0x026A82BC, 0x00938E26, 0x080E18B0, 0x0511433B, 0x0F72AB66, 0x0412AE1A, 0x0A3D3A46,
-      0x0A6DE324, 0x00F1767E, 0x04657047, 0x036DA9E1, 0x05A622BF, 0x0ED221D1, 0x066BED0D, 0x04F1970C
-   },
-   {
-      0x0230FA14, 0x008795BF, 0x07C8AD98, 0x0132C4ED, 0x09C4FDBD, 0x01CE67C3, 0x073AD3FF, 0x005A0C2D,
-      0x07789C1E, 0x0A398408, 0x0A73736C, 0x0C7624BE, 0x003756C9, 0x02488762, 0x016EB6BC, 0x0693F467
-   },
-   {
-      0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-      0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000
-   }
-};
+// Base point B
+static const Ed448Point ED448_B = {
+    {0x070CC05E, 0x026A82BC, 0x00938E26, 0x080E18B0, 0x0511433B, 0x0F72AB66,
+     0x0412AE1A, 0x0A3D3A46, 0x0A6DE324, 0x00F1767E, 0x04657047, 0x036DA9E1,
+     0x05A622BF, 0x0ED221D1, 0x066BED0D, 0x04F1970C},
+    {0x0230FA14, 0x008795BF, 0x07C8AD98, 0x0132C4ED, 0x09C4FDBD, 0x01CE67C3,
+     0x073AD3FF, 0x005A0C2D, 0x07789C1E, 0x0A398408, 0x0A73736C, 0x0C7624BE,
+     0x003756C9, 0x02488762, 0x016EB6BC, 0x0693F467},
+    {0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+     0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+     0x00000000, 0x00000000, 0x00000000, 0x00000000}};
 
-//Zero (constant)
-static const int32_t ED448_ZERO[16] =
-{
-   0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-   0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000
-};
+// Zero (constant)
+static const int32_t ED448_ZERO[16] = {
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000};
 
-//Curve parameter d
-static const int32_t ED448_D[16] =
-{
-   0x0FFF6756, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF,
-   0x0FFFFFFE, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF
-};
+// Curve parameter d
+static const int32_t ED448_D[16] = {
+    0x0FFF6756, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF,
+    0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFE, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF,
+    0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF};
 
-//Order of the base point L
-static const uint8_t ED448_L[60] =
-{
-   0xF3, 0x44, 0x58, 0xAB, 0x92, 0xC2, 0x78, 0x23, 0x55, 0x8F, 0xC5, 0x8D, 0x72, 0xC2, 0x6C, 0x21,
-   0x90, 0x36, 0xD6, 0xAE, 0x49, 0xDB, 0x4E, 0xC4, 0xE9, 0x23, 0xCA, 0x7C, 0xFF, 0xFF, 0xFF, 0xFF,
-   0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-   0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3F, 0x00, 0x00, 0x00, 0x00
-};
+// Order of the base point L
+static const uint8_t ED448_L[60] = {
+    0xF3, 0x44, 0x58, 0xAB, 0x92, 0xC2, 0x78, 0x23, 0x55, 0x8F, 0xC5, 0x8D,
+    0x72, 0xC2, 0x6C, 0x21, 0x90, 0x36, 0xD6, 0xAE, 0x49, 0xDB, 0x4E, 0xC4,
+    0xE9, 0x23, 0xCA, 0x7C, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3F, 0x00, 0x00, 0x00, 0x00};
 
-//Pre-computed value of mu = b^(2 * k) / L with b = 2^24 and k = 19
-static const uint8_t ED448_MU[60] =
-{
-   0x0A, 0xD0, 0xE0, 0xB0, 0x7B, 0x4A, 0xD5, 0xD6, 0x73, 0xC8, 0xAD, 0x0A, 0xA7, 0x23, 0xD7, 0xD8,
-   0x33, 0xE9, 0xFD, 0x96, 0x9C, 0x12, 0x65, 0x4B, 0x12, 0xBB, 0x63, 0xC1, 0x5D, 0x33, 0x08, 0x00,
-   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00
-};
-
+// Pre-computed value of mu = b^(2 * k) / L with b = 2^24 and k = 19
+static const uint8_t ED448_MU[60] = {
+    0x0A, 0xD0, 0xE0, 0xB0, 0x7B, 0x4A, 0xD5, 0xD6, 0x73, 0xC8, 0xAD, 0x0A,
+    0xA7, 0x23, 0xD7, 0xD8, 0x33, 0xE9, 0xFD, 0x96, 0x9C, 0x12, 0x65, 0x4B,
+    0x12, 0xBB, 0x63, 0xC1, 0x5D, 0x33, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00};
 
 /**
  * @brief EdDSA key pair generation
@@ -101,24 +91,21 @@ static const uint8_t ED448_MU[60] =
  **/
 
 error_t ed448GenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *privateKey, uint8_t *publicKey)
-{
-   error_t error;
+                             uint8_t *privateKey, uint8_t *publicKey) {
+  error_t error;
 
-   //Generate a private key
-   error = ed448GeneratePrivateKey(prngAlgo, prngContext, privateKey);
+  // Generate a private key
+  error = ed448GeneratePrivateKey(prngAlgo, prngContext, privateKey);
 
-   //Check status code
-   if(!error)
-   {
-      //Derive the public key from the private key
-      error = ed448GeneratePublicKey(privateKey, publicKey);
-   }
+  // Check status code
+  if (!error) {
+    // Derive the public key from the private key
+    error = ed448GeneratePublicKey(privateKey, publicKey);
+  }
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief EdDSA private key generation
@@ -129,21 +116,19 @@ error_t ed448GenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
  **/
 
 error_t ed448GeneratePrivateKey(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *privateKey)
-{
-   error_t error;
+                                uint8_t *privateKey) {
+  error_t error;
 
-   //Check parameters
-   if(prngAlgo == NULL || prngContext == NULL || privateKey == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (prngAlgo == NULL || prngContext == NULL || privateKey == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //The private key is 57 octets of cryptographically secure random data
-   error = prngAlgo->generate(prngContext, privateKey, ED448_PRIVATE_KEY_LEN);
+  // The private key is 57 octets of cryptographically secure random data
+  error = prngAlgo->generate(prngContext, privateKey, ED448_PRIVATE_KEY_LEN);
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief Derive the public key from an EdDSA private key
@@ -152,60 +137,58 @@ error_t ed448GeneratePrivateKey(const PrngAlgo *prngAlgo, void *prngContext,
  * @return Error code
  **/
 
-error_t ed448GeneratePublicKey(const uint8_t *privateKey, uint8_t *publicKey)
-{
-   uint8_t s[57];
+error_t ed448GeneratePublicKey(const uint8_t *privateKey, uint8_t *publicKey) {
+  uint8_t s[57];
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   Ed448GeneratePublicKeyState *state;
+  Ed448GeneratePublicKeyState *state;
 #else
-   Ed448GeneratePublicKeyState state[1];
+  Ed448GeneratePublicKeyState state[1];
 #endif
 
-   //Check parameters
-   if(privateKey == NULL || publicKey == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (privateKey == NULL || publicKey == NULL)
+    return ERROR_INVALID_PARAMETER;
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate working state
-   state = cryptoAllocMem(sizeof(Ed448GeneratePublicKeyState));
-   //Failed to allocate memory?
-   if(state == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate working state
+  state = cryptoAllocMem(sizeof(Ed448GeneratePublicKeyState));
+  // Failed to allocate memory?
+  if (state == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Hash the 57-byte private key using SHAKE256(x, 57)
-   shakeInit(&state->shakeContext, 256);
-   shakeAbsorb(&state->shakeContext, privateKey, ED448_PRIVATE_KEY_LEN);
-   shakeFinal(&state->shakeContext);
+  // Hash the 57-byte private key using SHAKE256(x, 57)
+  shakeInit(&state->shakeContext, 256);
+  shakeAbsorb(&state->shakeContext, privateKey, ED448_PRIVATE_KEY_LEN);
+  shakeFinal(&state->shakeContext);
 
-   //Only the lower 57 bytes are used for generating the public key. Interpret
-   //the buffer as the little-endian integer, forming a secret scalar s
-   shakeSqueeze(&state->shakeContext, s, 57);
+  // Only the lower 57 bytes are used for generating the public key. Interpret
+  // the buffer as the little-endian integer, forming a secret scalar s
+  shakeSqueeze(&state->shakeContext, s, 57);
 
-   //The two least significant bits of the first octet are cleared, all eight
-   //bits the last octet are cleared, and the highest bit of the second to
-   //last octet is set
-   s[0] &= 0xFC;
-   s[56] = 0x00;
-   s[55] |= 0x80;
+  // The two least significant bits of the first octet are cleared, all eight
+  // bits the last octet are cleared, and the highest bit of the second to
+  // last octet is set
+  s[0] &= 0xFC;
+  s[56] = 0x00;
+  s[55] |= 0x80;
 
-   //Perform a fixed-base scalar multiplication s * B
-   ed448Mul(&state->subState, &state->a, s, &ED448_B);
-   //The public key A is the encoding of the point s * B
-   ed448Encode(&state->a, publicKey);
+  // Perform a fixed-base scalar multiplication s * B
+  ed448Mul(&state->subState, &state->a, s, &ED448_B);
+  // The public key A is the encoding of the point s * B
+  ed448Encode(&state->a, publicKey);
 
-   //Erase working state
-   osMemset(state, 0, sizeof(Ed448GeneratePublicKeyState));
+  // Erase working state
+  osMemset(state, 0, sizeof(Ed448GeneratePublicKeyState));
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Release working state
-   cryptoFreeMem(state);
+  // Release working state
+  cryptoFreeMem(state);
 #endif
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
-
 
 /**
  * @brief EdDSA signature generation
@@ -221,24 +204,25 @@ error_t ed448GeneratePublicKey(const uint8_t *privateKey, uint8_t *publicKey)
  **/
 
 error_t ed448GenerateSignature(const uint8_t *privateKey,
-   const uint8_t *publicKey, const void *message, size_t messageLen,
-   const void *context, uint8_t contextLen, uint8_t flag, uint8_t *signature)
-{
-   error_t error;
-   DataChunk messageChunks[1];
+                               const uint8_t *publicKey, const void *message,
+                               size_t messageLen, const void *context,
+                               uint8_t contextLen, uint8_t flag,
+                               uint8_t *signature) {
+  error_t error;
+  DataChunk messageChunks[1];
 
-   //The message fits in a single chunk
-   messageChunks[0].buffer = message;
-   messageChunks[0].length = messageLen;
+  // The message fits in a single chunk
+  messageChunks[0].buffer = message;
+  messageChunks[0].length = messageLen;
 
-   //Ed448 signature generation
-   error = ed448GenerateSignatureEx(privateKey, publicKey, messageChunks,
-      arraysize(messageChunks), context, contextLen, flag, signature);
+  // Ed448 signature generation
+  error = ed448GenerateSignatureEx(privateKey, publicKey, messageChunks,
+                                   arraysize(messageChunks), context,
+                                   contextLen, flag, signature);
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief EdDSA signature generation
@@ -255,139 +239,134 @@ error_t ed448GenerateSignature(const uint8_t *privateKey,
  **/
 
 error_t ed448GenerateSignatureEx(const uint8_t *privateKey,
-   const uint8_t *publicKey, const DataChunk *message, uint_t messageLen,
-   const void *context, uint8_t contextLen, uint8_t flag, uint8_t *signature)
-{
-   uint_t i;
-   uint8_t c;
+                                 const uint8_t *publicKey,
+                                 const DataChunk *message, uint_t messageLen,
+                                 const void *context, uint8_t contextLen,
+                                 uint8_t flag, uint8_t *signature) {
+  uint_t i;
+  uint8_t c;
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   Ed448GenerateSignatureState *state;
+  Ed448GenerateSignatureState *state;
 #else
-   Ed448GenerateSignatureState state[1];
+  Ed448GenerateSignatureState state[1];
 #endif
 
-   //Check parameters
-   if(privateKey == NULL || message == NULL || signature == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (privateKey == NULL || message == NULL || signature == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //The context is an optional constant string specified by the protocol using
-   //it (refer to RFC 8032, section 8.3)
-   if(context == NULL && contextLen != 0)
-      return ERROR_INVALID_PARAMETER;
+  // The context is an optional constant string specified by the protocol using
+  // it (refer to RFC 8032, section 8.3)
+  if (context == NULL && contextLen != 0)
+    return ERROR_INVALID_PARAMETER;
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate working state
-   state = cryptoAllocMem(sizeof(Ed448GenerateSignatureState));
-   //Failed to allocate memory?
-   if(state == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate working state
+  state = cryptoAllocMem(sizeof(Ed448GenerateSignatureState));
+  // Failed to allocate memory?
+  if (state == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Hash the private key, 57 octets, using SHAKE256(x, 114). Let h denote
-   //the resulting digest
-   shakeInit(&state->shakeContext, 256);
-   shakeAbsorb(&state->shakeContext, privateKey, ED448_PRIVATE_KEY_LEN);
-   shakeFinal(&state->shakeContext);
+  // Hash the private key, 57 octets, using SHAKE256(x, 114). Let h denote
+  // the resulting digest
+  shakeInit(&state->shakeContext, 256);
+  shakeAbsorb(&state->shakeContext, privateKey, ED448_PRIVATE_KEY_LEN);
+  shakeFinal(&state->shakeContext);
 
-   //Construct the secret scalar s from the first half of the digest
-   shakeSqueeze(&state->shakeContext, state->s, 57);
+  // Construct the secret scalar s from the first half of the digest
+  shakeSqueeze(&state->shakeContext, state->s, 57);
 
-   //The two least significant bits of the first octet are cleared, all eight
-   //bits the last octet are cleared, and the highest bit of the second to
-   //last octet is set
-   state->s[0] &= 0xFC;
-   state->s[56] = 0x00;
-   state->s[55] |= 0x80;
+  // The two least significant bits of the first octet are cleared, all eight
+  // bits the last octet are cleared, and the highest bit of the second to
+  // last octet is set
+  state->s[0] &= 0xFC;
+  state->s[56] = 0x00;
+  state->s[55] |= 0x80;
 
-   //The public key is optional
-   if(publicKey == NULL)
-   {
-      //Perform a fixed-base scalar multiplication s * B
-      ed448Mul(&state->subState, &state->a, state->s, &ED448_B);
-      //The public key A is the encoding of the point s * B
-      ed448Encode(&state->a, state->t);
-      //Point to the resulting public key
-      publicKey = state->t;
-   }
+  // The public key is optional
+  if (publicKey == NULL) {
+    // Perform a fixed-base scalar multiplication s * B
+    ed448Mul(&state->subState, &state->a, state->s, &ED448_B);
+    // The public key A is the encoding of the point s * B
+    ed448Encode(&state->a, state->t);
+    // Point to the resulting public key
+    publicKey = state->t;
+  }
 
-   //Let prefix denote the second half of the hash digest
-   shakeSqueeze(&state->shakeContext, state->p, 57);
+  // Let prefix denote the second half of the hash digest
+  shakeSqueeze(&state->shakeContext, state->p, 57);
 
-   //Initialize SHAKE256 context
-   shakeInit(&state->shakeContext, 256);
+  // Initialize SHAKE256 context
+  shakeInit(&state->shakeContext, 256);
 
-   //Absorb dom4(F, C) || prefix
-   shakeAbsorb(&state->shakeContext, "SigEd448", 8);
-   shakeAbsorb(&state->shakeContext, &flag, sizeof(uint8_t));
-   shakeAbsorb(&state->shakeContext, &contextLen, sizeof(uint8_t));
-   shakeAbsorb(&state->shakeContext, context, contextLen);
-   shakeAbsorb(&state->shakeContext, state->p, 57);
+  // Absorb dom4(F, C) || prefix
+  shakeAbsorb(&state->shakeContext, "SigEd448", 8);
+  shakeAbsorb(&state->shakeContext, &flag, sizeof(uint8_t));
+  shakeAbsorb(&state->shakeContext, &contextLen, sizeof(uint8_t));
+  shakeAbsorb(&state->shakeContext, context, contextLen);
+  shakeAbsorb(&state->shakeContext, state->p, 57);
 
-   //The message is split over multiple chunks
-   for(i = 0; i < messageLen; i++)
-   {
-      //Absorb current chunk
-      shakeAbsorb(&state->shakeContext, message[i].buffer,
-         message[i].length);
-   }
+  // The message is split over multiple chunks
+  for (i = 0; i < messageLen; i++) {
+    // Absorb current chunk
+    shakeAbsorb(&state->shakeContext, message[i].buffer, message[i].length);
+  }
 
-   //Compute SHAKE256(dom4(F, C) || prefix || PH(M), 114)
-   shakeFinal(&state->shakeContext);
-   shakeSqueeze(&state->shakeContext, state->k, 114);
+  // Compute SHAKE256(dom4(F, C) || prefix || PH(M), 114)
+  shakeFinal(&state->shakeContext);
+  shakeSqueeze(&state->shakeContext, state->k, 114);
 
-   //Reduce the 114-octet digest as a little-endian integer r
-   ed448RedInt(state->r, state->k);
-   //Compute the point r * B
-   ed448Mul(&state->subState, &state->a, state->r, &ED448_B);
-   //Let the string R be the encoding of this point
-   ed448Encode(&state->a, signature);
+  // Reduce the 114-octet digest as a little-endian integer r
+  ed448RedInt(state->r, state->k);
+  // Compute the point r * B
+  ed448Mul(&state->subState, &state->a, state->r, &ED448_B);
+  // Let the string R be the encoding of this point
+  ed448Encode(&state->a, signature);
 
-   //Initialize SHAKE256 context
-   shakeInit(&state->shakeContext, 256);
+  // Initialize SHAKE256 context
+  shakeInit(&state->shakeContext, 256);
 
-   //Absorb dom4(F, C) || R || A
-   shakeAbsorb(&state->shakeContext, "SigEd448", 8);
-   shakeAbsorb(&state->shakeContext, &flag, sizeof(uint8_t));
-   shakeAbsorb(&state->shakeContext, &contextLen, sizeof(uint8_t));
-   shakeAbsorb(&state->shakeContext, context, contextLen);
-   shakeAbsorb(&state->shakeContext, signature, ED448_SIGNATURE_LEN / 2);
-   shakeAbsorb(&state->shakeContext, publicKey, ED448_PUBLIC_KEY_LEN);
+  // Absorb dom4(F, C) || R || A
+  shakeAbsorb(&state->shakeContext, "SigEd448", 8);
+  shakeAbsorb(&state->shakeContext, &flag, sizeof(uint8_t));
+  shakeAbsorb(&state->shakeContext, &contextLen, sizeof(uint8_t));
+  shakeAbsorb(&state->shakeContext, context, contextLen);
+  shakeAbsorb(&state->shakeContext, signature, ED448_SIGNATURE_LEN / 2);
+  shakeAbsorb(&state->shakeContext, publicKey, ED448_PUBLIC_KEY_LEN);
 
-   //The message is split over multiple chunks
-   for(i = 0; i < messageLen; i++)
-   {
-      //Absorb current chunk
-      shakeAbsorb(&state->shakeContext, message[i].buffer,
-         message[i].length);
-   }
+  // The message is split over multiple chunks
+  for (i = 0; i < messageLen; i++) {
+    // Absorb current chunk
+    shakeAbsorb(&state->shakeContext, message[i].buffer, message[i].length);
+  }
 
-   //Compute SHAKE256(dom4(F, C) || R || A || PH(M), 114) and interpret the
-   //114-octet digest as a little-endian integer k
-   shakeFinal(&state->shakeContext);
-   shakeSqueeze(&state->shakeContext, state->k, 114);
+  // Compute SHAKE256(dom4(F, C) || R || A || PH(M), 114) and interpret the
+  // 114-octet digest as a little-endian integer k
+  shakeFinal(&state->shakeContext);
+  shakeSqueeze(&state->shakeContext, state->k, 114);
 
-   //Compute S = (r + k * s) mod L. For efficiency, reduce k modulo L first
-   ed448RedInt(state->p, state->k);
-   ed448MulInt(state->k, state->k + 57, state->p, state->s, 57);
-   ed448RedInt(state->p, state->k);
-   ed448AddInt(state->s, state->p, state->r, 57);
+  // Compute S = (r + k * s) mod L. For efficiency, reduce k modulo L first
+  ed448RedInt(state->p, state->k);
+  ed448MulInt(state->k, state->k + 57, state->p, state->s, 57);
+  ed448RedInt(state->p, state->k);
+  ed448AddInt(state->s, state->p, state->r, 57);
 
-   //Perform modular reduction
-   c = ed448SubInt(state->p, state->s, ED448_L, 57);
-   ed448SelectInt(signature + 57, state->p, state->s, c, 57);
+  // Perform modular reduction
+  c = ed448SubInt(state->p, state->s, ED448_L, 57);
+  ed448SelectInt(signature + 57, state->p, state->s, c, 57);
 
-   //Erase working state
-   osMemset(state, 0, sizeof(Ed448GenerateSignatureState));
+  // Erase working state
+  osMemset(state, 0, sizeof(Ed448GenerateSignatureState));
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Release working state
-   cryptoFreeMem(state);
+  // Release working state
+  cryptoFreeMem(state);
 #endif
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
-
 
 /**
  * @brief EdDSA signature verification
@@ -402,24 +381,24 @@ error_t ed448GenerateSignatureEx(const uint8_t *privateKey,
  **/
 
 error_t ed448VerifySignature(const uint8_t *publicKey, const void *message,
-   size_t messageLen, const void *context, uint8_t contextLen, uint8_t flag,
-   const uint8_t *signature)
-{
-   error_t error;
-   DataChunk messageChunks[1];
+                             size_t messageLen, const void *context,
+                             uint8_t contextLen, uint8_t flag,
+                             const uint8_t *signature) {
+  error_t error;
+  DataChunk messageChunks[1];
 
-   //The message fits in a single chunk
-   messageChunks[0].buffer = message;
-   messageChunks[0].length = messageLen;
+  // The message fits in a single chunk
+  messageChunks[0].buffer = message;
+  messageChunks[0].length = messageLen;
 
-   //Ed448 signature verification
-   error = ed448VerifySignatureEx(publicKey, messageChunks,
-      arraysize(messageChunks), context, contextLen, flag, signature);
+  // Ed448 signature verification
+  error =
+      ed448VerifySignatureEx(publicKey, messageChunks, arraysize(messageChunks),
+                             context, contextLen, flag, signature);
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief EdDSA signature verification
@@ -435,102 +414,99 @@ error_t ed448VerifySignature(const uint8_t *publicKey, const void *message,
  **/
 
 error_t ed448VerifySignatureEx(const uint8_t *publicKey,
-   const DataChunk *message, uint_t messageLen, const void *context,
-   uint8_t contextLen, uint8_t flag, const uint8_t *signature)
-{
-   uint_t i;
-   uint32_t ret;
+                               const DataChunk *message, uint_t messageLen,
+                               const void *context, uint8_t contextLen,
+                               uint8_t flag, const uint8_t *signature) {
+  uint_t i;
+  uint32_t ret;
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   Ed448VerifySignatureState *state;
+  Ed448VerifySignatureState *state;
 #else
-   Ed448VerifySignatureState state[1];
+  Ed448VerifySignatureState state[1];
 #endif
 
-   //Check parameters
-   if(publicKey == NULL || message == NULL || signature == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (publicKey == NULL || message == NULL || signature == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //The context is an optional constant string specified by the protocol using
-   //it (refer to RFC 8032, section 8.3)
-   if(context == NULL && contextLen != 0)
-      return ERROR_INVALID_PARAMETER;
+  // The context is an optional constant string specified by the protocol using
+  // it (refer to RFC 8032, section 8.3)
+  if (context == NULL && contextLen != 0)
+    return ERROR_INVALID_PARAMETER;
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate working state
-   state = cryptoAllocMem(sizeof(Ed448VerifySignatureState));
-   //Failed to allocate memory?
-   if(state == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate working state
+  state = cryptoAllocMem(sizeof(Ed448VerifySignatureState));
+  // Failed to allocate memory?
+  if (state == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //First split the signature into two 32-octet halves. Decode the first
-   //half as a point R
-   osMemcpy(state->r, signature, ED448_SIGNATURE_LEN / 2);
+  // First split the signature into two 32-octet halves. Decode the first
+  // half as a point R
+  osMemcpy(state->r, signature, ED448_SIGNATURE_LEN / 2);
 
-   //Decode the second half as an integer S, in the range 0 <= s < L
-   osMemcpy(state->s, signature + ED448_SIGNATURE_LEN / 2,
-      ED448_SIGNATURE_LEN / 2);
+  // Decode the second half as an integer S, in the range 0 <= s < L
+  osMemcpy(state->s, signature + ED448_SIGNATURE_LEN / 2,
+           ED448_SIGNATURE_LEN / 2);
 
-   //Ed448 signatures are not malleable due to the verification check that
-   //decoded S is smaller than L (refer to RFC 8032, section 8.4)
-   ret = 1 ^ ed448SubInt(state->p, state->s, ED448_L, ED448_SIGNATURE_LEN / 2);
+  // Ed448 signatures are not malleable due to the verification check that
+  // decoded S is smaller than L (refer to RFC 8032, section 8.4)
+  ret = 1 ^ ed448SubInt(state->p, state->s, ED448_L, ED448_SIGNATURE_LEN / 2);
 
-   //Decode the public key A as point A'
-   ret |= ed448Decode(&state->a, publicKey);
+  // Decode the public key A as point A'
+  ret |= ed448Decode(&state->a, publicKey);
 
-   //Initialize SHAKE256 context
-   shakeInit(&state->shakeContext, 256);
+  // Initialize SHAKE256 context
+  shakeInit(&state->shakeContext, 256);
 
-   //Absorb dom4(F, C) || R || A
-   shakeAbsorb(&state->shakeContext, "SigEd448", 8);
-   shakeAbsorb(&state->shakeContext, &flag, sizeof(uint8_t));
-   shakeAbsorb(&state->shakeContext, &contextLen, sizeof(uint8_t));
-   shakeAbsorb(&state->shakeContext, context, contextLen);
-   shakeAbsorb(&state->shakeContext, state->r, ED448_SIGNATURE_LEN / 2);
-   shakeAbsorb(&state->shakeContext, publicKey, ED448_PUBLIC_KEY_LEN);
+  // Absorb dom4(F, C) || R || A
+  shakeAbsorb(&state->shakeContext, "SigEd448", 8);
+  shakeAbsorb(&state->shakeContext, &flag, sizeof(uint8_t));
+  shakeAbsorb(&state->shakeContext, &contextLen, sizeof(uint8_t));
+  shakeAbsorb(&state->shakeContext, context, contextLen);
+  shakeAbsorb(&state->shakeContext, state->r, ED448_SIGNATURE_LEN / 2);
+  shakeAbsorb(&state->shakeContext, publicKey, ED448_PUBLIC_KEY_LEN);
 
-   //The message is split over multiple chunks
-   for(i = 0; i < messageLen; i++)
-   {
-      //Absorb current chunk
-      shakeAbsorb(&state->shakeContext, message[i].buffer,
-         message[i].length);
-   }
+  // The message is split over multiple chunks
+  for (i = 0; i < messageLen; i++) {
+    // Absorb current chunk
+    shakeAbsorb(&state->shakeContext, message[i].buffer, message[i].length);
+  }
 
-   //Compute SHAKE256(dom4(F, C) || R || A || PH(M), 114) and interpret the
-   //114-octet digest as a little-endian integer k
-   shakeFinal(&state->shakeContext);
-   shakeSqueeze(&state->shakeContext, state->k, 114);
+  // Compute SHAKE256(dom4(F, C) || R || A || PH(M), 114) and interpret the
+  // 114-octet digest as a little-endian integer k
+  shakeFinal(&state->shakeContext);
+  shakeSqueeze(&state->shakeContext, state->k, 114);
 
-   //For efficiency, reduce k modulo L first
-   ed448RedInt(state->k, state->k);
+  // For efficiency, reduce k modulo L first
+  ed448RedInt(state->k, state->k);
 
-   //Compute -A'
-   curve448Sub(state->a.x, ED448_ZERO, state->a.x);
+  // Compute -A'
+  curve448Sub(state->a.x, ED448_ZERO, state->a.x);
 
-   //Compute the point P = s * B - k * A'
-   ed448TwinMul(&state->subState, &state->a, state->s, &ED448_B, state->k,
-      &state->a);
+  // Compute the point P = s * B - k * A'
+  ed448TwinMul(&state->subState, &state->a, state->s, &ED448_B, state->k,
+               &state->a);
 
-   //Encode of the resulting point P
-   ed448Encode(&state->a, state->p);
+  // Encode of the resulting point P
+  ed448Encode(&state->a, state->p);
 
-   //If P = R, then the signature is verified. If P does not equal R,
-   //then the message or the signature may have been modified
-   ret |= ed448CompInt(state->p, signature, ED448_SIGNATURE_LEN / 2);
+  // If P = R, then the signature is verified. If P does not equal R,
+  // then the message or the signature may have been modified
+  ret |= ed448CompInt(state->p, signature, ED448_SIGNATURE_LEN / 2);
 
-   //Erase working state
-   osMemset(state, 0, sizeof(Ed448VerifySignatureState));
+  // Erase working state
+  osMemset(state, 0, sizeof(Ed448VerifySignatureState));
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Release working state
-   cryptoFreeMem(state);
+  // Release working state
+  cryptoFreeMem(state);
 #endif
 
-   //Return status code
-   return (ret == 0) ? NO_ERROR : ERROR_INVALID_SIGNATURE;
+  // Return status code
+  return (ret == 0) ? NO_ERROR : ERROR_INVALID_SIGNATURE;
 }
-
 
 /**
  * @brief Scalar multiplication (regular calculation)
@@ -541,39 +517,36 @@ error_t ed448VerifySignatureEx(const uint8_t *publicKey,
  **/
 
 void ed448Mul(Ed448SubState *state, Ed448Point *r, const uint8_t *k,
-   const Ed448Point *p)
-{
-   int_t i;
-   uint8_t b;
+              const Ed448Point *p) {
+  int_t i;
+  uint8_t b;
 
-   //The neutral element is represented by (0, 1, 1)
-   curve448SetInt(state->u.x, 0);
-   curve448SetInt(state->u.y, 1);
-   curve448SetInt(state->u.z, 1);
+  // The neutral element is represented by (0, 1, 1)
+  curve448SetInt(state->u.x, 0);
+  curve448SetInt(state->u.y, 1);
+  curve448SetInt(state->u.z, 1);
 
-   //Perform scalar multiplication
-   for(i = CURVE448_BIT_LEN - 1; i >= 0; i--)
-   {
-      //The scalar is processed in a left-to-right fashion
-      b = (k[i / 8] >> (i % 8)) & 1;
+  // Perform scalar multiplication
+  for (i = CURVE448_BIT_LEN - 1; i >= 0; i--) {
+    // The scalar is processed in a left-to-right fashion
+    b = (k[i / 8] >> (i % 8)) & 1;
 
-      //Compute U = 2 * U
-      ed448Double(state, &state->u, &state->u);
-      //Compute V = U + P
-      ed448Add(state, &state->v, &state->u, p);
+    // Compute U = 2 * U
+    ed448Double(state, &state->u, &state->u);
+    // Compute V = U + P
+    ed448Add(state, &state->v, &state->u, p);
 
-      //If b is set, then U = V
-      curve448Select(state->u.x, state->u.x, state->v.x, b);
-      curve448Select(state->u.y, state->u.y, state->v.y, b);
-      curve448Select(state->u.z, state->u.z, state->v.z, b);
-   }
+    // If b is set, then U = V
+    curve448Select(state->u.x, state->u.x, state->v.x, b);
+    curve448Select(state->u.y, state->u.y, state->v.y, b);
+    curve448Select(state->u.z, state->u.z, state->v.z, b);
+  }
 
-   //Copy result
-   curve448Copy(r->x, state->u.x);
-   curve448Copy(r->y, state->u.y);
-   curve448Copy(r->z, state->u.z);
+  // Copy result
+  curve448Copy(r->x, state->u.x);
+  curve448Copy(r->y, state->u.y);
+  curve448Copy(r->z, state->u.z);
 }
-
 
 /**
  * @brief Twin multiplication
@@ -586,57 +559,47 @@ void ed448Mul(Ed448SubState *state, Ed448Point *r, const uint8_t *k,
  **/
 
 void ed448TwinMul(Ed448SubState *state, Ed448Point *r, const uint8_t *k1,
-   const Ed448Point *p, const uint8_t *k2, const Ed448Point *q)
-{
-   int_t i;
-   uint8_t b1;
-   uint8_t b2;
+                  const Ed448Point *p, const uint8_t *k2, const Ed448Point *q) {
+  int_t i;
+  uint8_t b1;
+  uint8_t b2;
 
-   //Pre-compute V = P + Q
-   ed448Add(state, &state->v, p, q);
+  // Pre-compute V = P + Q
+  ed448Add(state, &state->v, p, q);
 
-   //The neutral element is represented by (0, 1, 1)
-   curve448SetInt(state->u.x, 0);
-   curve448SetInt(state->u.y, 1);
-   curve448SetInt(state->u.z, 1);
+  // The neutral element is represented by (0, 1, 1)
+  curve448SetInt(state->u.x, 0);
+  curve448SetInt(state->u.y, 1);
+  curve448SetInt(state->u.z, 1);
 
-   //Calculate both multiplications at the same time
-   for(i = CURVE448_BIT_LEN - 1; i >= 0; i--)
-   {
-      //The scalars are processed in a left-to-right fashion
-      b1 = (k1[i / 8] >> (i % 8)) & 1;
-      b2 = (k2[i / 8] >> (i % 8)) & 1;
+  // Calculate both multiplications at the same time
+  for (i = CURVE448_BIT_LEN - 1; i >= 0; i--) {
+    // The scalars are processed in a left-to-right fashion
+    b1 = (k1[i / 8] >> (i % 8)) & 1;
+    b2 = (k2[i / 8] >> (i % 8)) & 1;
 
-      //Compute U = 2 * U
-      ed448Double(state, &state->u, &state->u);
+    // Compute U = 2 * U
+    ed448Double(state, &state->u, &state->u);
 
-      //Check k1(i) and k2(i)
-      if(b1 == 1 && b2 == 0)
-      {
-         //Compute U = U + P
-         ed448Add(state, &state->u, &state->u, p);
-      }
-      else if(b1 == 0 && b2 == 1)
-      {
-         //Compute U = U + Q
-         ed448Add(state, &state->u, &state->u, q);
-      }
-      else if(b1 == 1 && b2 == 1)
-      {
-         //Compute U = U + V
-         ed448Add(state, &state->u, &state->u, &state->v);
-      }
-      else
-      {
-      }
-   }
+    // Check k1(i) and k2(i)
+    if (b1 == 1 && b2 == 0) {
+      // Compute U = U + P
+      ed448Add(state, &state->u, &state->u, p);
+    } else if (b1 == 0 && b2 == 1) {
+      // Compute U = U + Q
+      ed448Add(state, &state->u, &state->u, q);
+    } else if (b1 == 1 && b2 == 1) {
+      // Compute U = U + V
+      ed448Add(state, &state->u, &state->u, &state->v);
+    } else {
+    }
+  }
 
-   //Copy result
-   curve448Copy(r->x, state->u.x);
-   curve448Copy(r->y, state->u.y);
-   curve448Copy(r->z, state->u.z);
+  // Copy result
+  curve448Copy(r->x, state->u.x);
+  curve448Copy(r->y, state->u.y);
+  curve448Copy(r->z, state->u.z);
 }
-
 
 /**
  * @brief Point addition
@@ -647,46 +610,44 @@ void ed448TwinMul(Ed448SubState *state, Ed448Point *r, const uint8_t *k1,
  **/
 
 void ed448Add(Ed448SubState *state, Ed448Point *r, const Ed448Point *p,
-   const Ed448Point *q)
-{
-   //Compute A = X1 * X2
-   curve448Mul(state->a, p->x, q->x);
-   //Compute B = Y1 * Y2
-   curve448Mul(state->b, p->y, q->y);
-   //Compute C = Z1 * Z2
-   curve448Mul(state->c, p->z, q->z);
-   //Compute D = C^2
-   curve448Sqr(state->d, state->c);
+              const Ed448Point *q) {
+  // Compute A = X1 * X2
+  curve448Mul(state->a, p->x, q->x);
+  // Compute B = Y1 * Y2
+  curve448Mul(state->b, p->y, q->y);
+  // Compute C = Z1 * Z2
+  curve448Mul(state->c, p->z, q->z);
+  // Compute D = C^2
+  curve448Sqr(state->d, state->c);
 
-   //Compute E = d * A * B
-   curve448Mul(state->e, state->a, state->b);
-   curve448Mul(state->e, state->e, ED448_D);
+  // Compute E = d * A * B
+  curve448Mul(state->e, state->a, state->b);
+  curve448Mul(state->e, state->e, ED448_D);
 
-   //Compute F = D + E
-   curve448Add(state->f, state->d, state->e);
-   //Compute G = D - E
-   curve448Sub(state->g, state->d, state->e);
+  // Compute F = D + E
+  curve448Add(state->f, state->d, state->e);
+  // Compute G = D - E
+  curve448Sub(state->g, state->d, state->e);
 
-   //Compute D = (X1 + Y1) * (X2 + Y2)
-   curve448Add(state->d, p->x, p->y);
-   curve448Add(state->e, q->x, q->y);
-   curve448Mul(state->d, state->d, state->e);
+  // Compute D = (X1 + Y1) * (X2 + Y2)
+  curve448Add(state->d, p->x, p->y);
+  curve448Add(state->e, q->x, q->y);
+  curve448Mul(state->d, state->d, state->e);
 
-   //Compute X3 = C * G * (D - A - B)
-   curve448Sub(state->d, state->d, state->a);
-   curve448Sub(state->d, state->d, state->b);
-   curve448Mul(state->d, state->d, state->c);
-   curve448Mul(r->x, state->d, state->g);
+  // Compute X3 = C * G * (D - A - B)
+  curve448Sub(state->d, state->d, state->a);
+  curve448Sub(state->d, state->d, state->b);
+  curve448Mul(state->d, state->d, state->c);
+  curve448Mul(r->x, state->d, state->g);
 
-   //Compute Y3 = C * F * (B - A)
-   curve448Sub(state->b, state->b, state->a);
-   curve448Mul(state->b, state->b, state->c);
-   curve448Mul(r->y, state->b, state->f);
+  // Compute Y3 = C * F * (B - A)
+  curve448Sub(state->b, state->b, state->a);
+  curve448Mul(state->b, state->b, state->c);
+  curve448Mul(r->y, state->b, state->f);
 
-   //Compute Z3 = F * G
-   curve448Mul(r->z, state->f, state->g);
+  // Compute Z3 = F * G
+  curve448Mul(r->z, state->f, state->g);
 }
-
 
 /**
  * @brief Point doubling
@@ -695,37 +656,35 @@ void ed448Add(Ed448SubState *state, Ed448Point *r, const Ed448Point *p,
  * @param[in] p Input point P
  **/
 
-void ed448Double(Ed448SubState *state, Ed448Point *r, const Ed448Point *p)
-{
-   //Compute A = X1 * X2
-   curve448Mul(state->a, p->x, p->x);
-   //Compute B = Y1 * Y2
-   curve448Mul(state->b, p->y, p->y);
-   //Compute C = Z1 * Z2
-   curve448Mul(state->c, p->z, p->z);
-   //Compute F = A + B
-   curve448Add(state->f, state->a, state->b);
+void ed448Double(Ed448SubState *state, Ed448Point *r, const Ed448Point *p) {
+  // Compute A = X1 * X2
+  curve448Mul(state->a, p->x, p->x);
+  // Compute B = Y1 * Y2
+  curve448Mul(state->b, p->y, p->y);
+  // Compute C = Z1 * Z2
+  curve448Mul(state->c, p->z, p->z);
+  // Compute F = A + B
+  curve448Add(state->f, state->a, state->b);
 
-   //Compute G = F - 2 * C
-   curve448Add(state->c, state->c, state->c);
-   curve448Sub(state->g, state->f, state->c);
+  // Compute G = F - 2 * C
+  curve448Add(state->c, state->c, state->c);
+  curve448Sub(state->g, state->f, state->c);
 
-   //Compute D = (X1 + Y1)^2
-   curve448Add(state->d, p->x, p->y);
-   curve448Sqr(state->d, state->d);
+  // Compute D = (X1 + Y1)^2
+  curve448Add(state->d, p->x, p->y);
+  curve448Sqr(state->d, state->d);
 
-   //Compute X3 = G * (D - F)
-   curve448Sub(state->d, state->d, state->f);
-   curve448Mul(r->x, state->d, state->g);
+  // Compute X3 = G * (D - F)
+  curve448Sub(state->d, state->d, state->f);
+  curve448Mul(r->x, state->d, state->g);
 
-   //Compute Y3 = F * (A - B)
-   curve448Sub(state->a, state->a, state->b);
-   curve448Mul(r->y, state->a, state->f);
+  // Compute Y3 = F * (A - B)
+  curve448Sub(state->a, state->a, state->b);
+  curve448Mul(r->y, state->a, state->f);
 
-   //Compute Z3 = F * G
-   curve448Mul(r->z, state->f, state->g);
+  // Compute Z3 = F * G
+  curve448Mul(r->z, state->f, state->g);
 }
-
 
 /**
  * @brief Point encoding
@@ -733,28 +692,26 @@ void ed448Double(Ed448SubState *state, Ed448Point *r, const Ed448Point *p)
  * @param[out] data Octet string resulting from the conversion
  **/
 
-void ed448Encode(Ed448Point *p, uint8_t *data)
-{
-   //Retrieve affine representation
-   curve448Inv(p->z, p->z);
-   curve448Mul(p->x, p->x, p->z);
-   curve448Mul(p->y, p->y, p->z);
-   curve448SetInt(p->z, 1);
+void ed448Encode(Ed448Point *p, uint8_t *data) {
+  // Retrieve affine representation
+  curve448Inv(p->z, p->z);
+  curve448Mul(p->x, p->x, p->z);
+  curve448Mul(p->y, p->y, p->z);
+  curve448SetInt(p->z, 1);
 
-   //Reduce non-canonical values
-   curve448Canonicalize(p->x, p->x);
-   curve448Canonicalize(p->y, p->y);
+  // Reduce non-canonical values
+  curve448Canonicalize(p->x, p->x);
+  curve448Canonicalize(p->y, p->y);
 
-   //Encode the y-coordinate as a little-endian string of 57 octets. The final
-   //octet is always zero
-   curve448Export(p->y, data);
-   data[56] = 0;
+  // Encode the y-coordinate as a little-endian string of 57 octets. The final
+  // octet is always zero
+  curve448Export(p->y, data);
+  data[56] = 0;
 
-   //Copy the least significant bit of the x-coordinate to the most significant
-   //bit of the final octet
-   data[56] |= (p->x[0] & 1) << 7;
+  // Copy the least significant bit of the x-coordinate to the most significant
+  // bit of the final octet
+  data[56] |= (p->x[0] & 1) << 7;
 }
-
 
 /**
  * @brief Point decoding
@@ -762,69 +719,65 @@ void ed448Encode(Ed448Point *p, uint8_t *data)
  * @param[in] data Octet string to be converted
  **/
 
-uint32_t ed448Decode(Ed448Point *p, const uint8_t *data)
-{
-   uint_t i;
-   uint8_t x0;
-   uint32_t ret;
-   int32_t temp;
-   int32_t u[16];
-   int32_t v[16];
+uint32_t ed448Decode(Ed448Point *p, const uint8_t *data) {
+  uint_t i;
+  uint8_t x0;
+  uint32_t ret;
+  int32_t temp;
+  int32_t u[16];
+  int32_t v[16];
 
-   //First, interpret the string as an integer in little-endian representation.
-   //Bit 455 of this number is the least significant bit of the x-coordinate
-   //and denote this value x_0
-   x0 = data[56] >> 7;
+  // First, interpret the string as an integer in little-endian representation.
+  // Bit 455 of this number is the least significant bit of the x-coordinate
+  // and denote this value x_0
+  x0 = data[56] >> 7;
 
-   //The y-coordinate is recovered simply by clearing this bit
-   curve448Import(p->y, data);
+  // The y-coordinate is recovered simply by clearing this bit
+  curve448Import(p->y, data);
 
-   //Compute u = y + 2^224 + 1
-   for(temp = 1, i = 0; i < 8; i++)
-   {
-      temp += p->y[i];
-      u[i] = temp & 0x0FFFFFFF;
-      temp >>= 28;
-   }
+  // Compute u = y + 2^224 + 1
+  for (temp = 1, i = 0; i < 8; i++) {
+    temp += p->y[i];
+    u[i] = temp & 0x0FFFFFFF;
+    temp >>= 28;
+  }
 
-   for(temp += 1, i = 8; i < 16; i++)
-   {
-      temp += p->y[i];
-      u[i] = temp & 0x0FFFFFFF;
-      temp >>= 28;
-   }
+  for (temp += 1, i = 8; i < 16; i++) {
+    temp += p->y[i];
+    u[i] = temp & 0x0FFFFFFF;
+    temp >>= 28;
+  }
 
-   temp += data[56] & 0x7F;
+  temp += data[56] & 0x7F;
 
-   //If the y-coordinate is >= p, decoding fails
-   ret = CRYPTO_TEST_NZ_32(temp);
+  // If the y-coordinate is >= p, decoding fails
+  ret = CRYPTO_TEST_NZ_32(temp);
 
-   //The curve equation implies x^2 = (y^2 - 1) / (d * y^2 - 1) mod p
-   //Let u = y^2 - 1 and v = d * y^2 - 1
-   curve448Sqr(v, p->y);
-   curve448SubInt(u, v, 1);
-   curve448Mul(v, v, ED448_D);
-   curve448SubInt(v, v, 1);
+  // The curve equation implies x^2 = (y^2 - 1) / (d * y^2 - 1) mod p
+  // Let u = y^2 - 1 and v = d * y^2 - 1
+  curve448Sqr(v, p->y);
+  curve448SubInt(u, v, 1);
+  curve448Mul(v, v, ED448_D);
+  curve448SubInt(v, v, 1);
 
-   //Compute u = sqrt(u / v)
-   ret |= curve448Sqrt(u, u, v);
+  // Compute u = sqrt(u / v)
+  ret |= curve448Sqrt(u, u, v);
 
-   //If x = 0, and x_0 = 1, decoding fails
-   ret |= (curve448Comp(u, ED448_ZERO) ^ 1) & x0;
+  // If x = 0, and x_0 = 1, decoding fails
+  ret |= (curve448Comp(u, ED448_ZERO) ^ 1) & x0;
 
-   //Compute v = p - u
-   curve448Sub(v, ED448_ZERO, u);
+  // Compute v = p - u
+  curve448Sub(v, ED448_ZERO, u);
 
-   //Finally, use the x_0 bit to select the right square root
-   curve448Select(p->x, u, v, (x0 ^ u[0]) & 1);
+  // Finally, use the x_0 bit to select the right square root
+  curve448Select(p->x, u, v, (x0 ^ u[0]) & 1);
 
-   //Initialize z-coordinate (projective representation)
-   curve448SetInt(p->z, 1);
+  // Initialize z-coordinate (projective representation)
+  curve448SetInt(p->z, 1);
 
-   //Return 0 if the point has been successfully decoded, else 1
-   return ret;
+  // Return 0 if the point has been successfully decoded, else 1
+  return ret;
 }
-
 
 /**
  * @brief Reduce an integer modulo L
@@ -836,32 +789,30 @@ uint32_t ed448Decode(Ed448Point *p, const uint8_t *data)
  * @param[in] a An integer such as 0 <= A < b^(2 * k)
  **/
 
-void ed448RedInt(uint8_t *r, const uint8_t *a)
-{
-   uint8_t c;
-   uint8_t u[60];
-   uint8_t v[60];
+void ed448RedInt(uint8_t *r, const uint8_t *a) {
+  uint8_t c;
+  uint8_t u[60];
+  uint8_t v[60];
 
-   //Compute the estimate of the quotient u = ((a / b^(k - 1)) * mu) / b^(k + 1)
-   ed448MulInt(NULL, u, a + 54, ED448_MU, 60);
-   //Compute v = u * L mod b^(k + 1)
-   ed448MulInt(v, NULL, u, ED448_L, 60);
+  // Compute the estimate of the quotient u = ((a / b^(k - 1)) * mu) / b^(k + 1)
+  ed448MulInt(NULL, u, a + 54, ED448_MU, 60);
+  // Compute v = u * L mod b^(k + 1)
+  ed448MulInt(v, NULL, u, ED448_L, 60);
 
-   //Compute the estimate of the remainder u = a mod b^(k + 1) - v
-   //If u < 0, then u = u + b^(k + 1)
-   ed448SubInt(u, a, v, 60);
+  // Compute the estimate of the remainder u = a mod b^(k + 1) - v
+  // If u < 0, then u = u + b^(k + 1)
+  ed448SubInt(u, a, v, 60);
 
-   //This estimation implies that at most two subtractions of L are required to
-   //obtain the correct remainder r
-   c = ed448SubInt(v, u, ED448_L, 60);
-   ed448SelectInt(u, v, u, c, 60);
-   c = ed448SubInt(v, u, ED448_L, 60);
-   ed448SelectInt(u, v, u, c, 60);
+  // This estimation implies that at most two subtractions of L are required to
+  // obtain the correct remainder r
+  c = ed448SubInt(v, u, ED448_L, 60);
+  ed448SelectInt(u, v, u, c, 60);
+  c = ed448SubInt(v, u, ED448_L, 60);
+  ed448SelectInt(u, v, u, c, 60);
 
-   //Copy the resulting remainder
-   ed448CopyInt(r, u, 57);
+  // Copy the resulting remainder
+  ed448CopyInt(r, u, 57);
 }
-
 
 /**
  * @brief Addition of two integers
@@ -871,21 +822,18 @@ void ed448RedInt(uint8_t *r, const uint8_t *a)
  * @param[in] n Size of the operands, in bytes
  **/
 
-void ed448AddInt(uint8_t *r, const uint8_t *a, const uint8_t *b, uint_t n)
-{
-   uint_t i;
-   uint16_t temp;
+void ed448AddInt(uint8_t *r, const uint8_t *a, const uint8_t *b, uint_t n) {
+  uint_t i;
+  uint16_t temp;
 
-   //Compute R = A + B
-   for(temp = 0, i = 0; i < n; i++)
-   {
-      temp += a[i];
-      temp += b[i];
-      r[i] = temp & 0xFF;
-      temp >>= 8;
-   }
+  // Compute R = A + B
+  for (temp = 0, i = 0; i < n; i++) {
+    temp += a[i];
+    temp += b[i];
+    r[i] = temp & 0xFF;
+    temp >>= 8;
+  }
 }
-
 
 /**
  * @brief Subtraction of two integers
@@ -896,24 +844,21 @@ void ed448AddInt(uint8_t *r, const uint8_t *a, const uint8_t *b, uint_t n)
  * @return 1 if the result is negative, else 0
  **/
 
-uint8_t ed448SubInt(uint8_t *r, const uint8_t *a, const uint8_t *b, uint_t n)
-{
-   uint_t i;
-   int16_t temp;
+uint8_t ed448SubInt(uint8_t *r, const uint8_t *a, const uint8_t *b, uint_t n) {
+  uint_t i;
+  int16_t temp;
 
-   //Compute R = A - B
-   for(temp = 0, i = 0; i < n; i++)
-   {
-      temp += a[i];
-      temp -= b[i];
-      r[i] = temp & 0xFF;
-      temp >>= 8;
-   }
+  // Compute R = A - B
+  for (temp = 0, i = 0; i < n; i++) {
+    temp += a[i];
+    temp -= b[i];
+    r[i] = temp & 0xFF;
+    temp >>= 8;
+  }
 
-   //Return 1 if the result of the subtraction is negative
-   return temp & 1;
+  // Return 1 if the result of the subtraction is negative
+  return temp & 1;
 }
-
 
 /**
  * @brief Multiplication of two integers
@@ -924,62 +869,54 @@ uint8_t ed448SubInt(uint8_t *r, const uint8_t *a, const uint8_t *b, uint_t n)
  * @param[in] n Size of the operands, in bytes
  **/
 
-void ed448MulInt(uint8_t *rl, uint8_t *rh, const uint8_t *a,
-   const uint8_t *b, uint_t n)
-{
-   uint_t i;
-   uint_t j;
-   uint32_t c;
-   uint32_t d;
-   uint64_t temp;
+void ed448MulInt(uint8_t *rl, uint8_t *rh, const uint8_t *a, const uint8_t *b,
+                 uint_t n) {
+  uint_t i;
+  uint_t j;
+  uint32_t c;
+  uint32_t d;
+  uint64_t temp;
 
-   //Perform multiplication in base b = 2^24
-   n /= 3;
+  // Perform multiplication in base b = 2^24
+  n /= 3;
 
-   //Compute the low part of the multiplication
-   for(temp = 0, i = 0; i < n; i++)
-   {
-      //The Comba's algorithm computes the products, column by column
-      for(j = 0; j <= i; j++)
-      {
-         c = LOAD24LE(a + 3 * j);
-         d = LOAD24LE(b + 3 * (i - j));
-         temp += (uint64_t) c * d;
+  // Compute the low part of the multiplication
+  for (temp = 0, i = 0; i < n; i++) {
+    // The Comba's algorithm computes the products, column by column
+    for (j = 0; j <= i; j++) {
+      c = LOAD24LE(a + 3 * j);
+      d = LOAD24LE(b + 3 * (i - j));
+      temp += (uint64_t)c * d;
+    }
+
+    // At the bottom of each column, the final result is written to memory
+    if (rl != NULL) {
+      STORE24LE(temp & 0xFFFFFF, rl + 3 * i);
+    }
+
+    // Propagate the carry upwards
+    temp >>= 24;
+  }
+
+  // Check whether the high part of the multiplication should be calculated
+  if (rh != NULL) {
+    // Compute the high part of the multiplication
+    for (i = n; i < (2 * n); i++) {
+      // The Comba's algorithm computes the products, column by column
+      for (j = i + 1 - n; j < n; j++) {
+        c = LOAD24LE(a + 3 * j);
+        d = LOAD24LE(b + 3 * (i - j));
+        temp += (uint64_t)c * d;
       }
 
-      //At the bottom of each column, the final result is written to memory
-      if(rl != NULL)
-      {
-         STORE24LE(temp & 0xFFFFFF, rl + 3 * i);
-      }
+      // At the bottom of each column, the final result is written to memory
+      STORE24LE(temp & 0xFFFFFF, rh + 3 * (i - n));
 
-      //Propagate the carry upwards
+      // Propagate the carry upwards
       temp >>= 24;
-   }
-
-   //Check whether the high part of the multiplication should be calculated
-   if(rh != NULL)
-   {
-      //Compute the high part of the multiplication
-      for(i = n; i < (2 * n); i++)
-      {
-         //The Comba's algorithm computes the products, column by column
-         for(j = i + 1 - n; j < n; j++)
-         {
-            c = LOAD24LE(a + 3 * j);
-            d = LOAD24LE(b + 3 * (i - j));
-            temp += (uint64_t) c * d;
-         }
-
-         //At the bottom of each column, the final result is written to memory
-         STORE24LE(temp & 0xFFFFFF, rh + 3 * (i - n));
-
-         //Propagate the carry upwards
-         temp >>= 24;
-      }
-   }
+    }
+  }
 }
-
 
 /**
  * @brief Copy an integer
@@ -988,17 +925,14 @@ void ed448MulInt(uint8_t *rl, uint8_t *rh, const uint8_t *a,
  * @param[in] n Size of the integers, in bytes
  **/
 
-void ed448CopyInt(uint8_t *a, const uint8_t *b, uint_t n)
-{
-   uint_t i;
+void ed448CopyInt(uint8_t *a, const uint8_t *b, uint_t n) {
+  uint_t i;
 
-   //Copy the value of the integer
-   for(i = 0; i < n; i++)
-   {
-      a[i] = b[i];
-   }
+  // Copy the value of the integer
+  for (i = 0; i < n; i++) {
+    a[i] = b[i];
+  }
 }
-
 
 /**
  * @brief Select an integer
@@ -1009,23 +943,20 @@ void ed448CopyInt(uint8_t *a, const uint8_t *b, uint_t n)
  * @param[in] n Size of the integers, in bytes
  **/
 
-void ed448SelectInt(uint8_t *r, const uint8_t *a, const uint8_t *b,
-   uint8_t c, uint_t n)
-{
-   uint_t i;
-   uint8_t mask;
+void ed448SelectInt(uint8_t *r, const uint8_t *a, const uint8_t *b, uint8_t c,
+                    uint_t n) {
+  uint_t i;
+  uint8_t mask;
 
-   //The mask is the all-1 or all-0 word
-   mask = c - 1;
+  // The mask is the all-1 or all-0 word
+  mask = c - 1;
 
-   //Select between A and B
-   for(i = 0; i < n; i++)
-   {
-      //Constant time implementation
-      r[i] = (a[i] & mask) | (b[i] & ~mask);
-   }
+  // Select between A and B
+  for (i = 0; i < n; i++) {
+    // Constant time implementation
+    r[i] = (a[i] & mask) | (b[i] & ~mask);
+  }
 }
-
 
 /**
  * @brief Compare integers
@@ -1035,23 +966,21 @@ void ed448SelectInt(uint8_t *r, const uint8_t *a, const uint8_t *b,
  * @return The function returns 0 if the A = B, else 1
  **/
 
-uint8_t ed448CompInt(const uint8_t *a, const uint8_t *b, uint_t n)
-{
-   uint_t i;
-   uint8_t mask;
+uint8_t ed448CompInt(const uint8_t *a, const uint8_t *b, uint_t n) {
+  uint_t i;
+  uint8_t mask;
 
-   //Initialize mask
-   mask = 0;
+  // Initialize mask
+  mask = 0;
 
-   //Compare A and B
-   for(i = 0; i < n; i++)
-   {
-      //Constant time implementation
-      mask |= a[i] ^ b[i];
-   }
+  // Compare A and B
+  for (i = 0; i < n; i++) {
+    // Constant time implementation
+    mask |= a[i] ^ b[i];
+  }
 
-   //Return 0 if A = B, else 1
-   return ((uint8_t) (mask | (~mask + 1))) >> 7;
+  // Return 0 if A = B, else 1
+  return ((uint8_t)(mask | (~mask + 1))) >> 7;
 }
 
 #endif

@@ -31,52 +31,48 @@
 #ifndef _MD5_H
 #define _MD5_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef MD5_PRIVATE_CONTEXT
-   #define MD5_PRIVATE_CONTEXT
+#define MD5_PRIVATE_CONTEXT
 #endif
 
-//MD5 block size
+// MD5 block size
 #define MD5_BLOCK_SIZE 64
-//MD5 digest size
+// MD5 digest size
 #define MD5_DIGEST_SIZE 16
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define MD5_MIN_PAD_SIZE 9
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define MD5_HASH_ALGO (&md5HashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief MD5 algorithm context
  **/
 
-typedef struct
-{
-   uint32_t h[4];
-   union
-   {
-      uint32_t x[16];
-      uint8_t buffer[64];
-   };
-   size_t size;
-   uint64_t totalSize;
-   MD5_PRIVATE_CONTEXT
+typedef struct {
+  uint32_t h[4];
+  union {
+    uint32_t x[16];
+    uint8_t buffer[64];
+  };
+  size_t size;
+  uint64_t totalSize;
+  MD5_PRIVATE_CONTEXT
 } Md5Context;
 
-
-//MD5 related constants
+// MD5 related constants
 extern const uint8_t MD5_OID[8];
 extern const HashAlgo md5HashAlgo;
 
-//MD5 related functions
+// MD5 related functions
 error_t md5Compute(const void *data, size_t length, uint8_t *digest);
 void md5Init(Md5Context *context);
 void md5Update(Md5Context *context, const void *data, size_t length);
@@ -84,7 +80,7 @@ void md5Final(Md5Context *context, uint8_t *digest);
 void md5FinalRaw(Md5Context *context, uint8_t *digest);
 void md5ProcessBlock(Md5Context *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

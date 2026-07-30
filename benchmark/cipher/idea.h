@@ -31,46 +31,43 @@
 #ifndef _IDEA_H
 #define _IDEA_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//IDEA block size
+// IDEA block size
 #define IDEA_BLOCK_SIZE 8
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define IDEA_CIPHER_ALGO (&ideaCipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief IDEA algorithm context
  **/
 
-typedef struct
-{
-   uint16_t ek[52];
-   uint16_t dk[52];
+typedef struct {
+  uint16_t ek[52];
+  uint16_t dk[52];
 } IdeaContext;
 
-
-//IDEA related constants
+// IDEA related constants
 extern const CipherAlgo ideaCipherAlgo;
 
-//IDEA related functions
+// IDEA related functions
 error_t ideaInit(IdeaContext *context, const uint8_t *key, size_t keyLen);
 
 void ideaEncryptBlock(IdeaContext *context, const uint8_t *input,
-   uint8_t *output);
+                      uint8_t *output);
 
 void ideaDecryptBlock(IdeaContext *context, const uint8_t *input,
-   uint8_t *output);
+                      uint8_t *output);
 
 void ideaDeinit(IdeaContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

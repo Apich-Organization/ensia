@@ -31,45 +31,42 @@
 #ifndef _SHAKE_H
 #define _SHAKE_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "xof/keccak.h"
 
-//Common interface for XOF algorithms
+// Common interface for XOF algorithms
 #define SHAKE128_XOF_ALGO (&shake128XofAlgo)
 #define SHAKE256_XOF_ALGO (&shake256XofAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief SHAKE algorithm context
  **/
 
-typedef struct
-{
-   KeccakContext keccakContext;
+typedef struct {
+  KeccakContext keccakContext;
 } ShakeContext;
 
-
-//SHAKE related constants
+// SHAKE related constants
 extern const uint8_t SHAKE128_OID[9];
 extern const uint8_t SHAKE256_OID[9];
 extern const XofAlgo shake128XofAlgo;
 extern const XofAlgo shake256XofAlgo;
 
-//SHAKE related functions
+// SHAKE related functions
 error_t shakeCompute(uint_t strength, const void *input, size_t inputLen,
-   uint8_t *output, size_t outputLen);
+                     uint8_t *output, size_t outputLen);
 
 error_t shake128Compute(const void *input, size_t inputLen, uint8_t *output,
-   size_t outputLen);
+                        size_t outputLen);
 
 error_t shake256Compute(const void *input, size_t inputLen, uint8_t *output,
-   size_t outputLen);
+                        size_t outputLen);
 
 error_t shakeInit(ShakeContext *context, uint_t strength);
 error_t shake128Init(ShakeContext *context);
@@ -79,7 +76,7 @@ void shakeAbsorb(ShakeContext *context, const void *input, size_t length);
 void shakeFinal(ShakeContext *context);
 void shakeSqueeze(ShakeContext *context, uint8_t *output, size_t length);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

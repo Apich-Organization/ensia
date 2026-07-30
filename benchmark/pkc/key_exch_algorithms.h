@@ -31,22 +31,22 @@
 #ifndef _KEY_EXCH_ALGORITHMS_H
 #define _KEY_EXCH_ALGORITHMS_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Diffie-Hellman support?
+// Diffie-Hellman support?
 #if (DH_SUPPORT == ENABLED)
-   #include "pkc/dh.h"
+#include "pkc/dh.h"
 #endif
 
-//ECDH support?
+// ECDH support?
 #if (ECDH_SUPPORT == ENABLED)
-   #include "ecc/ecdh.h"
+#include "ecc/ecdh.h"
 #endif
 
-//KEM support?
+// KEM support?
 #if (KEM_SUPPORT == ENABLED)
-   #include "pqc/kem.h"
+#include "pqc/kem.h"
 #endif
 
 #endif

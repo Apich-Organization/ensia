@@ -31,37 +31,34 @@
 #ifndef _X25519_H
 #define _X25519_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "ecc/curve25519.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief X25519 working state
  **/
 
-typedef struct
-{
-   uint32_t k[8];
-   int32_t u[9];
-   int32_t x1[9];
-   int32_t z1[9];
-   int32_t x2[9];
-   int32_t z2[9];
-   int32_t t1[9];
-   int32_t t2[9];
+typedef struct {
+  uint32_t k[8];
+  int32_t u[9];
+  int32_t x1[9];
+  int32_t z1[9];
+  int32_t x2[9];
+  int32_t z2[9];
+  int32_t t1[9];
+  int32_t t2[9];
 } X25519State;
 
-
-//X25519 related functions
+// X25519 related functions
 error_t x25519(uint8_t *r, const uint8_t *k, const uint8_t *u);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

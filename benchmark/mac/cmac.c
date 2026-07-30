@@ -32,16 +32,15 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "mac/cmac.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (CMAC_SUPPORT == ENABLED)
-
 
 /**
  * @brief Compute CMAC using the specified cipher algorithm
@@ -56,44 +55,42 @@
  **/
 
 error_t cmacCompute(const CipherAlgo *cipher, const void *key, size_t keyLen,
-   const void *data, size_t dataLen, uint8_t *mac, size_t macLen)
-{
-   error_t error;
+                    const void *data, size_t dataLen, uint8_t *mac,
+                    size_t macLen) {
+  error_t error;
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   CmacContext *context;
+  CmacContext *context;
 #else
-   CmacContext context[1];
+  CmacContext context[1];
 #endif
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate a memory buffer to hold the CMAC context
-   context = cryptoAllocMem(sizeof(CmacContext));
-   //Failed to allocate memory?
-   if(context == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate a memory buffer to hold the CMAC context
+  context = cryptoAllocMem(sizeof(CmacContext));
+  // Failed to allocate memory?
+  if (context == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Initialize the CMAC context
-   error = cmacInit(context, cipher, key, keyLen);
+  // Initialize the CMAC context
+  error = cmacInit(context, cipher, key, keyLen);
 
-   //Check status code
-   if(!error)
-   {
-      //Digest the message
-      cmacUpdate(context, data, dataLen);
-      //Finalize the CMAC computation
-      error = cmacFinal(context, mac, macLen);
-   }
+  // Check status code
+  if (!error) {
+    // Digest the message
+    cmacUpdate(context, data, dataLen);
+    // Finalize the CMAC computation
+    error = cmacFinal(context, mac, macLen);
+  }
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Free previously allocated memory
-   cryptoFreeMem(context);
+  // Free previously allocated memory
+  cryptoFreeMem(context);
 #endif
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief Initialize CMAC calculation
@@ -105,81 +102,72 @@ error_t cmacCompute(const CipherAlgo *cipher, const void *key, size_t keyLen,
  **/
 
 error_t cmacInit(CmacContext *context, const CipherAlgo *cipher,
-   const void *key, size_t keyLen)
-{
-   error_t error;
-   uint8_t rb;
+                 const void *key, size_t keyLen) {
+  error_t error;
+  uint8_t rb;
 
-   //Check parameters
-   if(context == NULL || cipher == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (context == NULL || cipher == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //CMAC supports only block ciphers whose block size is 64 or 128 bits
-   if(cipher->type != CIPHER_ALGO_TYPE_BLOCK)
-      return ERROR_INVALID_PARAMETER;
+  // CMAC supports only block ciphers whose block size is 64 or 128 bits
+  if (cipher->type != CIPHER_ALGO_TYPE_BLOCK)
+    return ERROR_INVALID_PARAMETER;
 
-   //Rb is completely determined by the number of bits in a block
-   if(cipher->blockSize == 8)
-   {
-      //If b = 64, then Rb = 11011
-      rb = 0x1B;
-   }
-   else if(cipher->blockSize == 16)
-   {
-      //If b = 128, then Rb = 10000111
-      rb = 0x87;
-   }
-   else
-   {
-      //Invalid block size
-      return ERROR_INVALID_PARAMETER;
-   }
+  // Rb is completely determined by the number of bits in a block
+  if (cipher->blockSize == 8) {
+    // If b = 64, then Rb = 11011
+    rb = 0x1B;
+  } else if (cipher->blockSize == 16) {
+    // If b = 128, then Rb = 10000111
+    rb = 0x87;
+  } else {
+    // Invalid block size
+    return ERROR_INVALID_PARAMETER;
+  }
 
-   //Cipher algorithm used to compute CMAC
-   context->cipher = cipher;
+  // Cipher algorithm used to compute CMAC
+  context->cipher = cipher;
 
-   //Initialize cipher context
-   error = cipher->init(&context->cipherContext, key, keyLen);
-   //Any error to report?
-   if(error)
-      return error;
+  // Initialize cipher context
+  error = cipher->init(&context->cipherContext, key, keyLen);
+  // Any error to report?
+  if (error)
+    return error;
 
-   //Let L = 0
-   osMemset(context->buffer, 0, cipher->blockSize);
+  // Let L = 0
+  osMemset(context->buffer, 0, cipher->blockSize);
 
-   //Compute L = CIPH(L)
-   cipher->encryptBlock(&context->cipherContext, context->buffer,
-      context->buffer);
+  // Compute L = CIPH(L)
+  cipher->encryptBlock(&context->cipherContext, context->buffer,
+                       context->buffer);
 
-   //The subkey K1 is obtained by multiplying L by x in GF(2^b)
-   cmacMul(context->k1, context->buffer, cipher->blockSize, rb);
-   //The subkey K2 is obtained by multiplying L by x^2 in GF(2^b)
-   cmacMul(context->k2, context->k1, cipher->blockSize, rb);
+  // The subkey K1 is obtained by multiplying L by x in GF(2^b)
+  cmacMul(context->k1, context->buffer, cipher->blockSize, rb);
+  // The subkey K2 is obtained by multiplying L by x^2 in GF(2^b)
+  cmacMul(context->k2, context->k1, cipher->blockSize, rb);
 
-   //Reset CMAC context
-   cmacReset(context);
+  // Reset CMAC context
+  cmacReset(context);
 
-   //Successful initialization
-   return NO_ERROR;
+  // Successful initialization
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Reset CMAC context
  * @param[in] context Pointer to the CMAC context
  **/
 
-void cmacReset(CmacContext *context)
-{
-   //Clear input buffer
-   osMemset(context->buffer, 0, context->cipher->blockSize);
-   //Number of bytes in the buffer
-   context->bufferLength = 0;
+void cmacReset(CmacContext *context) {
+  // Clear input buffer
+  osMemset(context->buffer, 0, context->cipher->blockSize);
+  // Number of bytes in the buffer
+  context->bufferLength = 0;
 
-   //Initialize MAC value
-   osMemset(context->mac, 0, context->cipher->blockSize);
+  // Initialize MAC value
+  osMemset(context->mac, 0, context->cipher->blockSize);
 }
-
 
 /**
  * @brief Update the CMAC context with a portion of the message being hashed
@@ -188,43 +176,39 @@ void cmacReset(CmacContext *context)
  * @param[in] dataLen Length of the buffer
  **/
 
-void cmacUpdate(CmacContext *context, const void *data, size_t dataLen)
-{
-   size_t n;
+void cmacUpdate(CmacContext *context, const void *data, size_t dataLen) {
+  size_t n;
 
-   //Process the incoming data
-   while(dataLen > 0)
-   {
-      //Process message block by block
-      if(context->bufferLength == context->cipher->blockSize)
-      {
-         //XOR M(i) with C(i-1)
-         cmacXorBlock(context->buffer, context->buffer, context->mac,
-            context->cipher->blockSize);
+  // Process the incoming data
+  while (dataLen > 0) {
+    // Process message block by block
+    if (context->bufferLength == context->cipher->blockSize) {
+      // XOR M(i) with C(i-1)
+      cmacXorBlock(context->buffer, context->buffer, context->mac,
+                   context->cipher->blockSize);
 
-         //Compute C(i) = CIPH(M(i) ^ C(i-1))
-         context->cipher->encryptBlock(&context->cipherContext, context->buffer,
-            context->mac);
+      // Compute C(i) = CIPH(M(i) ^ C(i-1))
+      context->cipher->encryptBlock(&context->cipherContext, context->buffer,
+                                    context->mac);
 
-         //Empty the buffer
-         context->bufferLength = 0;
-      }
+      // Empty the buffer
+      context->bufferLength = 0;
+    }
 
-      //The message is partitioned into complete blocks
-      n = MIN(dataLen, context->cipher->blockSize - context->bufferLength);
+    // The message is partitioned into complete blocks
+    n = MIN(dataLen, context->cipher->blockSize - context->bufferLength);
 
-      //Copy the data to the buffer
-      osMemcpy(context->buffer + context->bufferLength, data, n);
-      //Update the length of the buffer
-      context->bufferLength += n;
+    // Copy the data to the buffer
+    osMemcpy(context->buffer + context->bufferLength, data, n);
+    // Update the length of the buffer
+    context->bufferLength += n;
 
-      //Advance the data pointer
-      data = (uint8_t *) data + n;
-      //Remaining bytes to process
-      dataLen -= n;
-   }
+    // Advance the data pointer
+    data = (uint8_t *)data + n;
+    // Remaining bytes to process
+    dataLen -= n;
+  }
 }
-
 
 /**
  * @brief Finish the CMAC calculation
@@ -234,78 +218,68 @@ void cmacUpdate(CmacContext *context, const void *data, size_t dataLen)
  * @return Error code
  **/
 
-error_t cmacFinal(CmacContext *context, uint8_t *mac, size_t macLen)
-{
-   //Make sure the CMAC context is valid
-   if(context == NULL)
-      return ERROR_INVALID_PARAMETER;
+error_t cmacFinal(CmacContext *context, uint8_t *mac, size_t macLen) {
+  // Make sure the CMAC context is valid
+  if (context == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Check the length of the MAC
-   if(macLen < 1 || macLen > context->cipher->blockSize)
-      return ERROR_INVALID_PARAMETER;
+  // Check the length of the MAC
+  if (macLen < 1 || macLen > context->cipher->blockSize)
+    return ERROR_INVALID_PARAMETER;
 
-   //Check whether the last block Mn is complete
-   if(context->bufferLength >= context->cipher->blockSize)
-   {
-      //The final block M(n) is XOR-ed with the first subkey K1
-      cmacXorBlock(context->buffer, context->buffer, context->k1,
-         context->cipher->blockSize);
-   }
-   else
-   {
-      //Append padding string
-      context->buffer[context->bufferLength++] = 0x80;
+  // Check whether the last block Mn is complete
+  if (context->bufferLength >= context->cipher->blockSize) {
+    // The final block M(n) is XOR-ed with the first subkey K1
+    cmacXorBlock(context->buffer, context->buffer, context->k1,
+                 context->cipher->blockSize);
+  } else {
+    // Append padding string
+    context->buffer[context->bufferLength++] = 0x80;
 
-      //Append the minimum number of zeroes to form a complete block
-      while(context->bufferLength < context->cipher->blockSize)
-      {
-         context->buffer[context->bufferLength++] = 0x00;
-      }
+    // Append the minimum number of zeroes to form a complete block
+    while (context->bufferLength < context->cipher->blockSize) {
+      context->buffer[context->bufferLength++] = 0x00;
+    }
 
-      //The final block M(n) is XOR-ed with the second subkey K2
-      cmacXorBlock(context->buffer, context->buffer, context->k2,
-         context->cipher->blockSize);
-   }
+    // The final block M(n) is XOR-ed with the second subkey K2
+    cmacXorBlock(context->buffer, context->buffer, context->k2,
+                 context->cipher->blockSize);
+  }
 
-   //XOR M(n) with C(n-1)
-   cmacXorBlock(context->buffer, context->buffer, context->mac,
-      context->cipher->blockSize);
+  // XOR M(n) with C(n-1)
+  cmacXorBlock(context->buffer, context->buffer, context->mac,
+               context->cipher->blockSize);
 
-   //Compute T = CIPH(M(n) ^ C(n-1))
-   context->cipher->encryptBlock(&context->cipherContext, context->buffer,
-      context->mac);
+  // Compute T = CIPH(M(n) ^ C(n-1))
+  context->cipher->encryptBlock(&context->cipherContext, context->buffer,
+                                context->mac);
 
-   //Copy the resulting MAC value
-   if(mac != NULL)
-   {
-      //It is possible to truncate the MAC. The result of the truncation
-      //should be taken in most significant bits first order
-      osMemcpy(mac, context->mac, macLen);
-   }
+  // Copy the resulting MAC value
+  if (mac != NULL) {
+    // It is possible to truncate the MAC. The result of the truncation
+    // should be taken in most significant bits first order
+    osMemcpy(mac, context->mac, macLen);
+  }
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Release CMAC context
  * @param[in] context Pointer to the CMAC context
  **/
 
-void cmacDeinit(CmacContext *context)
-{
-   //Make sure the CMAC context is valid
-   if(context != NULL)
-   {
-      //Release cipher context
-      context->cipher->deinit(&context->cipherContext);
+void cmacDeinit(CmacContext *context) {
+  // Make sure the CMAC context is valid
+  if (context != NULL) {
+    // Release cipher context
+    context->cipher->deinit(&context->cipherContext);
 
-      //Clear CMAC context
-      osMemset(context, 0, sizeof(CmacContext));
-   }
+    // Clear CMAC context
+    osMemset(context, 0, sizeof(CmacContext));
+  }
 }
-
 
 /**
  * @brief Multiplication by x in GF(2^128)
@@ -315,28 +289,25 @@ void cmacDeinit(CmacContext *context)
  * @param[in] rb Representation of the irreducible binary polynomial
  **/
 
-void cmacMul(uint8_t *x, const uint8_t *a, size_t n, uint8_t rb)
-{
-   size_t i;
-   uint8_t c;
+void cmacMul(uint8_t *x, const uint8_t *a, size_t n, uint8_t rb) {
+  size_t i;
+  uint8_t c;
 
-   //Save the value of the most significant bit
-   c = a[0] >> 7;
+  // Save the value of the most significant bit
+  c = a[0] >> 7;
 
-   //The multiplication of a polynomial by x in GF(2^128) corresponds to a
-   //shift of indices
-   for(i = 0; i < (n - 1); i++)
-   {
-      x[i] = (a[i] << 1) | (a[i + 1] >> 7);
-   }
+  // The multiplication of a polynomial by x in GF(2^128) corresponds to a
+  // shift of indices
+  for (i = 0; i < (n - 1); i++) {
+    x[i] = (a[i] << 1) | (a[i + 1] >> 7);
+  }
 
-   //Shift the last byte of the block to the left
-   x[i] = a[i] << 1;
+  // Shift the last byte of the block to the left
+  x[i] = a[i] << 1;
 
-   //If the highest term of the result is equal to one, then perform reduction
-   x[i] ^= rb & ~(c - 1);
+  // If the highest term of the result is equal to one, then perform reduction
+  x[i] ^= rb & ~(c - 1);
 }
-
 
 /**
  * @brief XOR operation
@@ -346,15 +317,13 @@ void cmacMul(uint8_t *x, const uint8_t *a, size_t n, uint8_t rb)
  * @param[in] n Size of the block, in bytes
  **/
 
-void cmacXorBlock(uint8_t *x, const uint8_t *a, const uint8_t *b, size_t n)
-{
-   size_t i;
+void cmacXorBlock(uint8_t *x, const uint8_t *a, const uint8_t *b, size_t n) {
+  size_t i;
 
-   //Perform XOR operation
-   for(i = 0; i < n; i++)
-   {
-      x[i] = a[i] ^ b[i];
-   }
+  // Perform XOR operation
+  for (i = 0; i < n; i++) {
+    x[i] = a[i] ^ b[i];
+  }
 }
 
 #endif

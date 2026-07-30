@@ -28,32 +28,29 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "pqc/mlkem512.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (MLKEM512_SUPPORT == ENABLED)
 
-//Dependencies (liboqs)
+// Dependencies (liboqs)
 #include <oqs/oqs.h>
 
-//Common interface for key encapsulation mechanisms (KEM)
-const KemAlgo mlkem512KemAlgo =
-{
-   "ML-KEM-512",
-   MLKEM512_PUBLIC_KEY_LEN,
-   MLKEM512_SECRET_KEY_LEN,
-   MLKEM512_CIPHERTEXT_LEN,
-   MLKEM512_SHARED_SECRET_LEN,
-   (KemAlgoGenerateKeyPair) mlkem512GenerateKeyPair,
-   (KemAlgoEncapsulate) mlkem512Encapsulate,
-   (KemAlgoDecapsulate) mlkem512Decapsulate
-};
-
+// Common interface for key encapsulation mechanisms (KEM)
+const KemAlgo mlkem512KemAlgo = {
+    "ML-KEM-512",
+    MLKEM512_PUBLIC_KEY_LEN,
+    MLKEM512_SECRET_KEY_LEN,
+    MLKEM512_CIPHERTEXT_LEN,
+    MLKEM512_SHARED_SECRET_LEN,
+    (KemAlgoGenerateKeyPair)mlkem512GenerateKeyPair,
+    (KemAlgoEncapsulate)mlkem512Encapsulate,
+    (KemAlgoDecapsulate)mlkem512Decapsulate};
 
 /**
  * @brief Key pair generation
@@ -65,17 +62,15 @@ const KemAlgo mlkem512KemAlgo =
  **/
 
 error_t mlkem512GenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *pk, uint8_t *sk)
-{
-   OQS_STATUS status;
+                                uint8_t *pk, uint8_t *sk) {
+  OQS_STATUS status;
 
-   //Key pair generation
-   status = OQS_KEM_ml_kem_512_keypair(pk, sk);
+  // Key pair generation
+  status = OQS_KEM_ml_kem_512_keypair(pk, sk);
 
-   //Return status code
-   return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
+  // Return status code
+  return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
 }
-
 
 /**
  * @brief Encapsulation algorithm
@@ -88,17 +83,15 @@ error_t mlkem512GenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
  **/
 
 error_t mlkem512Encapsulate(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *ct, uint8_t *ss, const uint8_t *pk)
-{
-   OQS_STATUS status;
+                            uint8_t *ct, uint8_t *ss, const uint8_t *pk) {
+  OQS_STATUS status;
 
-   //Encapsulation algorithm
-   status = OQS_KEM_ml_kem_512_encaps(ct, ss, pk);
+  // Encapsulation algorithm
+  status = OQS_KEM_ml_kem_512_encaps(ct, ss, pk);
 
-   //Return status code
-   return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
+  // Return status code
+  return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
 }
-
 
 /**
  * @brief Decapsulation algorithm
@@ -108,15 +101,14 @@ error_t mlkem512Encapsulate(const PrngAlgo *prngAlgo, void *prngContext,
  * @return Error code
  **/
 
-error_t mlkem512Decapsulate(uint8_t *ss, const uint8_t *ct, const uint8_t *sk)
-{
-   OQS_STATUS status;
+error_t mlkem512Decapsulate(uint8_t *ss, const uint8_t *ct, const uint8_t *sk) {
+  OQS_STATUS status;
 
-   //Decapsulation algorithm
-   status = OQS_KEM_ml_kem_512_decaps(ss, ct, sk);
+  // Decapsulation algorithm
+  status = OQS_KEM_ml_kem_512_decaps(ss, ct, sk);
 
-   //Return status code
-   return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
+  // Return status code
+  return (status == OQS_SUCCESS) ? NO_ERROR : ERROR_FAILURE;
 }
 
 #endif

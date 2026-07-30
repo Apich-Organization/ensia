@@ -31,39 +31,39 @@
 #ifndef _SNTRUP761_H
 #define _SNTRUP761_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Public key length
+// Public key length
 #define SNTRUP761_PUBLIC_KEY_LEN 1158
-//Secret key length
+// Secret key length
 #define SNTRUP761_SECRET_KEY_LEN 1763
-//Ciphertext length
+// Ciphertext length
 #define SNTRUP761_CIPHERTEXT_LEN 1039
-//Shared secret length
+// Shared secret length
 #define SNTRUP761_SHARED_SECRET_LEN 32
 
-//Common interface for key encapsulation mechanisms (KEM)
+// Common interface for key encapsulation mechanisms (KEM)
 #define SNTRUP761_KEM_ALGO (&sntrup761KemAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Streamlined NTRU Prime 761 related constants
+// Streamlined NTRU Prime 761 related constants
 extern const KemAlgo sntrup761KemAlgo;
 
-//Streamlined NTRU Prime 761 related functions
+// Streamlined NTRU Prime 761 related functions
 error_t sntrup761GenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *pk, uint8_t *sk);
+                                 uint8_t *pk, uint8_t *sk);
 
 error_t sntrup761Encapsulate(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *ct, uint8_t *ss, const uint8_t *pk);
+                             uint8_t *ct, uint8_t *ss, const uint8_t *pk);
 
 error_t sntrup761Decapsulate(uint8_t *ss, const uint8_t *ct, const uint8_t *sk);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

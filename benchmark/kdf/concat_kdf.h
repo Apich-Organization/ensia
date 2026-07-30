@@ -31,19 +31,20 @@
 #ifndef _CONCAT_KDF_H
 #define _CONCAT_KDF_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Concat KDF related functions
+// Concat KDF related functions
 error_t concatKdf(const HashAlgo *hash, const uint8_t *z, size_t zLen,
-   const uint8_t *otherInfo, size_t otherInfoLen, uint8_t *dk, size_t dkLen);
+                  const uint8_t *otherInfo, size_t otherInfoLen, uint8_t *dk,
+                  size_t dkLen);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

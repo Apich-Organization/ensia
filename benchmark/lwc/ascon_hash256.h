@@ -31,53 +31,51 @@
 #ifndef _ASCON_HASH256_H
 #define _ASCON_HASH256_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "lwc/ascon.h"
 
-//Application specific context
+// Application specific context
 #ifndef ASCON_HASH256_PRIVATE_CONTEXT
-   #define ASCON_HASH256_PRIVATE_CONTEXT
+#define ASCON_HASH256_PRIVATE_CONTEXT
 #endif
 
-//Ascon-Hash256 block size
+// Ascon-Hash256 block size
 #define ASCON_HASH256_BLOCK_SIZE 8
-//Ascon-Hash256 digest size
+// Ascon-Hash256 digest size
 #define ASCON_HASH256_DIGEST_SIZE 32
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define ASCON_HASH256_MIN_PAD_SIZE 0
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define ASCON_HASH256_HASH_ALGO (&asconHash256HashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Ascon-Hash256 algorithm context
  **/
 
-typedef struct
-{
-   AsconState state;
-   uint8_t buffer[8];
-   size_t length;
+typedef struct {
+  AsconState state;
+  uint8_t buffer[8];
+  size_t length;
 } AsconHash256Context;
 
-
-//Ascon-Hash256 related constants
+// Ascon-Hash256 related constants
 extern const uint8_t ASCON_HASH256_OID[1];
 extern const HashAlgo asconHash256HashAlgo;
 
-//Ascon-Hash256 related functions
+// Ascon-Hash256 related functions
 error_t asconHash256Compute(const void *data, size_t length, uint8_t *digest);
 void asconHash256Init(AsconHash256Context *context);
-void asconHash256Update(AsconHash256Context *context, const void *data, size_t length);
+void asconHash256Update(AsconHash256Context *context, const void *data,
+                        size_t length);
 void asconHash256Final(AsconHash256Context *context, uint8_t *digest);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

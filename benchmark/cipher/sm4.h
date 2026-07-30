@@ -31,38 +31,35 @@
 #ifndef _SM4_H
 #define _SM4_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef SM4_PRIVATE_CONTEXT
-   #define SM4_PRIVATE_CONTEXT
+#define SM4_PRIVATE_CONTEXT
 #endif
 
-//SM4 block size
+// SM4 block size
 #define SM4_BLOCK_SIZE 16
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define SM4_CIPHER_ALGO (&sm4CipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief SM4 algorithm context
  **/
 
-typedef struct
-{
-   uint_t nr;
-   uint32_t rk[32];
-   SM4_PRIVATE_CONTEXT
+typedef struct {
+  uint_t nr;
+  uint32_t rk[32];
+  SM4_PRIVATE_CONTEXT
 } Sm4Context;
 
-
-//SM4 related constants
+// SM4 related constants
 extern const uint8_t SM4_CBC_OID[8];
 extern const uint8_t SM4_ECB_OID[8];
 extern const uint8_t SM4_CBC_OID[8];
@@ -74,18 +71,18 @@ extern const uint8_t SM4_CCM_OID[8];
 extern const uint8_t SM4_XTS_OID[8];
 extern const CipherAlgo sm4CipherAlgo;
 
-//SM4 related functions
+// SM4 related functions
 error_t sm4Init(Sm4Context *context, const uint8_t *key, size_t keyLen);
 
 void sm4EncryptBlock(Sm4Context *context, const uint8_t *input,
-   uint8_t *output);
+                     uint8_t *output);
 
 void sm4DecryptBlock(Sm4Context *context, const uint8_t *input,
-   uint8_t *output);
+                     uint8_t *output);
 
 void sm4Deinit(Sm4Context *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

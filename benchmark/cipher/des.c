@@ -33,257 +33,239 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher/des.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (DES_SUPPORT == ENABLED || DES3_SUPPORT == ENABLED)
 
-//Rotate left operation
+// Rotate left operation
 #define ROL28(a, n) ((((a) << (n)) | ((a) >> (28 - (n)))) & 0x0FFFFFFF)
 
-//Permutation of bit fields between words (Eric Young's technique)
-#define SWAPMOVE(a, b, n, m) \
-{ \
-   t = ((a >> n) ^ b) & m; \
-   b ^= t; \
-   a ^= t << n; \
-}
+// Permutation of bit fields between words (Eric Young's technique)
+#define SWAPMOVE(a, b, n, m)                                                   \
+  {                                                                            \
+    t = ((a >> n) ^ b) & m;                                                    \
+    b ^= t;                                                                    \
+    a ^= t << n;                                                               \
+  }
 
-//Initial permutation
-#define IP(l, r) \
-{ \
-   SWAPMOVE(l, r, 4, 0x0F0F0F0F); \
-   SWAPMOVE(l, r, 16, 0x0000FFFF); \
-   SWAPMOVE(r, l, 2, 0x33333333); \
-   SWAPMOVE(r, l, 8, 0x00FF00FF); \
-   SWAPMOVE(l, r, 1, 0x55555555); \
-   l = ROL32(l, 1); \
-   r = ROL32(r, 1); \
-}
+// Initial permutation
+#define IP(l, r)                                                               \
+  {                                                                            \
+    SWAPMOVE(l, r, 4, 0x0F0F0F0F);                                             \
+    SWAPMOVE(l, r, 16, 0x0000FFFF);                                            \
+    SWAPMOVE(r, l, 2, 0x33333333);                                             \
+    SWAPMOVE(r, l, 8, 0x00FF00FF);                                             \
+    SWAPMOVE(l, r, 1, 0x55555555);                                             \
+    l = ROL32(l, 1);                                                           \
+    r = ROL32(r, 1);                                                           \
+  }
 
-//Inverse of initial permutation
-#define IP_INV(l, r) \
-{ \
-   l = ROR32(l, 1); \
-   r = ROR32(r, 1); \
-   SWAPMOVE(l, r, 1, 0x55555555); \
-   SWAPMOVE(r, l, 8, 0x00FF00FF); \
-   SWAPMOVE(r, l, 2, 0x33333333); \
-   SWAPMOVE(l, r, 16, 0x0000FFFF); \
-   SWAPMOVE(l, r, 4, 0x0F0F0F0F); \
-}
+// Inverse of initial permutation
+#define IP_INV(l, r)                                                           \
+  {                                                                            \
+    l = ROR32(l, 1);                                                           \
+    r = ROR32(r, 1);                                                           \
+    SWAPMOVE(l, r, 1, 0x55555555);                                             \
+    SWAPMOVE(r, l, 8, 0x00FF00FF);                                             \
+    SWAPMOVE(r, l, 2, 0x33333333);                                             \
+    SWAPMOVE(l, r, 16, 0x0000FFFF);                                            \
+    SWAPMOVE(l, r, 4, 0x0F0F0F0F);                                             \
+  }
 
-//Permuted choice 1
-#define PC1(c, d) \
-{ \
-   SWAPMOVE(c, d, 4, 0x0F0F0F0F); \
-   SWAPMOVE(c, d, 16, 0x0000FFFF); \
-   SWAPMOVE(d, c, 2, 0x33333333); \
-   SWAPMOVE(d, c, 8, 0x00FF00FF); \
-   SWAPMOVE(c, d, 1, 0x55555555); \
-   SWAPMOVE(d, c, 8, 0x00FF00FF); \
-   SWAPMOVE(c, d, 16, 0x0000FFFF); \
-   t = (c << 4) & 0x0FFFFFF0; \
-   t |= (d >> 24) & 0x0000000F; \
-   c = (d << 20) & 0x0FF00000; \
-   c |= (d << 4) & 0x000FF000; \
-   c |= (d >> 12) & 0x00000FF0; \
-   c |= (d >> 28) & 0x0000000F; \
-   d = t; \
-}
+// Permuted choice 1
+#define PC1(c, d)                                                              \
+  {                                                                            \
+    SWAPMOVE(c, d, 4, 0x0F0F0F0F);                                             \
+    SWAPMOVE(c, d, 16, 0x0000FFFF);                                            \
+    SWAPMOVE(d, c, 2, 0x33333333);                                             \
+    SWAPMOVE(d, c, 8, 0x00FF00FF);                                             \
+    SWAPMOVE(c, d, 1, 0x55555555);                                             \
+    SWAPMOVE(d, c, 8, 0x00FF00FF);                                             \
+    SWAPMOVE(c, d, 16, 0x0000FFFF);                                            \
+    t = (c << 4) & 0x0FFFFFF0;                                                 \
+    t |= (d >> 24) & 0x0000000F;                                               \
+    c = (d << 20) & 0x0FF00000;                                                \
+    c |= (d << 4) & 0x000FF000;                                                \
+    c |= (d >> 12) & 0x00000FF0;                                               \
+    c |= (d >> 28) & 0x0000000F;                                               \
+    d = t;                                                                     \
+  }
 
-//Permuted choice 2 (first half)
-#define PC2_L(c, d) \
-   (((c << 4) & 0x24000000) | \
-   ((c << 28) & 0x10000000) | \
-   ((c << 14) & 0x08000000) | \
-   ((c << 18) & 0x02080000) | \
-   ((c << 6) & 0x01000000) | \
-   ((c << 9) & 0x00200000) | \
-   ((c >> 1) & 0x00100000) | \
-   ((c << 10) & 0x00040000) | \
-   ((c << 2) & 0x00020000) | \
-   ((c >> 10) & 0x00010000) | \
-   ((d >> 13) & 0x00002000) | \
-   ((d >> 4) & 0x00001000) | \
-   ((d << 6) & 0x00000800) | \
-   ((d >> 1) & 0x00000400) | \
-   ((d >> 14) & 0x00000200) | \
-   ((d >> 0) & 0x00000100) | \
-   ((d >> 5) & 0x00000020) | \
-   ((d >> 10) & 0x00000010) | \
-   ((d >> 3) & 0x00000008) | \
-   ((d >> 18) & 0x00000004) | \
-   ((d >> 26) & 0x00000002) | \
-   ((d >> 24) & 0x00000001))
+// Permuted choice 2 (first half)
+#define PC2_L(c, d)                                                            \
+  (((c << 4) & 0x24000000) | ((c << 28) & 0x10000000) |                        \
+   ((c << 14) & 0x08000000) | ((c << 18) & 0x02080000) |                       \
+   ((c << 6) & 0x01000000) | ((c << 9) & 0x00200000) |                         \
+   ((c >> 1) & 0x00100000) | ((c << 10) & 0x00040000) |                        \
+   ((c << 2) & 0x00020000) | ((c >> 10) & 0x00010000) |                        \
+   ((d >> 13) & 0x00002000) | ((d >> 4) & 0x00001000) |                        \
+   ((d << 6) & 0x00000800) | ((d >> 1) & 0x00000400) |                         \
+   ((d >> 14) & 0x00000200) | ((d >> 0) & 0x00000100) |                        \
+   ((d >> 5) & 0x00000020) | ((d >> 10) & 0x00000010) |                        \
+   ((d >> 3) & 0x00000008) | ((d >> 18) & 0x00000004) |                        \
+   ((d >> 26) & 0x00000002) | ((d >> 24) & 0x00000001))
 
-//Permuted choice 2 (second half)
-#define PC2_R(c, d) \
-   (((c << 15) & 0x20000000) | \
-   ((c << 17) & 0x10000000) | \
-   ((c << 10) & 0x08000000) | \
-   ((c << 22) & 0x04000000) | \
-   ((c >> 2) & 0x02000000) | \
-   ((c << 1) & 0x01000000) | \
-   ((c << 16) & 0x00200000) | \
-   ((c << 11) & 0x00100000) | \
-   ((c << 3) & 0x00080000) | \
-   ((c >> 6) & 0x00040000) | \
-   ((c << 15) & 0x00020000) | \
-   ((c >> 4) & 0x00010000) | \
-   ((d >> 2) & 0x00002000) | \
-   ((d << 8) & 0x00001000) | \
-   ((d >> 14) & 0x00000808) | \
-   ((d >> 9) & 0x00000400) | \
-   ((d >> 0) & 0x00000200) | \
-   ((d << 7) & 0x00000100) | \
-   ((d >> 7) & 0x00000020) | \
-   ((d >> 3) & 0x00000011) | \
-   ((d << 2) & 0x00000004) | \
-   ((d >> 21) & 0x00000002))
+// Permuted choice 2 (second half)
+#define PC2_R(c, d)                                                            \
+  (((c << 15) & 0x20000000) | ((c << 17) & 0x10000000) |                       \
+   ((c << 10) & 0x08000000) | ((c << 22) & 0x04000000) |                       \
+   ((c >> 2) & 0x02000000) | ((c << 1) & 0x01000000) |                         \
+   ((c << 16) & 0x00200000) | ((c << 11) & 0x00100000) |                       \
+   ((c << 3) & 0x00080000) | ((c >> 6) & 0x00040000) |                         \
+   ((c << 15) & 0x00020000) | ((c >> 4) & 0x00010000) |                        \
+   ((d >> 2) & 0x00002000) | ((d << 8) & 0x00001000) |                         \
+   ((d >> 14) & 0x00000808) | ((d >> 9) & 0x00000400) |                        \
+   ((d >> 0) & 0x00000200) | ((d << 7) & 0x00000100) |                         \
+   ((d >> 7) & 0x00000020) | ((d >> 3) & 0x00000011) |                         \
+   ((d << 2) & 0x00000004) | ((d >> 21) & 0x00000002))
 
-//Round function
-#define ROUND(l, r, k1, k2) \
-{ \
-   t = r ^ k1; \
-   l ^= sp2[(t >> 24) & 0x3F]; \
-   l ^= sp4[(t >> 16) & 0x3F]; \
-   l ^= sp6[(t >> 8) & 0x3F]; \
-   l ^= sp8[t & 0x3F]; \
-   t = ROR32(r, 4) ^ k2; \
-   l ^= sp1[(t >> 24) & 0x3F]; \
-   l ^= sp3[(t >> 16) & 0x3F]; \
-   l ^= sp5[(t >> 8) & 0x3F]; \
-   l ^= sp7[t & 0x3F]; \
-}
+// Round function
+#define ROUND(l, r, k1, k2)                                                    \
+  {                                                                            \
+    t = r ^ k1;                                                                \
+    l ^= sp2[(t >> 24) & 0x3F];                                                \
+    l ^= sp4[(t >> 16) & 0x3F];                                                \
+    l ^= sp6[(t >> 8) & 0x3F];                                                 \
+    l ^= sp8[t & 0x3F];                                                        \
+    t = ROR32(r, 4) ^ k2;                                                      \
+    l ^= sp1[(t >> 24) & 0x3F];                                                \
+    l ^= sp3[(t >> 16) & 0x3F];                                                \
+    l ^= sp5[(t >> 8) & 0x3F];                                                 \
+    l ^= sp7[t & 0x3F];                                                        \
+  }
 
-//Selection function 1
-static const uint32_t sp1[64] =
-{
-   0x01010400, 0x00000000, 0x00010000, 0x01010404, 0x01010004, 0x00010404, 0x00000004, 0x00010000,
-   0x00000400, 0x01010400, 0x01010404, 0x00000400, 0x01000404, 0x01010004, 0x01000000, 0x00000004,
-   0x00000404, 0x01000400, 0x01000400, 0x00010400, 0x00010400, 0x01010000, 0x01010000, 0x01000404,
-   0x00010004, 0x01000004, 0x01000004, 0x00010004, 0x00000000, 0x00000404, 0x00010404, 0x01000000,
-   0x00010000, 0x01010404, 0x00000004, 0x01010000, 0x01010400, 0x01000000, 0x01000000, 0x00000400,
-   0x01010004, 0x00010000, 0x00010400, 0x01000004, 0x00000400, 0x00000004, 0x01000404, 0x00010404,
-   0x01010404, 0x00010004, 0x01010000, 0x01000404, 0x01000004, 0x00000404, 0x00010404, 0x01010400,
-   0x00000404, 0x01000400, 0x01000400, 0x00000000, 0x00010004, 0x00010400, 0x00000000, 0x01010004
-};
+// Selection function 1
+static const uint32_t sp1[64] = {
+    0x01010400, 0x00000000, 0x00010000, 0x01010404, 0x01010004, 0x00010404,
+    0x00000004, 0x00010000, 0x00000400, 0x01010400, 0x01010404, 0x00000400,
+    0x01000404, 0x01010004, 0x01000000, 0x00000004, 0x00000404, 0x01000400,
+    0x01000400, 0x00010400, 0x00010400, 0x01010000, 0x01010000, 0x01000404,
+    0x00010004, 0x01000004, 0x01000004, 0x00010004, 0x00000000, 0x00000404,
+    0x00010404, 0x01000000, 0x00010000, 0x01010404, 0x00000004, 0x01010000,
+    0x01010400, 0x01000000, 0x01000000, 0x00000400, 0x01010004, 0x00010000,
+    0x00010400, 0x01000004, 0x00000400, 0x00000004, 0x01000404, 0x00010404,
+    0x01010404, 0x00010004, 0x01010000, 0x01000404, 0x01000004, 0x00000404,
+    0x00010404, 0x01010400, 0x00000404, 0x01000400, 0x01000400, 0x00000000,
+    0x00010004, 0x00010400, 0x00000000, 0x01010004};
 
-//Selection function 2
-static const uint32_t sp2[64] =
-{
-   0x80108020, 0x80008000, 0x00008000, 0x00108020, 0x00100000, 0x00000020, 0x80100020, 0x80008020,
-   0x80000020, 0x80108020, 0x80108000, 0x80000000, 0x80008000, 0x00100000, 0x00000020, 0x80100020,
-   0x00108000, 0x00100020, 0x80008020, 0x00000000, 0x80000000, 0x00008000, 0x00108020, 0x80100000,
-   0x00100020, 0x80000020, 0x00000000, 0x00108000, 0x00008020, 0x80108000, 0x80100000, 0x00008020,
-   0x00000000, 0x00108020, 0x80100020, 0x00100000, 0x80008020, 0x80100000, 0x80108000, 0x00008000,
-   0x80100000, 0x80008000, 0x00000020, 0x80108020, 0x00108020, 0x00000020, 0x00008000, 0x80000000,
-   0x00008020, 0x80108000, 0x00100000, 0x80000020, 0x00100020, 0x80008020, 0x80000020, 0x00100020,
-   0x00108000, 0x00000000, 0x80008000, 0x00008020, 0x80000000, 0x80100020, 0x80108020, 0x00108000
-};
+// Selection function 2
+static const uint32_t sp2[64] = {
+    0x80108020, 0x80008000, 0x00008000, 0x00108020, 0x00100000, 0x00000020,
+    0x80100020, 0x80008020, 0x80000020, 0x80108020, 0x80108000, 0x80000000,
+    0x80008000, 0x00100000, 0x00000020, 0x80100020, 0x00108000, 0x00100020,
+    0x80008020, 0x00000000, 0x80000000, 0x00008000, 0x00108020, 0x80100000,
+    0x00100020, 0x80000020, 0x00000000, 0x00108000, 0x00008020, 0x80108000,
+    0x80100000, 0x00008020, 0x00000000, 0x00108020, 0x80100020, 0x00100000,
+    0x80008020, 0x80100000, 0x80108000, 0x00008000, 0x80100000, 0x80008000,
+    0x00000020, 0x80108020, 0x00108020, 0x00000020, 0x00008000, 0x80000000,
+    0x00008020, 0x80108000, 0x00100000, 0x80000020, 0x00100020, 0x80008020,
+    0x80000020, 0x00100020, 0x00108000, 0x00000000, 0x80008000, 0x00008020,
+    0x80000000, 0x80100020, 0x80108020, 0x00108000};
 
-//Selection function 3
-static const uint32_t sp3[64] =
-{
-   0x00000208, 0x08020200, 0x00000000, 0x08020008, 0x08000200, 0x00000000, 0x00020208, 0x08000200,
-   0x00020008, 0x08000008, 0x08000008, 0x00020000, 0x08020208, 0x00020008, 0x08020000, 0x00000208,
-   0x08000000, 0x00000008, 0x08020200, 0x00000200, 0x00020200, 0x08020000, 0x08020008, 0x00020208,
-   0x08000208, 0x00020200, 0x00020000, 0x08000208, 0x00000008, 0x08020208, 0x00000200, 0x08000000,
-   0x08020200, 0x08000000, 0x00020008, 0x00000208, 0x00020000, 0x08020200, 0x08000200, 0x00000000,
-   0x00000200, 0x00020008, 0x08020208, 0x08000200, 0x08000008, 0x00000200, 0x00000000, 0x08020008,
-   0x08000208, 0x00020000, 0x08000000, 0x08020208, 0x00000008, 0x00020208, 0x00020200, 0x08000008,
-   0x08020000, 0x08000208, 0x00000208, 0x08020000, 0x00020208, 0x00000008, 0x08020008, 0x00020200
-};
+// Selection function 3
+static const uint32_t sp3[64] = {
+    0x00000208, 0x08020200, 0x00000000, 0x08020008, 0x08000200, 0x00000000,
+    0x00020208, 0x08000200, 0x00020008, 0x08000008, 0x08000008, 0x00020000,
+    0x08020208, 0x00020008, 0x08020000, 0x00000208, 0x08000000, 0x00000008,
+    0x08020200, 0x00000200, 0x00020200, 0x08020000, 0x08020008, 0x00020208,
+    0x08000208, 0x00020200, 0x00020000, 0x08000208, 0x00000008, 0x08020208,
+    0x00000200, 0x08000000, 0x08020200, 0x08000000, 0x00020008, 0x00000208,
+    0x00020000, 0x08020200, 0x08000200, 0x00000000, 0x00000200, 0x00020008,
+    0x08020208, 0x08000200, 0x08000008, 0x00000200, 0x00000000, 0x08020008,
+    0x08000208, 0x00020000, 0x08000000, 0x08020208, 0x00000008, 0x00020208,
+    0x00020200, 0x08000008, 0x08020000, 0x08000208, 0x00000208, 0x08020000,
+    0x00020208, 0x00000008, 0x08020008, 0x00020200};
 
-//Selection function 4
-static const uint32_t sp4[64] =
-{
-   0x00802001, 0x00002081, 0x00002081, 0x00000080, 0x00802080, 0x00800081, 0x00800001, 0x00002001,
-   0x00000000, 0x00802000, 0x00802000, 0x00802081, 0x00000081, 0x00000000, 0x00800080, 0x00800001,
-   0x00000001, 0x00002000, 0x00800000, 0x00802001, 0x00000080, 0x00800000, 0x00002001, 0x00002080,
-   0x00800081, 0x00000001, 0x00002080, 0x00800080, 0x00002000, 0x00802080, 0x00802081, 0x00000081,
-   0x00800080, 0x00800001, 0x00802000, 0x00802081, 0x00000081, 0x00000000, 0x00000000, 0x00802000,
-   0x00002080, 0x00800080, 0x00800081, 0x00000001, 0x00802001, 0x00002081, 0x00002081, 0x00000080,
-   0x00802081, 0x00000081, 0x00000001, 0x00002000, 0x00800001, 0x00002001, 0x00802080, 0x00800081,
-   0x00002001, 0x00002080, 0x00800000, 0x00802001, 0x00000080, 0x00800000, 0x00002000, 0x00802080
-};
+// Selection function 4
+static const uint32_t sp4[64] = {
+    0x00802001, 0x00002081, 0x00002081, 0x00000080, 0x00802080, 0x00800081,
+    0x00800001, 0x00002001, 0x00000000, 0x00802000, 0x00802000, 0x00802081,
+    0x00000081, 0x00000000, 0x00800080, 0x00800001, 0x00000001, 0x00002000,
+    0x00800000, 0x00802001, 0x00000080, 0x00800000, 0x00002001, 0x00002080,
+    0x00800081, 0x00000001, 0x00002080, 0x00800080, 0x00002000, 0x00802080,
+    0x00802081, 0x00000081, 0x00800080, 0x00800001, 0x00802000, 0x00802081,
+    0x00000081, 0x00000000, 0x00000000, 0x00802000, 0x00002080, 0x00800080,
+    0x00800081, 0x00000001, 0x00802001, 0x00002081, 0x00002081, 0x00000080,
+    0x00802081, 0x00000081, 0x00000001, 0x00002000, 0x00800001, 0x00002001,
+    0x00802080, 0x00800081, 0x00002001, 0x00002080, 0x00800000, 0x00802001,
+    0x00000080, 0x00800000, 0x00002000, 0x00802080};
 
-//Selection function 5
-static const uint32_t sp5[64] =
-{
-   0x00000100, 0x02080100, 0x02080000, 0x42000100, 0x00080000, 0x00000100, 0x40000000, 0x02080000,
-   0x40080100, 0x00080000, 0x02000100, 0x40080100, 0x42000100, 0x42080000, 0x00080100, 0x40000000,
-   0x02000000, 0x40080000, 0x40080000, 0x00000000, 0x40000100, 0x42080100, 0x42080100, 0x02000100,
-   0x42080000, 0x40000100, 0x00000000, 0x42000000, 0x02080100, 0x02000000, 0x42000000, 0x00080100,
-   0x00080000, 0x42000100, 0x00000100, 0x02000000, 0x40000000, 0x02080000, 0x42000100, 0x40080100,
-   0x02000100, 0x40000000, 0x42080000, 0x02080100, 0x40080100, 0x00000100, 0x02000000, 0x42080000,
-   0x42080100, 0x00080100, 0x42000000, 0x42080100, 0x02080000, 0x00000000, 0x40080000, 0x42000000,
-   0x00080100, 0x02000100, 0x40000100, 0x00080000, 0x00000000, 0x40080000, 0x02080100, 0x40000100
-};
+// Selection function 5
+static const uint32_t sp5[64] = {
+    0x00000100, 0x02080100, 0x02080000, 0x42000100, 0x00080000, 0x00000100,
+    0x40000000, 0x02080000, 0x40080100, 0x00080000, 0x02000100, 0x40080100,
+    0x42000100, 0x42080000, 0x00080100, 0x40000000, 0x02000000, 0x40080000,
+    0x40080000, 0x00000000, 0x40000100, 0x42080100, 0x42080100, 0x02000100,
+    0x42080000, 0x40000100, 0x00000000, 0x42000000, 0x02080100, 0x02000000,
+    0x42000000, 0x00080100, 0x00080000, 0x42000100, 0x00000100, 0x02000000,
+    0x40000000, 0x02080000, 0x42000100, 0x40080100, 0x02000100, 0x40000000,
+    0x42080000, 0x02080100, 0x40080100, 0x00000100, 0x02000000, 0x42080000,
+    0x42080100, 0x00080100, 0x42000000, 0x42080100, 0x02080000, 0x00000000,
+    0x40080000, 0x42000000, 0x00080100, 0x02000100, 0x40000100, 0x00080000,
+    0x00000000, 0x40080000, 0x02080100, 0x40000100};
 
-//Selection function 6
-static const uint32_t sp6[64] =
-{
-   0x20000010, 0x20400000, 0x00004000, 0x20404010, 0x20400000, 0x00000010, 0x20404010, 0x00400000,
-   0x20004000, 0x00404010, 0x00400000, 0x20000010, 0x00400010, 0x20004000, 0x20000000, 0x00004010,
-   0x00000000, 0x00400010, 0x20004010, 0x00004000, 0x00404000, 0x20004010, 0x00000010, 0x20400010,
-   0x20400010, 0x00000000, 0x00404010, 0x20404000, 0x00004010, 0x00404000, 0x20404000, 0x20000000,
-   0x20004000, 0x00000010, 0x20400010, 0x00404000, 0x20404010, 0x00400000, 0x00004010, 0x20000010,
-   0x00400000, 0x20004000, 0x20000000, 0x00004010, 0x20000010, 0x20404010, 0x00404000, 0x20400000,
-   0x00404010, 0x20404000, 0x00000000, 0x20400010, 0x00000010, 0x00004000, 0x20400000, 0x00404010,
-   0x00004000, 0x00400010, 0x20004010, 0x00000000, 0x20404000, 0x20000000, 0x00400010, 0x20004010
-};
+// Selection function 6
+static const uint32_t sp6[64] = {
+    0x20000010, 0x20400000, 0x00004000, 0x20404010, 0x20400000, 0x00000010,
+    0x20404010, 0x00400000, 0x20004000, 0x00404010, 0x00400000, 0x20000010,
+    0x00400010, 0x20004000, 0x20000000, 0x00004010, 0x00000000, 0x00400010,
+    0x20004010, 0x00004000, 0x00404000, 0x20004010, 0x00000010, 0x20400010,
+    0x20400010, 0x00000000, 0x00404010, 0x20404000, 0x00004010, 0x00404000,
+    0x20404000, 0x20000000, 0x20004000, 0x00000010, 0x20400010, 0x00404000,
+    0x20404010, 0x00400000, 0x00004010, 0x20000010, 0x00400000, 0x20004000,
+    0x20000000, 0x00004010, 0x20000010, 0x20404010, 0x00404000, 0x20400000,
+    0x00404010, 0x20404000, 0x00000000, 0x20400010, 0x00000010, 0x00004000,
+    0x20400000, 0x00404010, 0x00004000, 0x00400010, 0x20004010, 0x00000000,
+    0x20404000, 0x20000000, 0x00400010, 0x20004010};
 
-//Selection function 7
-static const uint32_t sp7[64] =
-{
-   0x00200000, 0x04200002, 0x04000802, 0x00000000, 0x00000800, 0x04000802, 0x00200802, 0x04200800,
-   0x04200802, 0x00200000, 0x00000000, 0x04000002, 0x00000002, 0x04000000, 0x04200002, 0x00000802,
-   0x04000800, 0x00200802, 0x00200002, 0x04000800, 0x04000002, 0x04200000, 0x04200800, 0x00200002,
-   0x04200000, 0x00000800, 0x00000802, 0x04200802, 0x00200800, 0x00000002, 0x04000000, 0x00200800,
-   0x04000000, 0x00200800, 0x00200000, 0x04000802, 0x04000802, 0x04200002, 0x04200002, 0x00000002,
-   0x00200002, 0x04000000, 0x04000800, 0x00200000, 0x04200800, 0x00000802, 0x00200802, 0x04200800,
-   0x00000802, 0x04000002, 0x04200802, 0x04200000, 0x00200800, 0x00000000, 0x00000002, 0x04200802,
-   0x00000000, 0x00200802, 0x04200000, 0x00000800, 0x04000002, 0x04000800, 0x00000800, 0x00200002
-};
+// Selection function 7
+static const uint32_t sp7[64] = {
+    0x00200000, 0x04200002, 0x04000802, 0x00000000, 0x00000800, 0x04000802,
+    0x00200802, 0x04200800, 0x04200802, 0x00200000, 0x00000000, 0x04000002,
+    0x00000002, 0x04000000, 0x04200002, 0x00000802, 0x04000800, 0x00200802,
+    0x00200002, 0x04000800, 0x04000002, 0x04200000, 0x04200800, 0x00200002,
+    0x04200000, 0x00000800, 0x00000802, 0x04200802, 0x00200800, 0x00000002,
+    0x04000000, 0x00200800, 0x04000000, 0x00200800, 0x00200000, 0x04000802,
+    0x04000802, 0x04200002, 0x04200002, 0x00000002, 0x00200002, 0x04000000,
+    0x04000800, 0x00200000, 0x04200800, 0x00000802, 0x00200802, 0x04200800,
+    0x00000802, 0x04000002, 0x04200802, 0x04200000, 0x00200800, 0x00000000,
+    0x00000002, 0x04200802, 0x00000000, 0x00200802, 0x04200000, 0x00000800,
+    0x04000002, 0x04000800, 0x00000800, 0x00200002};
 
-//Selection function 8
-static const uint32_t sp8[64] =
-{
-   0x10001040, 0x00001000, 0x00040000, 0x10041040, 0x10000000, 0x10001040, 0x00000040, 0x10000000,
-   0x00040040, 0x10040000, 0x10041040, 0x00041000, 0x10041000, 0x00041040, 0x00001000, 0x00000040,
-   0x10040000, 0x10000040, 0x10001000, 0x00001040, 0x00041000, 0x00040040, 0x10040040, 0x10041000,
-   0x00001040, 0x00000000, 0x00000000, 0x10040040, 0x10000040, 0x10001000, 0x00041040, 0x00040000,
-   0x00041040, 0x00040000, 0x10041000, 0x00001000, 0x00000040, 0x10040040, 0x00001000, 0x00041040,
-   0x10001000, 0x00000040, 0x10000040, 0x10040000, 0x10040040, 0x10000000, 0x00040000, 0x10001040,
-   0x00000000, 0x10041040, 0x00040040, 0x10000040, 0x10040000, 0x10001000, 0x10001040, 0x00000000,
-   0x10041040, 0x00041000, 0x00041000, 0x00001040, 0x00001040, 0x00040040, 0x10000000, 0x10041000
-};
+// Selection function 8
+static const uint32_t sp8[64] = {
+    0x10001040, 0x00001000, 0x00040000, 0x10041040, 0x10000000, 0x10001040,
+    0x00000040, 0x10000000, 0x00040040, 0x10040000, 0x10041040, 0x00041000,
+    0x10041000, 0x00041040, 0x00001000, 0x00000040, 0x10040000, 0x10000040,
+    0x10001000, 0x00001040, 0x00041000, 0x00040040, 0x10040040, 0x10041000,
+    0x00001040, 0x00000000, 0x00000000, 0x10040040, 0x10000040, 0x10001000,
+    0x00041040, 0x00040000, 0x00041040, 0x00040000, 0x10041000, 0x00001000,
+    0x00000040, 0x10040040, 0x00001000, 0x00041040, 0x10001000, 0x00000040,
+    0x10000040, 0x10040000, 0x10040040, 0x10000000, 0x00040000, 0x10001040,
+    0x00000000, 0x10041040, 0x00040040, 0x10000040, 0x10040000, 0x10001000,
+    0x10001040, 0x00000000, 0x10041040, 0x00041000, 0x00041000, 0x00001040,
+    0x00001040, 0x00040040, 0x10000000, 0x10041000};
 
-//DES-CBC OID (1.3.14.3.2.7)
+// DES-CBC OID (1.3.14.3.2.7)
 const uint8_t DES_CBC_OID[5] = {0x2B, 0x0E, 0x03, 0x02, 0x07};
 
-//Common interface for encryption algorithms
-const CipherAlgo desCipherAlgo =
-{
-   "DES",
-   sizeof(DesContext),
-   CIPHER_ALGO_TYPE_BLOCK,
-   DES_BLOCK_SIZE,
-   (CipherAlgoInit) desInit,
-   NULL,
-   NULL,
-   (CipherAlgoEncryptBlock) desEncryptBlock,
-   (CipherAlgoDecryptBlock) desDecryptBlock,
-   (CipherAlgoDeinit) desDeinit
-};
-
+// Common interface for encryption algorithms
+const CipherAlgo desCipherAlgo = {"DES",
+                                  sizeof(DesContext),
+                                  CIPHER_ALGO_TYPE_BLOCK,
+                                  DES_BLOCK_SIZE,
+                                  (CipherAlgoInit)desInit,
+                                  NULL,
+                                  NULL,
+                                  (CipherAlgoEncryptBlock)desEncryptBlock,
+                                  (CipherAlgoDecryptBlock)desDecryptBlock,
+                                  (CipherAlgoDeinit)desDeinit};
 
 /**
  * @brief Initialize a DES context using the supplied key
@@ -294,52 +276,46 @@ const CipherAlgo desCipherAlgo =
  **/
 
 __weak_func error_t desInit(DesContext *context, const uint8_t *key,
-   size_t keyLen)
-{
-   uint_t i;
-   uint32_t c;
-   uint32_t d;
-   uint32_t t;
+                            size_t keyLen) {
+  uint_t i;
+  uint32_t c;
+  uint32_t d;
+  uint32_t t;
 
-   //Check parameters
-   if(context == NULL || key == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (context == NULL || key == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Invalid key length?
-   if(keyLen != 8)
-      return ERROR_INVALID_KEY_LENGTH;
+  // Invalid key length?
+  if (keyLen != 8)
+    return ERROR_INVALID_KEY_LENGTH;
 
-   //Copy the key
-   c = LOAD32BE(key);
-   d = LOAD32BE(key + 4);
+  // Copy the key
+  c = LOAD32BE(key);
+  d = LOAD32BE(key + 4);
 
-   //Permuted choice 1
-   PC1(c, d);
+  // Permuted choice 1
+  PC1(c, d);
 
-   //Generate the key schedule
-   for(i = 0; i < 16; i++)
-   {
-      //Individual blocks are shifted left
-      if(i == 0 || i == 1 || i == 8 || i == 15)
-      {
-         c = ROL28(c, 1);
-         d = ROL28(d, 1);
-      }
-      else
-      {
-         c = ROL28(c, 2);
-         d = ROL28(d, 2);
-      }
+  // Generate the key schedule
+  for (i = 0; i < 16; i++) {
+    // Individual blocks are shifted left
+    if (i == 0 || i == 1 || i == 8 || i == 15) {
+      c = ROL28(c, 1);
+      d = ROL28(d, 1);
+    } else {
+      c = ROL28(c, 2);
+      d = ROL28(d, 2);
+    }
 
-      //Permuted choice 2
-      context->ks[2 * i] = PC2_L(c, d);
-      context->ks[2 * i + 1] = PC2_R(c, d);
-   }
+    // Permuted choice 2
+    context->ks[2 * i] = PC2_L(c, d);
+    context->ks[2 * i + 1] = PC2_R(c, d);
+  }
 
-   //Successful initialization
-   return NO_ERROR;
+  // Successful initialization
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Encrypt a 8-byte block using DES algorithm
@@ -349,37 +325,34 @@ __weak_func error_t desInit(DesContext *context, const uint8_t *key,
  **/
 
 __weak_func void desEncryptBlock(DesContext *context, const uint8_t *input,
-   uint8_t *output)
-{
-   uint_t i;
-   uint32_t l;
-   uint32_t r;
-   uint32_t t;
+                                 uint8_t *output) {
+  uint_t i;
+  uint32_t l;
+  uint32_t r;
+  uint32_t t;
 
-   //Copy the plaintext from the input buffer
-   l = LOAD32BE(input);
-   r = LOAD32BE(input + 4);
+  // Copy the plaintext from the input buffer
+  l = LOAD32BE(input);
+  r = LOAD32BE(input + 4);
 
-   //Initial permutation
-   IP(l, r);
+  // Initial permutation
+  IP(l, r);
 
-   //16 rounds of computation are needed
-   for(i = 0; i < 32; i += 4)
-   {
-      //Apply odd round function
-      ROUND(l, r, context->ks[i], context->ks[i + 1]);
-      //Apply even round function
-      ROUND(r, l, context->ks[i + 2], context->ks[i + 3]);
-   }
+  // 16 rounds of computation are needed
+  for (i = 0; i < 32; i += 4) {
+    // Apply odd round function
+    ROUND(l, r, context->ks[i], context->ks[i + 1]);
+    // Apply even round function
+    ROUND(r, l, context->ks[i + 2], context->ks[i + 3]);
+  }
 
-   //Inverse of initial permutation
-   IP_INV(r, l);
+  // Inverse of initial permutation
+  IP_INV(r, l);
 
-   //Copy the resulting ciphertext
-   STORE32BE(r, output);
-   STORE32BE(l, output + 4);
+  // Copy the resulting ciphertext
+  STORE32BE(r, output);
+  STORE32BE(l, output + 4);
 }
-
 
 /**
  * @brief Decrypt a 8-byte block using DES algorithm
@@ -389,49 +362,44 @@ __weak_func void desEncryptBlock(DesContext *context, const uint8_t *input,
  **/
 
 __weak_func void desDecryptBlock(DesContext *context, const uint8_t *input,
-   uint8_t *output)
-{
-   uint_t i;
-   uint32_t l;
-   uint32_t r;
-   uint32_t t;
+                                 uint8_t *output) {
+  uint_t i;
+  uint32_t l;
+  uint32_t r;
+  uint32_t t;
 
-   //Copy the ciphertext from the input buffer
-   r = LOAD32BE(input);
-   l = LOAD32BE(input + 4);
+  // Copy the ciphertext from the input buffer
+  r = LOAD32BE(input);
+  l = LOAD32BE(input + 4);
 
-   //Initial permutation
-   IP(r, l);
+  // Initial permutation
+  IP(r, l);
 
-   //For decryption, keys in the key schedule must be applied in reverse order
-   for(i = 32; i > 0; i -= 4)
-   {
-      //Apply even round function
-      ROUND(r, l, context->ks[i - 2], context->ks[i - 1]);
-      //Apply odd round function
-      ROUND(l, r, context->ks[i - 4], context->ks[i - 3]);
-   }
+  // For decryption, keys in the key schedule must be applied in reverse order
+  for (i = 32; i > 0; i -= 4) {
+    // Apply even round function
+    ROUND(r, l, context->ks[i - 2], context->ks[i - 1]);
+    // Apply odd round function
+    ROUND(l, r, context->ks[i - 4], context->ks[i - 3]);
+  }
 
-   //Inverse of initial permutation
-   IP_INV(l, r);
+  // Inverse of initial permutation
+  IP_INV(l, r);
 
-   //Copy the resulting plaintext
-   STORE32BE(l, output);
-   STORE32BE(r, output + 4);
+  // Copy the resulting plaintext
+  STORE32BE(l, output);
+  STORE32BE(r, output + 4);
 }
-
 
 /**
  * @brief Release DES context
  * @param[in] context Pointer to the DES context
  **/
 
-__weak_func void desDeinit(DesContext *context)
-{
-   //Clear DES context
-   osMemset(context, 0, sizeof(DesContext));
+__weak_func void desDeinit(DesContext *context) {
+  // Clear DES context
+  osMemset(context, 0, sizeof(DesContext));
 }
-
 
 /**
  * @brief Convert a 56-bit key to a 64-bit key (with odd parity)
@@ -439,48 +407,43 @@ __weak_func void desDeinit(DesContext *context)
  * @param[out] output 64-bit key (with odd parity)
  **/
 
-void desComputeKeyParity(const uint8_t *input, uint8_t *output)
-{
-   //Convert the 56-bit key to a 64-bit key
-   output[0] = input[0];
-   output[1] = (input[0] << 7) | (input[1] >> 1);
-   output[2] = (input[1] << 6) | (input[2] >> 2);
-   output[3] = (input[2] << 5) | (input[3] >> 3);
-   output[4] = (input[3] << 4) | (input[4] >> 4);
-   output[5] = (input[4] << 3) | (input[5] >> 5);
-   output[6] = (input[5] << 2) | (input[6] >> 6);
-   output[7] = input[6] << 1;
+void desComputeKeyParity(const uint8_t *input, uint8_t *output) {
+  // Convert the 56-bit key to a 64-bit key
+  output[0] = input[0];
+  output[1] = (input[0] << 7) | (input[1] >> 1);
+  output[2] = (input[1] << 6) | (input[2] >> 2);
+  output[3] = (input[2] << 5) | (input[3] >> 3);
+  output[4] = (input[3] << 4) | (input[4] >> 4);
+  output[5] = (input[4] << 3) | (input[5] >> 5);
+  output[6] = (input[5] << 2) | (input[6] >> 6);
+  output[7] = input[6] << 1;
 
-   //Fix parity bits
-   desFixKeyParity(output);
+  // Fix parity bits
+  desFixKeyParity(output);
 }
-
 
 /**
  * @brief Fix key parity
  * @param[in,out] key 64-bit key
  **/
 
-void desFixKeyParity(uint8_t *key)
-{
-   uint_t i;
-   uint8_t parity;
+void desFixKeyParity(uint8_t *key) {
+  uint_t i;
+  uint8_t parity;
 
-   //Loop through the 64-bit key
-   for(i = 0; i < 8; i++)
-   {
-      //Calculate parity
-      parity = key[i];
-      parity ^= parity >> 1;
-      parity ^= parity >> 2;
-      parity ^= parity >> 4;
-      parity &= 0x01;
+  // Loop through the 64-bit key
+  for (i = 0; i < 8; i++) {
+    // Calculate parity
+    parity = key[i];
+    parity ^= parity >> 1;
+    parity ^= parity >> 2;
+    parity ^= parity >> 4;
+    parity &= 0x01;
 
-      //Fix the parity bit so that there is an odd number of ones
-      key[i] ^= (parity ^ 0x01);
-   }
+    // Fix the parity bit so that there is an odd number of ones
+    key[i] ^= (parity ^ 0x01);
+  }
 }
-
 
 /**
  * @brief Check key parity
@@ -488,28 +451,26 @@ void desFixKeyParity(uint8_t *key)
  * @return TRUE if the parity is correct, else FALSE
  **/
 
-bool_t desCheckKeyParity(const uint8_t *key)
-{
-   uint_t i;
-   uint8_t valid;
-   uint8_t parity;
+bool_t desCheckKeyParity(const uint8_t *key) {
+  uint_t i;
+  uint8_t valid;
+  uint8_t parity;
 
-   //Loop through the 64-bit key
-   for(valid = 1, i = 0; i < 8; i++)
-   {
-      //Calculate parity
-      parity = key[i];
-      parity ^= parity >> 1;
-      parity ^= parity >> 2;
-      parity ^= parity >> 4;
-      parity &= 0x01;
+  // Loop through the 64-bit key
+  for (valid = 1, i = 0; i < 8; i++) {
+    // Calculate parity
+    parity = key[i];
+    parity ^= parity >> 1;
+    parity ^= parity >> 2;
+    parity ^= parity >> 4;
+    parity &= 0x01;
 
-      //Make sure there is an odd number of ones
-      valid &= parity;
-   }
+    // Make sure there is an odd number of ones
+    valid &= parity;
+  }
 
-   //Return TRUE if the parity is correct
-   return valid ? TRUE : FALSE;
+  // Return TRUE if the parity is correct
+  return valid ? TRUE : FALSE;
 }
 
 #endif

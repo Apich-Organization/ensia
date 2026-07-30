@@ -31,24 +31,23 @@
 #ifndef _SHA3_256_H
 #define _SHA3_256_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "xof/keccak.h"
 
-//SHA3-256 block size
+// SHA3-256 block size
 #define SHA3_256_BLOCK_SIZE 136
-//SHA3-256 digest size
+// SHA3-256 digest size
 #define SHA3_256_DIGEST_SIZE 32
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define SHA3_256_MIN_PAD_SIZE 1
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define SHA3_256_HASH_ALGO (&sha3_256HashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief SHA3-256 algorithm context
@@ -56,18 +55,17 @@ extern "C" {
 
 typedef KeccakContext Sha3_256Context;
 
-
-//SHA3-256 related constants
+// SHA3-256 related constants
 extern const uint8_t SHA3_256_OID[9];
 extern const HashAlgo sha3_256HashAlgo;
 
-//SHA3-256 related functions
+// SHA3-256 related functions
 error_t sha3_256Compute(const void *data, size_t length, uint8_t *digest);
 void sha3_256Init(Sha3_256Context *context);
 void sha3_256Update(Sha3_256Context *context, const void *data, size_t length);
 void sha3_256Final(Sha3_256Context *context, uint8_t *digest);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

@@ -31,23 +31,23 @@
 #ifndef _SCRYPT_H
 #define _SCRYPT_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//scrypt related functions
+// scrypt related functions
 error_t scrypt(const char_t *password, const uint8_t *salt, size_t saltLen,
-   uint_t n, uint_t r, uint_t p, uint8_t *dk, size_t dkLen);
+               uint_t n, uint_t r, uint_t p, uint8_t *dk, size_t dkLen);
 
 void scryptRoMix(uint_t r, uint8_t *b, uint_t n, uint8_t *v, uint8_t *y);
 void scryptBlockMix(uint_t r, uint8_t *b, uint8_t *y);
 void scryptXorBlock(uint8_t *x, const uint8_t *a, const uint8_t *b, size_t n);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

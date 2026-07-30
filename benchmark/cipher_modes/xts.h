@@ -31,42 +31,39 @@
 #ifndef _XTS_H
 #define _XTS_H
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher/cipher_algorithms.h"
+#include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief XTS context
  **/
 
-typedef struct
-{
-   const CipherAlgo *cipherAlgo;
-   CipherContext cipherContext1;
-   CipherContext cipherContext2;
+typedef struct {
+  const CipherAlgo *cipherAlgo;
+  CipherContext cipherContext1;
+  CipherContext cipherContext2;
 } XtsContext;
 
-
-//XTS related functions
+// XTS related functions
 error_t xtsInit(XtsContext *context, const CipherAlgo *cipherAlgo,
-   const void *key, size_t keyLen);
+                const void *key, size_t keyLen);
 
 error_t xtsEncrypt(XtsContext *context, const uint8_t *i, const uint8_t *p,
-   uint8_t *c, size_t length);
+                   uint8_t *c, size_t length);
 
 error_t xtsDecrypt(XtsContext *context, const uint8_t *i, const uint8_t *c,
-   uint8_t *p, size_t length);
+                   uint8_t *p, size_t length);
 
 void xtsMul(uint8_t *x, const uint8_t *a);
 void xtsXorBlock(uint8_t *x, const uint8_t *a, const uint8_t *b);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

@@ -31,64 +31,55 @@
 #ifndef _DSA_H
 #define _DSA_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "mpi/mpi.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief DSA domain parameters
  **/
 
-typedef struct
-{
-   Mpi p; ///<Prime modulus
-   Mpi q; ///<Group order
-   Mpi g; ///<Group generator
+typedef struct {
+  Mpi p; ///< Prime modulus
+  Mpi q; ///< Group order
+  Mpi g; ///< Group generator
 } DsaDomainParameters;
-
 
 /**
  * @brief DSA public key
  **/
 
-typedef struct
-{
-   DsaDomainParameters params; ///<DSA domain parameters
-   Mpi y;                      ///<Public key value
+typedef struct {
+  DsaDomainParameters params; ///< DSA domain parameters
+  Mpi y;                      ///< Public key value
 } DsaPublicKey;
-
 
 /**
  * @brief DSA private key
  **/
 
-typedef struct
-{
-   DsaDomainParameters params; ///<DSA domain parameters
-   Mpi x;                      ///<Secret exponent
-   Mpi y;                      ///<Public key value
-   int_t slot;                 ///<Private key slot
+typedef struct {
+  DsaDomainParameters params; ///< DSA domain parameters
+  Mpi x;                      ///< Secret exponent
+  Mpi y;                      ///< Public key value
+  int_t slot;                 ///< Private key slot
 } DsaPrivateKey;
-
 
 /**
  * @brief DSA signature
  **/
 
-typedef struct
-{
-   Mpi r;
-   Mpi s;
+typedef struct {
+  Mpi r;
+  Mpi s;
 } DsaSignature;
 
-
-//DSA related constants
+// DSA related constants
 extern const uint8_t DSA_OID[7];
 extern const uint8_t DSA_WITH_SHA1_OID[7];
 extern const uint8_t DSA_WITH_SHA224_OID[9];
@@ -100,7 +91,7 @@ extern const uint8_t DSA_WITH_SHA3_256_OID[9];
 extern const uint8_t DSA_WITH_SHA3_384_OID[9];
 extern const uint8_t DSA_WITH_SHA3_512_OID[9];
 
-//DSA related functions
+// DSA related functions
 void dsaInitDomainParameters(DsaDomainParameters *params);
 void dsaFreeDomainParameters(DsaDomainParameters *params);
 
@@ -114,19 +105,19 @@ void dsaInitSignature(DsaSignature *signature);
 void dsaFreeSignature(DsaSignature *signature);
 
 error_t dsaImportSignature(DsaSignature *signature, const uint8_t *input,
-   size_t length);
+                           size_t length);
 
 error_t dsaExportSignature(const DsaSignature *signature, uint8_t *output,
-   size_t *written);
+                           size_t *written);
 
 error_t dsaGenerateSignature(const PrngAlgo *prngAlgo, void *prngContext,
-   const DsaPrivateKey *key, const uint8_t *digest, size_t digestLen,
-   DsaSignature *signature);
+                             const DsaPrivateKey *key, const uint8_t *digest,
+                             size_t digestLen, DsaSignature *signature);
 
-error_t dsaVerifySignature(const DsaPublicKey *key,
-   const uint8_t *digest, size_t digestLen, const DsaSignature *signature);
+error_t dsaVerifySignature(const DsaPublicKey *key, const uint8_t *digest,
+                           size_t digestLen, const DsaSignature *signature);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

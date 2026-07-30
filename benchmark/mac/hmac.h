@@ -31,41 +31,38 @@
 #ifndef _HMAC_H
 #define _HMAC_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "hash/hash_algorithms.h"
 
-//Application specific context
+// Application specific context
 #ifndef HMAC_PRIVATE_CONTEXT
-   #define HMAC_PRIVATE_CONTEXT
+#define HMAC_PRIVATE_CONTEXT
 #endif
 
-//Inner padding (ipad)
+// Inner padding (ipad)
 #define HMAC_IPAD 0x36
-//Outer padding (opad)
+// Outer padding (opad)
 #define HMAC_OPAD 0x5C
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief HMAC algorithm context
  **/
 
-typedef struct
-{
-   const HashAlgo *hash;
-   HashContext hashContext;
-   uint8_t key[MAX_HASH_BLOCK_SIZE];
-   uint8_t digest[MAX_HASH_DIGEST_SIZE];
-   HMAC_PRIVATE_CONTEXT
+typedef struct {
+  const HashAlgo *hash;
+  HashContext hashContext;
+  uint8_t key[MAX_HASH_BLOCK_SIZE];
+  uint8_t digest[MAX_HASH_DIGEST_SIZE];
+  HMAC_PRIVATE_CONTEXT
 } HmacContext;
 
-
-//HMAC related constants
+// HMAC related constants
 extern const uint8_t HMAC_WITH_MD5_OID[8];
 extern const uint8_t HMAC_WITH_TIGER_OID[8];
 extern const uint8_t HMAC_WITH_RIPEMD160_OID[8];
@@ -82,19 +79,19 @@ extern const uint8_t HMAC_WITH_SHA3_384_OID[9];
 extern const uint8_t HMAC_WITH_SHA3_512_OID[9];
 extern const uint8_t HMAC_WITH_SM3_OID[10];
 
-//HMAC related functions
+// HMAC related functions
 error_t hmacCompute(const HashAlgo *hash, const void *key, size_t keyLen,
-   const void *data, size_t dataLen, uint8_t *digest);
+                    const void *data, size_t dataLen, uint8_t *digest);
 
-error_t hmacInit(HmacContext *context, const HashAlgo *hash,
-   const void *key, size_t keyLen);
+error_t hmacInit(HmacContext *context, const HashAlgo *hash, const void *key,
+                 size_t keyLen);
 
 void hmacUpdate(HmacContext *context, const void *data, size_t length);
 void hmacFinal(HmacContext *context, uint8_t *digest);
 void hmacFinalRaw(HmacContext *context, uint8_t *digest);
 void hmacDeinit(HmacContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

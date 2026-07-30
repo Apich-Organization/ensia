@@ -28,17 +28,16 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "kdf/bcrypt.h"
+#include "core/crypto.h"
 #include "encoding/radix64.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (BCRYPT_SUPPORT == ENABLED)
-
 
 /**
  * @brief Password hashing function
@@ -52,32 +51,29 @@
  **/
 
 error_t bcryptHashPassword(const PrngAlgo *prngAlgo, void *prngContext,
-   uint_t cost, const char_t *password, char_t *hash, size_t *hashLen)
-{
-   error_t error;
-   uint8_t salt[16];
+                           uint_t cost, const char_t *password, char_t *hash,
+                           size_t *hashLen) {
+  error_t error;
+  uint8_t salt[16];
 
-   //Check parameters
-   if(prngAlgo == NULL || prngContext == NULL || password == NULL ||
-      hash == NULL)
-   {
-      return ERROR_INVALID_PARAMETER;
-   }
+  // Check parameters
+  if (prngAlgo == NULL || prngContext == NULL || password == NULL ||
+      hash == NULL) {
+    return ERROR_INVALID_PARAMETER;
+  }
 
-   //Generate a 16-byte random salt
-   error = prngAlgo->generate(prngContext, salt, sizeof(salt));
+  // Generate a 16-byte random salt
+  error = prngAlgo->generate(prngContext, salt, sizeof(salt));
 
-   //Check status code
-   if(!error)
-   {
-      //Hash the password using bcrypt algorithm
-      error = bcrypt(cost, salt, password, hash, hashLen);
-   }
+  // Check status code
+  if (!error) {
+    // Hash the password using bcrypt algorithm
+    error = bcrypt(cost, salt, password, hash, hashLen);
+  }
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief Password verification function
@@ -86,63 +82,60 @@ error_t bcryptHashPassword(const PrngAlgo *prngAlgo, void *prngContext,
  * @return Error code
  **/
 
-error_t bcryptVerifyPassword(const char_t *password, const char_t *hash)
-{
-   error_t error;
-   size_t i;
-   size_t n;
-   uint_t cost;
-   uint8_t mask;
-   char_t *p;
-   uint8_t salt[16];
-   char_t temp[BCRYPT_HASH_STRING_LEN + 1];
+error_t bcryptVerifyPassword(const char_t *password, const char_t *hash) {
+  error_t error;
+  size_t i;
+  size_t n;
+  uint_t cost;
+  uint8_t mask;
+  char_t *p;
+  uint8_t salt[16];
+  char_t temp[BCRYPT_HASH_STRING_LEN + 1];
 
-   //Check parameters
-   if(password == NULL || hash == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (password == NULL || hash == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Check the length of the hash string
-   if(osStrlen(hash) != BCRYPT_HASH_STRING_LEN)
-      return ERROR_INVALID_PASSWORD;
+  // Check the length of the hash string
+  if (osStrlen(hash) != BCRYPT_HASH_STRING_LEN)
+    return ERROR_INVALID_PASSWORD;
 
-   //bcrypt uses the $2a$ prefix in the hash string
-   if(osMemcmp(hash, "$2a$", 4))
-      return ERROR_INVALID_PASSWORD;
+  // bcrypt uses the $2a$ prefix in the hash string
+  if (osMemcmp(hash, "$2a$", 4))
+    return ERROR_INVALID_PASSWORD;
 
-   //Parse cost parameter
-   cost = osStrtoul(hash + 4, &p, 10);
+  // Parse cost parameter
+  cost = osStrtoul(hash + 4, &p, 10);
 
-   //Malformed hash string?
-   if(p != (hash + 6) || *p != '$')
-      return ERROR_INVALID_PASSWORD;
+  // Malformed hash string?
+  if (p != (hash + 6) || *p != '$')
+    return ERROR_INVALID_PASSWORD;
 
-   //Check the value of the cost parameter
-   if(cost < BCRYPT_MIN_COST || cost > BCRYPT_MAX_COST)
-      return ERROR_INVALID_PASSWORD;
+  // Check the value of the cost parameter
+  if (cost < BCRYPT_MIN_COST || cost > BCRYPT_MAX_COST)
+    return ERROR_INVALID_PASSWORD;
 
-   //Parse salt parameter
-   error = radix64Decode(hash + 7, 22, salt, &n);
-   //Any error to report?
-   if(error)
-      return error;
+  // Parse salt parameter
+  error = radix64Decode(hash + 7, 22, salt, &n);
+  // Any error to report?
+  if (error)
+    return error;
 
-   //Hash the password using bcrypt algorithm
-   error = bcrypt(cost, salt, password, temp, &n);
-   //Any error to report?
-   if(error)
-      return error;
+  // Hash the password using bcrypt algorithm
+  error = bcrypt(cost, salt, password, temp, &n);
+  // Any error to report?
+  if (error)
+    return error;
 
-   //The calculated string is bitwise compared to the hash string. The
-   //password is correct if and only if the strings match
-   for(mask = 0, i = 0; i < BCRYPT_HASH_STRING_LEN; i++)
-   {
-      mask |= temp[i] ^ hash[i];
-   }
+  // The calculated string is bitwise compared to the hash string. The
+  // password is correct if and only if the strings match
+  for (mask = 0, i = 0; i < BCRYPT_HASH_STRING_LEN; i++) {
+    mask |= temp[i] ^ hash[i];
+  }
 
-   //Return status code
-   return (mask == 0) ? NO_ERROR : ERROR_INVALID_PASSWORD;
+  // Return status code
+  return (mask == 0) ? NO_ERROR : ERROR_INVALID_PASSWORD;
 }
-
 
 /**
  * @brief bcrypt algorithm
@@ -155,82 +148,76 @@ error_t bcryptVerifyPassword(const char_t *password, const char_t *hash)
  **/
 
 error_t bcrypt(uint_t cost, const uint8_t *salt, const char_t *password,
-   char_t *hash, size_t *hashLen)
-{
-   error_t error;
-   uint_t i;
-   size_t n;
-   size_t length;
-   uint8_t buffer[24];
+               char_t *hash, size_t *hashLen) {
+  error_t error;
+  uint_t i;
+  size_t n;
+  size_t length;
+  uint8_t buffer[24];
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   BlowfishContext *context;
+  BlowfishContext *context;
 #else
-   BlowfishContext context[1];
+  BlowfishContext context[1];
 #endif
 
-   //Check parameters
-   if(salt == NULL || password == NULL || hash == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (salt == NULL || password == NULL || hash == NULL)
+    return ERROR_INVALID_PARAMETER;
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate a memory buffer to hold the Blowfish context
-   context = cryptoAllocMem(sizeof(BlowfishContext));
-   //Failed to allocate memory?
-   if(context == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate a memory buffer to hold the Blowfish context
+  context = cryptoAllocMem(sizeof(BlowfishContext));
+  // Failed to allocate memory?
+  if (context == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Calculate the length of the password (including the NULL-terminator byte)
-   length = osStrlen(password) + 1;
+  // Calculate the length of the password (including the NULL-terminator byte)
+  length = osStrlen(password) + 1;
 
-   //The key setup begins with a modified form of the standard Blowfish key
-   //setup, in which both the salt and password are used to set all subkeys
-   error = eksBlowfishSetup(context, cost, salt, 16, password, length);
+  // The key setup begins with a modified form of the standard Blowfish key
+  // setup, in which both the salt and password are used to set all subkeys
+  error = eksBlowfishSetup(context, cost, salt, 16, password, length);
 
-   //Check status code
-   if(!error)
-   {
-      //Initialize plaintext
-      osMemcpy(buffer, "OrpheanBeholderScryDoubt", 24);
+  // Check status code
+  if (!error) {
+    // Initialize plaintext
+    osMemcpy(buffer, "OrpheanBeholderScryDoubt", 24);
 
-      //Repeatedly encrypt the text "OrpheanBeholderScryDoubt" 64 times
-      for(i = 0; i < 64; i++)
-      {
-         //Perform encryption using Blowfish in ECB mode
-         blowfishEncryptBlock(context, buffer, buffer);
-         blowfishEncryptBlock(context, buffer + 8, buffer + 8);
-         blowfishEncryptBlock(context, buffer + 16, buffer + 16);
-      }
-   }
+    // Repeatedly encrypt the text "OrpheanBeholderScryDoubt" 64 times
+    for (i = 0; i < 64; i++) {
+      // Perform encryption using Blowfish in ECB mode
+      blowfishEncryptBlock(context, buffer, buffer);
+      blowfishEncryptBlock(context, buffer + 8, buffer + 8);
+      blowfishEncryptBlock(context, buffer + 16, buffer + 16);
+    }
+  }
 
-   //Check status code
-   if(!error)
-   {
-      //bcrypt uses the $2a$ prefix in the hash string
-      length = osSprintf(hash, "$2a$%02u$", cost);
+  // Check status code
+  if (!error) {
+    // bcrypt uses the $2a$ prefix in the hash string
+    length = osSprintf(hash, "$2a$%02u$", cost);
 
-      //Concatenate the salt and the ciphertext
-      radix64Encode(salt, 16, hash + length, &n);
-      length += n;
-      radix64Encode(buffer, 23, hash + length, &n);
-      length += n;
+    // Concatenate the salt and the ciphertext
+    radix64Encode(salt, 16, hash + length, &n);
+    length += n;
+    radix64Encode(buffer, 23, hash + length, &n);
+    length += n;
 
-      //Return the length of the resulting hash string
-      if(hashLen != NULL)
-      {
-         *hashLen = length;
-      }
-   }
+    // Return the length of the resulting hash string
+    if (hashLen != NULL) {
+      *hashLen = length;
+    }
+  }
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Release Blowfish context
-   cryptoFreeMem(context);
+  // Release Blowfish context
+  cryptoFreeMem(context);
 #endif
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief Expensive key setup
@@ -244,55 +231,51 @@ error_t bcrypt(uint_t cost, const uint8_t *salt, const char_t *password,
  **/
 
 error_t eksBlowfishSetup(BlowfishContext *context, uint_t cost,
-   const uint8_t *salt, size_t saltLen, const char_t *password,
-   size_t passwordLen)
-{
-   error_t error;
-   uint32_t i;
-   uint32_t n;
+                         const uint8_t *salt, size_t saltLen,
+                         const char_t *password, size_t passwordLen) {
+  error_t error;
+  uint32_t i;
+  uint32_t n;
 
-   //Check the value of the cost parameter
-   if(cost < BCRYPT_MIN_COST || cost > BCRYPT_MAX_COST)
-      return ERROR_INVALID_PARAMETER;
+  // Check the value of the cost parameter
+  if (cost < BCRYPT_MIN_COST || cost > BCRYPT_MAX_COST)
+    return ERROR_INVALID_PARAMETER;
 
-   //The cost parameter specifies a key expansion iteration count as a power
-   //of two
-   n = 1U << cost;
+  // The cost parameter specifies a key expansion iteration count as a power
+  // of two
+  n = 1U << cost;
 
-   //Initialize Blowfish state
-   error = blowfishInitState(context);
+  // Initialize Blowfish state
+  error = blowfishInitState(context);
 
-   //Check status code
-   if(!error)
-   {
-      //Perform the first key expansion
-      error = blowfishExpandKey(context, salt, saltLen, (uint8_t *) password,
-         passwordLen);
-   }
+  // Check status code
+  if (!error) {
+    // Perform the first key expansion
+    error = blowfishExpandKey(context, salt, saltLen, (uint8_t *)password,
+                              passwordLen);
+  }
 
-   //Check status code
-   if(!error)
-   {
-      //Iterate as many times as desired
-      for(i = 0; i < n; i++)
-      {
-         //Perform key expansion with password
-         error = blowfishExpandKey(context, NULL, 0, (uint8_t *) password,
-            passwordLen);
-         //Any error to report?
-         if(error)
-            break;
+  // Check status code
+  if (!error) {
+    // Iterate as many times as desired
+    for (i = 0; i < n; i++) {
+      // Perform key expansion with password
+      error =
+          blowfishExpandKey(context, NULL, 0, (uint8_t *)password, passwordLen);
+      // Any error to report?
+      if (error)
+        break;
 
-         //Perform key expansion with salt
-         error = blowfishExpandKey(context, NULL, 0, salt, saltLen);
-         //Any error to report?
-         if(error)
-            break;
-      }
-   }
+      // Perform key expansion with salt
+      error = blowfishExpandKey(context, NULL, 0, salt, saltLen);
+      // Any error to report?
+      if (error)
+        break;
+    }
+  }
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
 
 #endif

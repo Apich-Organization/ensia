@@ -31,30 +31,30 @@
 #ifndef _CURVE448_H
 #define _CURVE448_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Speed optimization level
+// Speed optimization level
 #ifndef CURVE448_SPEED_OPTIMIZATION_LEVEL
-   #define CURVE448_SPEED_OPTIMIZATION_LEVEL 2
+#define CURVE448_SPEED_OPTIMIZATION_LEVEL 2
 #elif (CURVE448_SPEED_OPTIMIZATION_LEVEL < 0)
-   #error CURVE448_SPEED_OPTIMIZATION_LEVEL parameter is not valid
+#error CURVE448_SPEED_OPTIMIZATION_LEVEL parameter is not valid
 #endif
 
-//Length of the elliptic curve
+// Length of the elliptic curve
 #define CURVE448_BIT_LEN 448
 #define CURVE448_BYTE_LEN 56
 #define CURVE448_WORD_LEN 14
 
-//A24 constant
+// A24 constant
 #define CURVE448_A24 39082
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Curve448 related functions
+// Curve448 related functions
 void curve448SetInt(int32_t *a, int32_t b);
 
 void curve448Add(int32_t *r, const int32_t *a, const int32_t *b);
@@ -77,15 +77,14 @@ void curve448Canonicalize(int32_t *r, const int32_t *a);
 void curve448Copy(int32_t *a, const int32_t *b);
 void curve448Swap(int32_t *a, int32_t *b, uint32_t c);
 
-void curve448Select(int32_t *r, const int32_t *a, const int32_t *b,
-   uint32_t c);
+void curve448Select(int32_t *r, const int32_t *a, const int32_t *b, uint32_t c);
 
 uint32_t curve448Comp(const int32_t *a, const int32_t *b);
 
 void curve448Import(int32_t *a, const uint8_t *data);
 void curve448Export(int32_t *a, uint8_t *data);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

@@ -31,37 +31,37 @@
 #ifndef _CIPHER_MODES_H
 #define _CIPHER_MODES_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//ECB mode support?
+// ECB mode support?
 #if (ECB_SUPPORT == ENABLED)
-   #include "cipher_modes/ecb.h"
+#include "cipher_modes/ecb.h"
 #endif
 
-//CBC mode support?
+// CBC mode support?
 #if (CBC_SUPPORT == ENABLED)
-   #include "cipher_modes/cbc.h"
+#include "cipher_modes/cbc.h"
 #endif
 
-//CFB mode support?
+// CFB mode support?
 #if (CFB_SUPPORT == ENABLED)
-   #include "cipher_modes/cfb.h"
+#include "cipher_modes/cfb.h"
 #endif
 
-//OFB mode support?
+// OFB mode support?
 #if (OFB_SUPPORT == ENABLED)
-   #include "cipher_modes/ofb.h"
+#include "cipher_modes/ofb.h"
 #endif
 
-//CTR mode support?
+// CTR mode support?
 #if (CTR_SUPPORT == ENABLED)
-   #include "cipher_modes/ctr.h"
+#include "cipher_modes/ctr.h"
 #endif
 
-//XTS mode support?
+// XTS mode support?
 #if (XTS_SUPPORT == ENABLED)
-   #include "cipher_modes/xts.h"
+#include "cipher_modes/xts.h"
 #endif
 
 #endif

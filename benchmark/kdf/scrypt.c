@@ -35,19 +35,18 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "kdf/scrypt.h"
-#include "kdf/pbkdf.h"
-#include "hash/sha256.h"
 #include "cipher/salsa20.h"
+#include "core/crypto.h"
+#include "hash/sha256.h"
+#include "kdf/pbkdf.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (SCRYPT_SUPPORT == ENABLED)
-
 
 /**
  * @brief scrypt algorithm
@@ -63,124 +62,114 @@
  **/
 
 error_t scrypt(const char_t *password, const uint8_t *salt, size_t saltLen,
-   uint_t n, uint_t r, uint_t p, uint8_t *dk, size_t dkLen)
-{
-   error_t error;
-   uint_t i;
-   size_t blockSize;
-   size_t passwordLen;
-   uint8_t *b;
-   uint8_t *v;
-   uint8_t *y;
+               uint_t n, uint_t r, uint_t p, uint8_t *dk, size_t dkLen) {
+  error_t error;
+  uint_t i;
+  size_t blockSize;
+  size_t passwordLen;
+  uint8_t *b;
+  uint8_t *v;
+  uint8_t *y;
 
-   //Check parameters
-   if(password == NULL || salt == NULL || dk == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (password == NULL || salt == NULL || dk == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Initialize variables
-   b = NULL;
-   v = NULL;
-   y = NULL;
+  // Initialize variables
+  b = NULL;
+  v = NULL;
+  y = NULL;
 
-   //The CPU/Memory cost parameter must be larger than 1, a power of 2, and
-   //less than 2^(128 * r / 8)
-   if(n <= 1 || (n & (n - 1)) != 0)
-      return ERROR_INVALID_PARAMETER;
+  // The CPU/Memory cost parameter must be larger than 1, a power of 2, and
+  // less than 2^(128 * r / 8)
+  if (n <= 1 || (n & (n - 1)) != 0)
+    return ERROR_INVALID_PARAMETER;
 
-   //The block size parameter must be a positive integer
-   if(r == 0)
-      return ERROR_INVALID_PARAMETER;
+  // The block size parameter must be a positive integer
+  if (r == 0)
+    return ERROR_INVALID_PARAMETER;
 
-   //The parallelization parameter must be a positive integer less than or equal
-   //to ((2^32-1) * hLen) / MFLen where hLen is 32 and MFlen is 128 * r
-   if(p == 0)
-      return ERROR_INVALID_PARAMETER;
+  // The parallelization parameter must be a positive integer less than or equal
+  // to ((2^32-1) * hLen) / MFLen where hLen is 32 and MFlen is 128 * r
+  if (p == 0)
+    return ERROR_INVALID_PARAMETER;
 
-   //Retrieve the length of the passphrase
-   passwordLen = osStrlen(password);
+  // Retrieve the length of the passphrase
+  passwordLen = osStrlen(password);
 
-   //Each block consists of 128 * r octets
-   blockSize = 128 * r;
+  // Each block consists of 128 * r octets
+  blockSize = 128 * r;
 
-   //Start of exception handling block
-   do
-   {
-      //Initialize an array B consisting of p blocks
-      b = cryptoAllocMem(p * blockSize);
-      //Failed to allocate memory?
-      if(b == NULL)
-      {
-         //Report an error
-         error = ERROR_OUT_OF_MEMORY;
-         break;
-      }
+  // Start of exception handling block
+  do {
+    // Initialize an array B consisting of p blocks
+    b = cryptoAllocMem(p * blockSize);
+    // Failed to allocate memory?
+    if (b == NULL) {
+      // Report an error
+      error = ERROR_OUT_OF_MEMORY;
+      break;
+    }
 
-      //Initialize a working array V consisting of N blocks
-      v = cryptoAllocMem(n * blockSize);
-      //Failed to allocate memory?
-      if(v == NULL)
-      {
-         //Report an error
-         error = ERROR_OUT_OF_MEMORY;
-         break;
-      }
+    // Initialize a working array V consisting of N blocks
+    v = cryptoAllocMem(n * blockSize);
+    // Failed to allocate memory?
+    if (v == NULL) {
+      // Report an error
+      error = ERROR_OUT_OF_MEMORY;
+      break;
+    }
 
-      //Initialize a working array Y
-      y = cryptoAllocMem(blockSize);
-      //Failed to allocate memory?
-      if(y == NULL)
-      {
-         //Report an error
-         error = ERROR_OUT_OF_MEMORY;
-         break;
-      }
+    // Initialize a working array Y
+    y = cryptoAllocMem(blockSize);
+    // Failed to allocate memory?
+    if (y == NULL) {
+      // Report an error
+      error = ERROR_OUT_OF_MEMORY;
+      break;
+    }
 
-      //Compute B = PBKDF2-HMAC-SHA256(P, S, 1, p * 128 * r)
-      error = pbkdf2(SHA256_HASH_ALGO, (const uint8_t *) password,
-         passwordLen, salt, saltLen, 1, b, p * blockSize);
-      //Any error to report?
-      if(error)
-         break;
+    // Compute B = PBKDF2-HMAC-SHA256(P, S, 1, p * 128 * r)
+    error = pbkdf2(SHA256_HASH_ALGO, (const uint8_t *)password, passwordLen,
+                   salt, saltLen, 1, b, p * blockSize);
+    // Any error to report?
+    if (error)
+      break;
 
-      //Iterate as many times as desired
-      for(i = 0; i < p; i++)
-      {
-         //Compute B[i] = scryptROMix(r, B[i], N)
-         scryptRoMix(r, b + i * blockSize, n, v, y);
-      }
+    // Iterate as many times as desired
+    for (i = 0; i < p; i++) {
+      // Compute B[i] = scryptROMix(r, B[i], N)
+      scryptRoMix(r, b + i * blockSize, n, v, y);
+    }
 
-      //Compute DK = PBKDF2-HMAC-SHA256(P, B, 1, dkLen)
-      error = pbkdf2(SHA256_HASH_ALGO, (const uint8_t *) password,
-         passwordLen, b, p * blockSize, 1, dk, dkLen);
-      //Any error to report?
-      if(error)
-         break;
+    // Compute DK = PBKDF2-HMAC-SHA256(P, B, 1, dkLen)
+    error = pbkdf2(SHA256_HASH_ALGO, (const uint8_t *)password, passwordLen, b,
+                   p * blockSize, 1, dk, dkLen);
+    // Any error to report?
+    if (error)
+      break;
 
-      //End of exception handling block
-   } while(0);
+    // End of exception handling block
+  } while (0);
 
-   //Release array B
-   if(b != NULL)
-   {
-      cryptoFreeMem(b);
-   }
+  // Release array B
+  if (b != NULL) {
+    cryptoFreeMem(b);
+  }
 
-   //Release working array V
-   if(v != NULL)
-   {
-      cryptoFreeMem(v);
-   }
+  // Release working array V
+  if (v != NULL) {
+    cryptoFreeMem(v);
+  }
 
-   //Release working array Y
-   if(y != NULL)
-   {
-      cryptoFreeMem(y);
-   }
+  // Release working array Y
+  if (y != NULL) {
+    cryptoFreeMem(y);
+  }
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief scryptROMix algorithm
@@ -191,43 +180,39 @@ error_t scrypt(const char_t *password, const uint8_t *salt, size_t saltLen,
  * @param[in,out] y Working array
  **/
 
-void scryptRoMix(uint_t r, uint8_t *b, uint_t n, uint8_t *v, uint8_t *y)
-{
-   uint_t i;
-   uint32_t j;
-   uint8_t *x;
-   size_t blockSize;
+void scryptRoMix(uint_t r, uint8_t *b, uint_t n, uint8_t *v, uint8_t *y) {
+  uint_t i;
+  uint32_t j;
+  uint8_t *x;
+  size_t blockSize;
 
-   //Each block consists of 128 * r octets
-   blockSize = 128 * r;
+  // Each block consists of 128 * r octets
+  blockSize = 128 * r;
 
-   //Let X = B
-   x = b;
+  // Let X = B
+  x = b;
 
-   //Compute V array
-   for(i = 0; i < n; i++)
-   {
-      //Let V[i] = X
-      osMemcpy(v + i * blockSize, x, blockSize);
+  // Compute V array
+  for (i = 0; i < n; i++) {
+    // Let V[i] = X
+    osMemcpy(v + i * blockSize, x, blockSize);
 
-      //Compute X = scryptBlockMix(r, X)
-      scryptBlockMix(r, x, y);
-   }
+    // Compute X = scryptBlockMix(r, X)
+    scryptBlockMix(r, x, y);
+  }
 
-   //Compute B' array
-   for(i = 0; i < n; i++)
-   {
-      //Compute j = Integerify(X) mod N
-      j = LOAD32LE(x + blockSize - 64) & (n - 1);
+  // Compute B' array
+  for (i = 0; i < n; i++) {
+    // Compute j = Integerify(X) mod N
+    j = LOAD32LE(x + blockSize - 64) & (n - 1);
 
-      //Compute T = X xor V[j]
-      scryptXorBlock(x, x, v + j * blockSize, blockSize);
+    // Compute T = X xor V[j]
+    scryptXorBlock(x, x, v + j * blockSize, blockSize);
 
-      //Compute X = scryptBlockMix(r, T)
-      scryptBlockMix(r, x, y);
-   }
+    // Compute X = scryptBlockMix(r, T)
+    scryptBlockMix(r, x, y);
+  }
 }
-
 
 /**
  * @brief scryptBlockMix algorithm
@@ -236,35 +221,31 @@ void scryptRoMix(uint_t r, uint8_t *b, uint_t n, uint8_t *v, uint8_t *y)
  * @param[in,out] y Working array
  **/
 
-void scryptBlockMix(uint_t r, uint8_t *b, uint8_t *y)
-{
-   uint_t i;
-   uint8_t x[64];
+void scryptBlockMix(uint_t r, uint8_t *b, uint8_t *y) {
+  uint_t i;
+  uint8_t x[64];
 
-   //Let X = B[2 * r - 1]
-   osMemcpy(x, b + r * 128 - 64, 64);
+  // Let X = B[2 * r - 1]
+  osMemcpy(x, b + r * 128 - 64, 64);
 
-   //Iterate as many times as desired
-   for(i = 0; i < (2 * r); i++)
-   {
-      //Compute T = X xor B[i]
-      scryptXorBlock(x, x, b + i * 64, 64);
+  // Iterate as many times as desired
+  for (i = 0; i < (2 * r); i++) {
+    // Compute T = X xor B[i]
+    scryptXorBlock(x, x, b + i * 64, 64);
 
-      //Salsa20/8 Core is used as the hash function
-      salsa20ProcessBlock(x, x, 8);
+    // Salsa20/8 Core is used as the hash function
+    salsa20ProcessBlock(x, x, 8);
 
-      //Let Y[i] = X
-      osMemcpy(y + i * 64, x, 64);
-   }
+    // Let Y[i] = X
+    osMemcpy(y + i * 64, x, 64);
+  }
 
-   //Let  B' = (Y[0], Y[2], ..., Y[2 * r - 2], Y[1], Y[3], ..., Y[2 * r - 1])
-   for(i = 0; i < r; i++)
-   {
-      osMemcpy(b + i * 64, y + i * 128, 64);
-      osMemcpy(b + (r + i) * 64, y + i * 128 + 64, 64);
-   }
+  // Let  B' = (Y[0], Y[2], ..., Y[2 * r - 2], Y[1], Y[3], ..., Y[2 * r - 1])
+  for (i = 0; i < r; i++) {
+    osMemcpy(b + i * 64, y + i * 128, 64);
+    osMemcpy(b + (r + i) * 64, y + i * 128 + 64, 64);
+  }
 }
-
 
 /**
  * @brief XOR operation
@@ -274,16 +255,13 @@ void scryptBlockMix(uint_t r, uint8_t *b, uint8_t *y)
  * @param[in] n Size of the block
  **/
 
-void scryptXorBlock(uint8_t *x, const uint8_t *a, const uint8_t *b, size_t n)
-{
-   size_t i;
+void scryptXorBlock(uint8_t *x, const uint8_t *a, const uint8_t *b, size_t n) {
+  size_t i;
 
-   //Perform XOR operation
-   for(i = 0; i < n; i++)
-   {
-      x[i] = a[i] ^ b[i];
-   }
+  // Perform XOR operation
+  for (i = 0; i < n; i++) {
+    x[i] = a[i] ^ b[i];
+  }
 }
-
 
 #endif

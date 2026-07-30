@@ -31,43 +31,40 @@
 #ifndef _KMAC_H
 #define _KMAC_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "xof/cshake.h"
 
-//Application specific context
+// Application specific context
 #ifndef KMAC_PRIVATE_CONTEXT
-   #define KMAC_PRIVATE_CONTEXT
+#define KMAC_PRIVATE_CONTEXT
 #endif
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief KMAC algorithm context
  **/
 
-typedef struct
-{
-   CshakeContext cshakeContext;
-   KMAC_PRIVATE_CONTEXT
+typedef struct {
+  CshakeContext cshakeContext;
+  KMAC_PRIVATE_CONTEXT
 } KmacContext;
 
-
-//KMAC related constants
+// KMAC related constants
 extern const uint8_t KMAC128_OID[9];
 extern const uint8_t KMAC256_OID[9];
 
-//KMAC related functions
+// KMAC related functions
 error_t kmacCompute(uint_t strength, const void *key, size_t keyLen,
-   const void *data, size_t dataLen, const char_t *custom, size_t customLen,
-   uint8_t *mac, size_t macLen);
+                    const void *data, size_t dataLen, const char_t *custom,
+                    size_t customLen, uint8_t *mac, size_t macLen);
 
 error_t kmacInit(KmacContext *context, uint_t strength, const void *key,
-   size_t keyLen, const char_t *custom, size_t customLen);
+                 size_t keyLen, const char_t *custom, size_t customLen);
 
 void kmacUpdate(KmacContext *context, const void *data, size_t dataLen);
 error_t kmacFinal(KmacContext *context, uint8_t *mac, size_t macLen);
@@ -75,7 +72,7 @@ void kmacDeinit(KmacContext *context);
 
 void kmacRightEncode(size_t value, uint8_t *buffer, size_t *length);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

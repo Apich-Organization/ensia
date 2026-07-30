@@ -28,240 +28,229 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "xof/keccak.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (KECCAK_SUPPORT == ENABLED)
 
-//Keccak round constants
-static const keccak_lane_t rc[KECCAK_NR] =
-{
-   (keccak_lane_t) 0x0000000000000001,
-   (keccak_lane_t) 0x0000000000008082,
-   (keccak_lane_t) 0x800000000000808A,
-   (keccak_lane_t) 0x8000000080008000,
-   (keccak_lane_t) 0x000000000000808B,
-   (keccak_lane_t) 0x0000000080000001,
-   (keccak_lane_t) 0x8000000080008081,
-   (keccak_lane_t) 0x8000000000008009,
-   (keccak_lane_t) 0x000000000000008A,
-   (keccak_lane_t) 0x0000000000000088,
-   (keccak_lane_t) 0x0000000080008009,
-   (keccak_lane_t) 0x000000008000000A,
-   (keccak_lane_t) 0x000000008000808B,
-   (keccak_lane_t) 0x800000000000008B,
-   (keccak_lane_t) 0x8000000000008089,
-   (keccak_lane_t) 0x8000000000008003,
-   (keccak_lane_t) 0x8000000000008002,
-   (keccak_lane_t) 0x8000000000000080,
+// Keccak round constants
+static const keccak_lane_t rc[KECCAK_NR] = {(keccak_lane_t)0x0000000000000001,
+                                            (keccak_lane_t)0x0000000000008082,
+                                            (keccak_lane_t)0x800000000000808A,
+                                            (keccak_lane_t)0x8000000080008000,
+                                            (keccak_lane_t)0x000000000000808B,
+                                            (keccak_lane_t)0x0000000080000001,
+                                            (keccak_lane_t)0x8000000080008081,
+                                            (keccak_lane_t)0x8000000000008009,
+                                            (keccak_lane_t)0x000000000000008A,
+                                            (keccak_lane_t)0x0000000000000088,
+                                            (keccak_lane_t)0x0000000080008009,
+                                            (keccak_lane_t)0x000000008000000A,
+                                            (keccak_lane_t)0x000000008000808B,
+                                            (keccak_lane_t)0x800000000000008B,
+                                            (keccak_lane_t)0x8000000000008089,
+                                            (keccak_lane_t)0x8000000000008003,
+                                            (keccak_lane_t)0x8000000000008002,
+                                            (keccak_lane_t)0x8000000000000080,
 #if (KECCAK_L >= 4)
-   (keccak_lane_t) 0x000000000000800A,
-   (keccak_lane_t) 0x800000008000000A,
+                                            (keccak_lane_t)0x000000000000800A,
+                                            (keccak_lane_t)0x800000008000000A,
 #endif
 #if (KECCAK_L >= 5)
-   (keccak_lane_t) 0x8000000080008081,
-   (keccak_lane_t) 0x8000000000008080,
+                                            (keccak_lane_t)0x8000000080008081,
+                                            (keccak_lane_t)0x8000000000008080,
 #endif
 #if (KECCAK_L >= 6)
-   (keccak_lane_t) 0x0000000080000001,
-   (keccak_lane_t) 0x8000000080008008
+                                            (keccak_lane_t)0x0000000080000001,
+                                            (keccak_lane_t)0x8000000080008008
 #endif
 };
-
 
 /**
  * @brief Apply theta transformation
  * @param[in,out] a State array
  **/
 
-static void theta(keccak_lane_t a[5][5])
-{
-   keccak_lane_t c[5];
-   keccak_lane_t d[5];
+static void theta(keccak_lane_t a[5][5]) {
+  keccak_lane_t c[5];
+  keccak_lane_t d[5];
 
-   //The effect of the theta transformation is to XOR each bit in the state
-   //with the parities of two columns in the array
-   c[0] = a[0][0] ^ a[1][0] ^ a[2][0] ^ a[3][0] ^ a[4][0];
-   c[1] = a[0][1] ^ a[1][1] ^ a[2][1] ^ a[3][1] ^ a[4][1];
-   c[2] = a[0][2] ^ a[1][2] ^ a[2][2] ^ a[3][2] ^ a[4][2];
-   c[3] = a[0][3] ^ a[1][3] ^ a[2][3] ^ a[3][3] ^ a[4][3];
-   c[4] = a[0][4] ^ a[1][4] ^ a[2][4] ^ a[3][4] ^ a[4][4];
+  // The effect of the theta transformation is to XOR each bit in the state
+  // with the parities of two columns in the array
+  c[0] = a[0][0] ^ a[1][0] ^ a[2][0] ^ a[3][0] ^ a[4][0];
+  c[1] = a[0][1] ^ a[1][1] ^ a[2][1] ^ a[3][1] ^ a[4][1];
+  c[2] = a[0][2] ^ a[1][2] ^ a[2][2] ^ a[3][2] ^ a[4][2];
+  c[3] = a[0][3] ^ a[1][3] ^ a[2][3] ^ a[3][3] ^ a[4][3];
+  c[4] = a[0][4] ^ a[1][4] ^ a[2][4] ^ a[3][4] ^ a[4][4];
 
-   d[0] = c[4] ^ KECCAK_ROL(c[1], 1);
-   d[1] = c[0] ^ KECCAK_ROL(c[2], 1);
-   d[2] = c[1] ^ KECCAK_ROL(c[3], 1);
-   d[3] = c[2] ^ KECCAK_ROL(c[4], 1);
-   d[4] = c[3] ^ KECCAK_ROL(c[0], 1);
+  d[0] = c[4] ^ KECCAK_ROL(c[1], 1);
+  d[1] = c[0] ^ KECCAK_ROL(c[2], 1);
+  d[2] = c[1] ^ KECCAK_ROL(c[3], 1);
+  d[3] = c[2] ^ KECCAK_ROL(c[4], 1);
+  d[4] = c[3] ^ KECCAK_ROL(c[0], 1);
 
-   a[0][0] ^= d[0];
-   a[1][0] ^= d[0];
-   a[2][0] ^= d[0];
-   a[3][0] ^= d[0];
-   a[4][0] ^= d[0];
+  a[0][0] ^= d[0];
+  a[1][0] ^= d[0];
+  a[2][0] ^= d[0];
+  a[3][0] ^= d[0];
+  a[4][0] ^= d[0];
 
-   a[0][1] ^= d[1];
-   a[1][1] ^= d[1];
-   a[2][1] ^= d[1];
-   a[3][1] ^= d[1];
-   a[4][1] ^= d[1];
+  a[0][1] ^= d[1];
+  a[1][1] ^= d[1];
+  a[2][1] ^= d[1];
+  a[3][1] ^= d[1];
+  a[4][1] ^= d[1];
 
-   a[0][2] ^= d[2];
-   a[1][2] ^= d[2];
-   a[2][2] ^= d[2];
-   a[3][2] ^= d[2];
-   a[4][2] ^= d[2];
+  a[0][2] ^= d[2];
+  a[1][2] ^= d[2];
+  a[2][2] ^= d[2];
+  a[3][2] ^= d[2];
+  a[4][2] ^= d[2];
 
-   a[0][3] ^= d[3];
-   a[1][3] ^= d[3];
-   a[2][3] ^= d[3];
-   a[3][3] ^= d[3];
-   a[4][3] ^= d[3];
+  a[0][3] ^= d[3];
+  a[1][3] ^= d[3];
+  a[2][3] ^= d[3];
+  a[3][3] ^= d[3];
+  a[4][3] ^= d[3];
 
-   a[0][4] ^= d[4];
-   a[1][4] ^= d[4];
-   a[2][4] ^= d[4];
-   a[3][4] ^= d[4];
-   a[4][4] ^= d[4];
+  a[0][4] ^= d[4];
+  a[1][4] ^= d[4];
+  a[2][4] ^= d[4];
+  a[3][4] ^= d[4];
+  a[4][4] ^= d[4];
 }
-
 
 /**
  * @brief Apply rho transformation
  * @param[in,out] a State array
  **/
 
-static void rho(keccak_lane_t a[5][5])
-{
-   //The effect of the rho transformation is to rotate the bits of each lane by
-   //an offset, which depends on the fixed x and y coordinates of the lane
-   a[0][1] = KECCAK_ROL(a[0][1], 1);
-   a[0][2] = KECCAK_ROL(a[0][2], 190);
-   a[0][3] = KECCAK_ROL(a[0][3], 28);
-   a[0][4] = KECCAK_ROL(a[0][4], 91);
+static void rho(keccak_lane_t a[5][5]) {
+  // The effect of the rho transformation is to rotate the bits of each lane by
+  // an offset, which depends on the fixed x and y coordinates of the lane
+  a[0][1] = KECCAK_ROL(a[0][1], 1);
+  a[0][2] = KECCAK_ROL(a[0][2], 190);
+  a[0][3] = KECCAK_ROL(a[0][3], 28);
+  a[0][4] = KECCAK_ROL(a[0][4], 91);
 
-   a[1][0] = KECCAK_ROL(a[1][0], 36);
-   a[1][1] = KECCAK_ROL(a[1][1], 300);
-   a[1][2] = KECCAK_ROL(a[1][2], 6);
-   a[1][3] = KECCAK_ROL(a[1][3], 55);
-   a[1][4] = KECCAK_ROL(a[1][4], 276);
+  a[1][0] = KECCAK_ROL(a[1][0], 36);
+  a[1][1] = KECCAK_ROL(a[1][1], 300);
+  a[1][2] = KECCAK_ROL(a[1][2], 6);
+  a[1][3] = KECCAK_ROL(a[1][3], 55);
+  a[1][4] = KECCAK_ROL(a[1][4], 276);
 
-   a[2][0] = KECCAK_ROL(a[2][0], 3);
-   a[2][1] = KECCAK_ROL(a[2][1], 10);
-   a[2][2] = KECCAK_ROL(a[2][2], 171);
-   a[2][3] = KECCAK_ROL(a[2][3], 153);
-   a[2][4] = KECCAK_ROL(a[2][4], 231);
+  a[2][0] = KECCAK_ROL(a[2][0], 3);
+  a[2][1] = KECCAK_ROL(a[2][1], 10);
+  a[2][2] = KECCAK_ROL(a[2][2], 171);
+  a[2][3] = KECCAK_ROL(a[2][3], 153);
+  a[2][4] = KECCAK_ROL(a[2][4], 231);
 
-   a[3][0] = KECCAK_ROL(a[3][0], 105);
-   a[3][1] = KECCAK_ROL(a[3][1], 45);
-   a[3][2] = KECCAK_ROL(a[3][2], 15);
-   a[3][3] = KECCAK_ROL(a[3][3], 21);
-   a[3][4] = KECCAK_ROL(a[3][4], 136);
+  a[3][0] = KECCAK_ROL(a[3][0], 105);
+  a[3][1] = KECCAK_ROL(a[3][1], 45);
+  a[3][2] = KECCAK_ROL(a[3][2], 15);
+  a[3][3] = KECCAK_ROL(a[3][3], 21);
+  a[3][4] = KECCAK_ROL(a[3][4], 136);
 
-   a[4][0] = KECCAK_ROL(a[4][0], 210);
-   a[4][1] = KECCAK_ROL(a[4][1], 66);
-   a[4][2] = KECCAK_ROL(a[4][2], 253);
-   a[4][3] = KECCAK_ROL(a[4][3], 120);
-   a[4][4] = KECCAK_ROL(a[4][4], 78);
+  a[4][0] = KECCAK_ROL(a[4][0], 210);
+  a[4][1] = KECCAK_ROL(a[4][1], 66);
+  a[4][2] = KECCAK_ROL(a[4][2], 253);
+  a[4][3] = KECCAK_ROL(a[4][3], 120);
+  a[4][4] = KECCAK_ROL(a[4][4], 78);
 }
-
 
 /**
  * @brief Apply pi transformation
  * @param[in,out] a State array
  **/
 
-static void pi(keccak_lane_t a[5][5])
-{
-   keccak_lane_t temp;
+static void pi(keccak_lane_t a[5][5]) {
+  keccak_lane_t temp;
 
-   //The effect of the pi transformation is to rearrange the positions of
-   //the lanes
-   temp = a[0][1];
-   a[0][1] = a[1][1];
-   a[1][1] = a[1][4];
-   a[1][4] = a[4][2];
-   a[4][2] = a[2][4];
-   a[2][4] = a[4][0];
-   a[4][0] = a[0][2];
-   a[0][2] = a[2][2];
-   a[2][2] = a[2][3];
-   a[2][3] = a[3][4];
-   a[3][4] = a[4][3];
-   a[4][3] = a[3][0];
-   a[3][0] = a[0][4];
-   a[0][4] = a[4][4];
-   a[4][4] = a[4][1];
-   a[4][1] = a[1][3];
-   a[1][3] = a[3][1];
-   a[3][1] = a[1][0];
-   a[1][0] = a[0][3];
-   a[0][3] = a[3][3];
-   a[3][3] = a[3][2];
-   a[3][2] = a[2][1];
-   a[2][1] = a[1][2];
-   a[1][2] = a[2][0];
-   a[2][0] = temp;
+  // The effect of the pi transformation is to rearrange the positions of
+  // the lanes
+  temp = a[0][1];
+  a[0][1] = a[1][1];
+  a[1][1] = a[1][4];
+  a[1][4] = a[4][2];
+  a[4][2] = a[2][4];
+  a[2][4] = a[4][0];
+  a[4][0] = a[0][2];
+  a[0][2] = a[2][2];
+  a[2][2] = a[2][3];
+  a[2][3] = a[3][4];
+  a[3][4] = a[4][3];
+  a[4][3] = a[3][0];
+  a[3][0] = a[0][4];
+  a[0][4] = a[4][4];
+  a[4][4] = a[4][1];
+  a[4][1] = a[1][3];
+  a[1][3] = a[3][1];
+  a[3][1] = a[1][0];
+  a[1][0] = a[0][3];
+  a[0][3] = a[3][3];
+  a[3][3] = a[3][2];
+  a[3][2] = a[2][1];
+  a[2][1] = a[1][2];
+  a[1][2] = a[2][0];
+  a[2][0] = temp;
 }
-
 
 /**
  * @brief Apply chi transformation
  * @param[in,out] a State array
  **/
 
-static void chi(keccak_lane_t a[5][5])
-{
-   keccak_lane_t temp1;
-   keccak_lane_t temp2;
+static void chi(keccak_lane_t a[5][5]) {
+  keccak_lane_t temp1;
+  keccak_lane_t temp2;
 
-   //The effect of the chi transformation is to XOR each bit with a non
-   //linear function of two other bits in its row
-   temp1 = a[0][0];
-   temp2 = a[0][1];
-   a[0][0] ^= ~a[0][1] & a[0][2];
-   a[0][1] ^= ~a[0][2] & a[0][3];
-   a[0][2] ^= ~a[0][3] & a[0][4];
-   a[0][3] ^= ~a[0][4] & temp1;
-   a[0][4] ^= ~temp1 & temp2;
+  // The effect of the chi transformation is to XOR each bit with a non
+  // linear function of two other bits in its row
+  temp1 = a[0][0];
+  temp2 = a[0][1];
+  a[0][0] ^= ~a[0][1] & a[0][2];
+  a[0][1] ^= ~a[0][2] & a[0][3];
+  a[0][2] ^= ~a[0][3] & a[0][4];
+  a[0][3] ^= ~a[0][4] & temp1;
+  a[0][4] ^= ~temp1 & temp2;
 
-   temp1 = a[1][0];
-   temp2 = a[1][1];
-   a[1][0] ^= ~a[1][1] & a[1][2];
-   a[1][1] ^= ~a[1][2] & a[1][3];
-   a[1][2] ^= ~a[1][3] & a[1][4];
-   a[1][3] ^= ~a[1][4] & temp1;
-   a[1][4] ^= ~temp1 & temp2;
+  temp1 = a[1][0];
+  temp2 = a[1][1];
+  a[1][0] ^= ~a[1][1] & a[1][2];
+  a[1][1] ^= ~a[1][2] & a[1][3];
+  a[1][2] ^= ~a[1][3] & a[1][4];
+  a[1][3] ^= ~a[1][4] & temp1;
+  a[1][4] ^= ~temp1 & temp2;
 
-   temp1 = a[2][0];
-   temp2 = a[2][1];
-   a[2][0] ^= ~a[2][1] & a[2][2];
-   a[2][1] ^= ~a[2][2] & a[2][3];
-   a[2][2] ^= ~a[2][3] & a[2][4];
-   a[2][3] ^= ~a[2][4] & temp1;
-   a[2][4] ^= ~temp1 & temp2;
+  temp1 = a[2][0];
+  temp2 = a[2][1];
+  a[2][0] ^= ~a[2][1] & a[2][2];
+  a[2][1] ^= ~a[2][2] & a[2][3];
+  a[2][2] ^= ~a[2][3] & a[2][4];
+  a[2][3] ^= ~a[2][4] & temp1;
+  a[2][4] ^= ~temp1 & temp2;
 
-   temp1 = a[3][0];
-   temp2 = a[3][1];
-   a[3][0] ^= ~a[3][1] & a[3][2];
-   a[3][1] ^= ~a[3][2] & a[3][3];
-   a[3][2] ^= ~a[3][3] & a[3][4];
-   a[3][3] ^= ~a[3][4] & temp1;
-   a[3][4] ^= ~temp1 & temp2;
+  temp1 = a[3][0];
+  temp2 = a[3][1];
+  a[3][0] ^= ~a[3][1] & a[3][2];
+  a[3][1] ^= ~a[3][2] & a[3][3];
+  a[3][2] ^= ~a[3][3] & a[3][4];
+  a[3][3] ^= ~a[3][4] & temp1;
+  a[3][4] ^= ~temp1 & temp2;
 
-   temp1 = a[4][0];
-   temp2 = a[4][1];
-   a[4][0] ^= ~a[4][1] & a[4][2];
-   a[4][1] ^= ~a[4][2] & a[4][3];
-   a[4][2] ^= ~a[4][3] & a[4][4];
-   a[4][3] ^= ~a[4][4] & temp1;
-   a[4][4] ^= ~temp1 & temp2;
+  temp1 = a[4][0];
+  temp2 = a[4][1];
+  a[4][0] ^= ~a[4][1] & a[4][2];
+  a[4][1] ^= ~a[4][2] & a[4][3];
+  a[4][2] ^= ~a[4][3] & a[4][4];
+  a[4][3] ^= ~a[4][4] & temp1;
+  a[4][4] ^= ~temp1 & temp2;
 }
-
 
 /**
  * @brief Apply iota transformation
@@ -269,12 +258,10 @@ static void chi(keccak_lane_t a[5][5])
  * @param[index] round Round index
  **/
 
-static void iota(keccak_lane_t a[5][5], uint_t index)
-{
-   //The iota transformation is parameterized by the round index
-   a[0][0] ^= rc[index];
+static void iota(keccak_lane_t a[5][5], uint_t index) {
+  // The iota transformation is parameterized by the round index
+  a[0][0] ^= rc[index];
 }
-
 
 /**
  * @brief Initialize Keccak context
@@ -282,35 +269,33 @@ static void iota(keccak_lane_t a[5][5], uint_t index)
  * @param[in] capacity Capacity of the sponge function
  **/
 
-error_t keccakInit(KeccakContext *context, uint_t capacity)
-{
-   uint_t rate;
+error_t keccakInit(KeccakContext *context, uint_t capacity) {
+  uint_t rate;
 
-   //Make sure the Keccak context is valid
-   if(context == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Make sure the Keccak context is valid
+  if (context == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Clear Keccak context
-   osMemset(context, 0, sizeof(KeccakContext));
+  // Clear Keccak context
+  osMemset(context, 0, sizeof(KeccakContext));
 
-   //The capacity cannot exceed the width of a Keccak-p permutation
-   if(capacity >= KECCAK_B_BITS)
-      return ERROR_INVALID_PARAMETER;
+  // The capacity cannot exceed the width of a Keccak-p permutation
+  if (capacity >= KECCAK_B_BITS)
+    return ERROR_INVALID_PARAMETER;
 
-   //The rate depends on the capacity of the sponge function
-   rate = KECCAK_B_BITS - capacity;
+  // The rate depends on the capacity of the sponge function
+  rate = KECCAK_B_BITS - capacity;
 
-   //The rate must be multiple of the lane size
-   if((rate % KECCAK_W_BITS) != 0)
-      return ERROR_INVALID_PARAMETER;
+  // The rate must be multiple of the lane size
+  if ((rate % KECCAK_W_BITS) != 0)
+    return ERROR_INVALID_PARAMETER;
 
-   //Save the block size, in bytes
-   context->blockSize = rate / 8;
+  // Save the block size, in bytes
+  context->blockSize = rate / 8;
 
-   //Successful initialization
-   return NO_ERROR;
+  // Successful initialization
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Absorb data
@@ -320,49 +305,44 @@ error_t keccakInit(KeccakContext *context, uint_t capacity)
  **/
 
 __weak_func void keccakAbsorb(KeccakContext *context, const void *input,
-   size_t length)
-{
-   uint_t i;
-   size_t n;
-   keccak_lane_t *a;
+                              size_t length) {
+  uint_t i;
+  size_t n;
+  keccak_lane_t *a;
 
-   //Point to the state array
-   a = (keccak_lane_t *) context->a;
+  // Point to the state array
+  a = (keccak_lane_t *)context->a;
 
-   //Absorbing phase
-   while(length > 0)
-   {
-      //Limit the number of bytes to process at a time
-      n = MIN(length, context->blockSize - context->length);
+  // Absorbing phase
+  while (length > 0) {
+    // Limit the number of bytes to process at a time
+    n = MIN(length, context->blockSize - context->length);
 
-      //Copy the data to the buffer
-      osMemcpy(context->buffer + context->length, input, n);
-      //Adjust the length of the buffer
-      context->length += n;
+    // Copy the data to the buffer
+    osMemcpy(context->buffer + context->length, input, n);
+    // Adjust the length of the buffer
+    context->length += n;
 
-      //Advance the data pointer
-      input = (uint8_t *) input + n;
-      //Remaining bytes to process
-      length -= n;
+    // Advance the data pointer
+    input = (uint8_t *)input + n;
+    // Remaining bytes to process
+    length -= n;
 
-      //Absorb the message block by block
-      if(context->length == context->blockSize)
-      {
-         //Absorb the current block
-         for(i = 0; i < context->blockSize / KECCAK_W_BYTES; i++)
-         {
-            a[i] ^= KECCAK_LOAD_LANE(context->buffer + i * KECCAK_W_BYTES);
-         }
-
-         //Apply block permutation function
-         keccakPermutBlock(context);
-
-         //The input buffer is empty
-         context->length = 0;
+    // Absorb the message block by block
+    if (context->length == context->blockSize) {
+      // Absorb the current block
+      for (i = 0; i < context->blockSize / KECCAK_W_BYTES; i++) {
+        a[i] ^= KECCAK_LOAD_LANE(context->buffer + i * KECCAK_W_BYTES);
       }
-   }
-}
 
+      // Apply block permutation function
+      keccakPermutBlock(context);
+
+      // The input buffer is empty
+      context->length = 0;
+    }
+  }
+}
 
 /**
  * @brief Finish absorbing phase
@@ -370,42 +350,38 @@ __weak_func void keccakAbsorb(KeccakContext *context, const void *input,
  * @param[in] pad Padding byte used for domain separation
  **/
 
-void keccakFinal(KeccakContext *context, uint8_t pad)
-{
-   uint_t i;
-   size_t q;
-   keccak_lane_t *a;
+void keccakFinal(KeccakContext *context, uint8_t pad) {
+  uint_t i;
+  size_t q;
+  keccak_lane_t *a;
 
-   //Point to the state array
-   a = (keccak_lane_t *) context->a;
+  // Point to the state array
+  a = (keccak_lane_t *)context->a;
 
-   //Compute the number of padding bytes
-   q = context->blockSize - context->length;
+  // Compute the number of padding bytes
+  q = context->blockSize - context->length;
 
-   //Append padding
-   osMemset(context->buffer + context->length, 0, q);
-   context->buffer[context->length] |= pad;
-   context->buffer[context->blockSize - 1] |= 0x80;
+  // Append padding
+  osMemset(context->buffer + context->length, 0, q);
+  context->buffer[context->length] |= pad;
+  context->buffer[context->blockSize - 1] |= 0x80;
 
-   //Absorb the final block
-   for(i = 0; i < context->blockSize / KECCAK_W_BYTES; i++)
-   {
-      a[i] ^= KECCAK_LOAD_LANE(context->buffer + i * KECCAK_W_BYTES);
-   }
+  // Absorb the final block
+  for (i = 0; i < context->blockSize / KECCAK_W_BYTES; i++) {
+    a[i] ^= KECCAK_LOAD_LANE(context->buffer + i * KECCAK_W_BYTES);
+  }
 
-   //Apply block permutation function
-   keccakPermutBlock(context);
+  // Apply block permutation function
+  keccakPermutBlock(context);
 
-   //Convert lanes to little-endian byte order
-   for(i = 0; i < context->blockSize / KECCAK_W_BYTES; i++)
-   {
-      KECCAK_STORE_LANE(a[i], context->buffer + i * KECCAK_W_BYTES);
-   }
+  // Convert lanes to little-endian byte order
+  for (i = 0; i < context->blockSize / KECCAK_W_BYTES; i++) {
+    KECCAK_STORE_LANE(a[i], context->buffer + i * KECCAK_W_BYTES);
+  }
 
-   //Number of bytes available in the output buffer
-   context->length = context->blockSize;
+  // Number of bytes available in the output buffer
+  context->length = context->blockSize;
 }
-
 
 /**
  * @brief Extract data from the squeezing phase
@@ -414,79 +390,71 @@ void keccakFinal(KeccakContext *context, uint8_t pad)
  * @param[in] length Desired output length, in bytes
  **/
 
-void keccakSqueeze(KeccakContext *context, uint8_t *output, size_t length)
-{
-   uint_t i;
-   size_t n;
-   keccak_lane_t *a;
+void keccakSqueeze(KeccakContext *context, uint8_t *output, size_t length) {
+  uint_t i;
+  size_t n;
+  keccak_lane_t *a;
 
-   //Point to the state array
-   a = (keccak_lane_t *) context->a;
+  // Point to the state array
+  a = (keccak_lane_t *)context->a;
 
-   //An arbitrary number of output bits can be squeezed out of the state
-   while(length > 0)
-   {
-      //Check whether more data is required
-      if(context->length == 0)
-      {
-         //Apply block permutation function
-         keccakPermutBlock(context);
+  // An arbitrary number of output bits can be squeezed out of the state
+  while (length > 0) {
+    // Check whether more data is required
+    if (context->length == 0) {
+      // Apply block permutation function
+      keccakPermutBlock(context);
 
-         //Convert lanes to little-endian byte order
-         for(i = 0; i < context->blockSize / KECCAK_W_BYTES; i++)
-         {
-            KECCAK_STORE_LANE(a[i], context->buffer + i * KECCAK_W_BYTES);
-         }
-
-         //Number of bytes available in the output buffer
-         context->length = context->blockSize;
+      // Convert lanes to little-endian byte order
+      for (i = 0; i < context->blockSize / KECCAK_W_BYTES; i++) {
+        KECCAK_STORE_LANE(a[i], context->buffer + i * KECCAK_W_BYTES);
       }
 
-      //Compute the number of bytes to process at a time
-      n = MIN(length, context->length);
+      // Number of bytes available in the output buffer
+      context->length = context->blockSize;
+    }
 
-      //Copy the output string
-      if(output != NULL)
-      {
-         osMemcpy(output, context->buffer + context->blockSize -
-            context->length, n);
-      }
+    // Compute the number of bytes to process at a time
+    n = MIN(length, context->length);
 
-      //Number of bytes available in the output buffer
-      context->length -= n;
+    // Copy the output string
+    if (output != NULL) {
+      osMemcpy(output, context->buffer + context->blockSize - context->length,
+               n);
+    }
 
-      //Advance the data pointer
-      output = (uint8_t *) output + n;
-      //Number of bytes that remains to be written
-      length -= n;
-   }
+    // Number of bytes available in the output buffer
+    context->length -= n;
+
+    // Advance the data pointer
+    output = (uint8_t *)output + n;
+    // Number of bytes that remains to be written
+    length -= n;
+  }
 }
-
 
 /**
  * @brief Block permutation
  * @param[in] context Pointer to the Keccak context
  **/
 
-__weak_func void keccakPermutBlock(KeccakContext *context)
-{
-   uint_t i;
+__weak_func void keccakPermutBlock(KeccakContext *context) {
+  uint_t i;
 
-   //Each round consists of a sequence of five transformations, which are
-   //called the step mappings
-   for(i = 0; i < KECCAK_NR; i++)
-   {
-      //Apply theta step mapping
-      theta(context->a);
-      //Apply rho step mapping
-      rho(context->a);
-      //Apply pi step mapping
-      pi(context->a);
-      //Apply chi step mapping
-      chi(context->a);
-      //Apply iota step mapping
-      iota(context->a, i);
-   }
+  // Each round consists of a sequence of five transformations, which are
+  // called the step mappings
+  for (i = 0; i < KECCAK_NR; i++) {
+    // Apply theta step mapping
+    theta(context->a);
+    // Apply rho step mapping
+    rho(context->a);
+    // Apply pi step mapping
+    pi(context->a);
+    // Apply chi step mapping
+    chi(context->a);
+    // Apply iota step mapping
+    iota(context->a, i);
+  }
 }
 
 #endif

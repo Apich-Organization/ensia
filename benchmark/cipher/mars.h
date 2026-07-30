@@ -31,45 +31,42 @@
 #ifndef _MARS_H
 #define _MARS_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//MARS block size
+// MARS block size
 #define MARS_BLOCK_SIZE 16
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define MARS_CIPHER_ALGO (&marsCipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief MARS algorithm context
  **/
 
-typedef struct
-{
-   uint32_t k[40];
+typedef struct {
+  uint32_t k[40];
 } MarsContext;
 
-
-//MARS related constants
+// MARS related constants
 extern const CipherAlgo marsCipherAlgo;
 
-//MARS related functions
+// MARS related functions
 error_t marsInit(MarsContext *context, const uint8_t *key, size_t keyLen);
 
 void marsEncryptBlock(MarsContext *context, const uint8_t *input,
-   uint8_t *output);
+                      uint8_t *output);
 
 void marsDecryptBlock(MarsContext *context, const uint8_t *input,
-   uint8_t *output);
+                      uint8_t *output);
 
 void marsDeinit(MarsContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

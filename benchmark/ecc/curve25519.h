@@ -31,30 +31,30 @@
 #ifndef _CURVE25519_H
 #define _CURVE25519_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Speed optimization level
+// Speed optimization level
 #ifndef CURVE25519_SPEED_OPTIMIZATION_LEVEL
-   #define CURVE25519_SPEED_OPTIMIZATION_LEVEL 2
+#define CURVE25519_SPEED_OPTIMIZATION_LEVEL 2
 #elif (CURVE25519_SPEED_OPTIMIZATION_LEVEL < 0)
-   #error CURVE25519_SPEED_OPTIMIZATION_LEVEL parameter is not valid
+#error CURVE25519_SPEED_OPTIMIZATION_LEVEL parameter is not valid
 #endif
 
-//Length of the elliptic curve
+// Length of the elliptic curve
 #define CURVE25519_BIT_LEN 255
 #define CURVE25519_BYTE_LEN 32
 #define CURVE25519_WORD_LEN 8
 
-//A24 constant
+// A24 constant
 #define CURVE25519_A24 121666
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Curve25519 related functions
+// Curve25519 related functions
 void curve25519SetInt(int32_t *a, int32_t b);
 
 void curve25519Add(int32_t *r, const int32_t *a, const int32_t *b);
@@ -78,14 +78,14 @@ void curve25519Copy(int32_t *a, const int32_t *b);
 void curve25519Swap(int32_t *a, int32_t *b, uint32_t c);
 
 void curve25519Select(int32_t *r, const int32_t *a, const int32_t *b,
-   uint32_t c);
+                      uint32_t c);
 
 uint32_t curve25519Comp(const int32_t *a, const int32_t *b);
 
 void curve25519Import(int32_t *a, const uint8_t *data);
 void curve25519Export(int32_t *a, uint8_t *data);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

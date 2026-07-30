@@ -35,17 +35,16 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher_modes/cbc.h"
+#include "core/crypto.h"
 #include "debug.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (CBC_SUPPORT == ENABLED)
-
 
 /**
  * @brief CBC encryption
@@ -59,40 +58,37 @@
  **/
 
 __weak_func error_t cbcEncrypt(const CipherAlgo *cipher, void *context,
-   uint8_t *iv, const uint8_t *p, uint8_t *c, size_t length)
-{
-   size_t i;
+                               uint8_t *iv, const uint8_t *p, uint8_t *c,
+                               size_t length) {
+  size_t i;
 
-   //CBC mode operates in a block-by-block fashion
-   while(length >= cipher->blockSize)
-   {
-      //XOR input block with IV contents
-      for(i = 0; i < cipher->blockSize; i++)
-      {
-         c[i] = p[i] ^ iv[i];
-      }
+  // CBC mode operates in a block-by-block fashion
+  while (length >= cipher->blockSize) {
+    // XOR input block with IV contents
+    for (i = 0; i < cipher->blockSize; i++) {
+      c[i] = p[i] ^ iv[i];
+    }
 
-      //Encrypt the current block based upon the output of the previous
-      //encryption
-      cipher->encryptBlock(context, c, c);
+    // Encrypt the current block based upon the output of the previous
+    // encryption
+    cipher->encryptBlock(context, c, c);
 
-      //Update IV with output block contents
-      osMemcpy(iv, c, cipher->blockSize);
+    // Update IV with output block contents
+    osMemcpy(iv, c, cipher->blockSize);
 
-      //Next block
-      p += cipher->blockSize;
-      c += cipher->blockSize;
-      length -= cipher->blockSize;
-   }
+    // Next block
+    p += cipher->blockSize;
+    c += cipher->blockSize;
+    length -= cipher->blockSize;
+  }
 
-   //The plaintext must be a multiple of the block size
-   if(length != 0)
-      return ERROR_INVALID_LENGTH;
+  // The plaintext must be a multiple of the block size
+  if (length != 0)
+    return ERROR_INVALID_LENGTH;
 
-   //Successful encryption
-   return NO_ERROR;
+  // Successful encryption
+  return NO_ERROR;
 }
-
 
 /**
  * @brief CBC decryption
@@ -106,41 +102,39 @@ __weak_func error_t cbcEncrypt(const CipherAlgo *cipher, void *context,
  **/
 
 __weak_func error_t cbcDecrypt(const CipherAlgo *cipher, void *context,
-   uint8_t *iv, const uint8_t *c, uint8_t *p, size_t length)
-{
-   size_t i;
-   uint8_t t[16];
+                               uint8_t *iv, const uint8_t *c, uint8_t *p,
+                               size_t length) {
+  size_t i;
+  uint8_t t[16];
 
-   //CBC mode operates in a block-by-block fashion
-   while(length >= cipher->blockSize)
-   {
-      //Save input block
-      osMemcpy(t, c, cipher->blockSize);
+  // CBC mode operates in a block-by-block fashion
+  while (length >= cipher->blockSize) {
+    // Save input block
+    osMemcpy(t, c, cipher->blockSize);
 
-      //Decrypt the current block
-      cipher->decryptBlock(context, c, p);
+    // Decrypt the current block
+    cipher->decryptBlock(context, c, p);
 
-      //XOR output block with IV contents
-      for(i = 0; i < cipher->blockSize; i++)
-      {
-         p[i] ^= iv[i];
-      }
+    // XOR output block with IV contents
+    for (i = 0; i < cipher->blockSize; i++) {
+      p[i] ^= iv[i];
+    }
 
-      //Update IV with input block contents
-      osMemcpy(iv, t, cipher->blockSize);
+    // Update IV with input block contents
+    osMemcpy(iv, t, cipher->blockSize);
 
-      //Next block
-      c += cipher->blockSize;
-      p += cipher->blockSize;
-      length -= cipher->blockSize;
-   }
+    // Next block
+    c += cipher->blockSize;
+    p += cipher->blockSize;
+    length -= cipher->blockSize;
+  }
 
-   //The ciphertext must be a multiple of the block size
-   if(length != 0)
-      return ERROR_INVALID_LENGTH;
+  // The ciphertext must be a multiple of the block size
+  if (length != 0)
+    return ERROR_INVALID_LENGTH;
 
-   //Successful encryption
-   return NO_ERROR;
+  // Successful encryption
+  return NO_ERROR;
 }
 
 #endif

@@ -31,48 +31,45 @@
 #ifndef _DES_H
 #define _DES_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef DES_PRIVATE_CONTEXT
-   #define DES_PRIVATE_CONTEXT
+#define DES_PRIVATE_CONTEXT
 #endif
 
-//DES block size
+// DES block size
 #define DES_BLOCK_SIZE 8
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define DES_CIPHER_ALGO (&desCipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief DES algorithm context
  **/
 
-typedef struct
-{
-   uint32_t ks[32];
-   DES_PRIVATE_CONTEXT
+typedef struct {
+  uint32_t ks[32];
+  DES_PRIVATE_CONTEXT
 } DesContext;
 
-
-//DES related constants
+// DES related constants
 extern const uint8_t DES_CBC_OID[5];
 extern const CipherAlgo desCipherAlgo;
 
-//DES related functions
+// DES related functions
 error_t desInit(DesContext *context, const uint8_t *key, size_t keyLen);
 
 void desEncryptBlock(DesContext *context, const uint8_t *input,
-   uint8_t *output);
+                     uint8_t *output);
 
 void desDecryptBlock(DesContext *context, const uint8_t *input,
-   uint8_t *output);
+                     uint8_t *output);
 
 void desDeinit(DesContext *context);
 
@@ -80,7 +77,7 @@ void desComputeKeyParity(const uint8_t *input, uint8_t *output);
 void desFixKeyParity(uint8_t *key);
 bool_t desCheckKeyParity(const uint8_t *key);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

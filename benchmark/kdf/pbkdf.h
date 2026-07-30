@@ -31,25 +31,27 @@
 #ifndef _PBKDF_H
 #define _PBKDF_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//PBKDF related constants
+// PBKDF related constants
 extern const uint8_t PBKDF2_OID[9];
 
-//PBKDF related functions
+// PBKDF related functions
 error_t pbkdf1(const HashAlgo *hash, const uint8_t *p, size_t pLen,
-   const uint8_t *s, size_t sLen, uint_t c, uint8_t *dk, size_t dkLen);
+               const uint8_t *s, size_t sLen, uint_t c, uint8_t *dk,
+               size_t dkLen);
 
 error_t pbkdf2(const HashAlgo *hash, const uint8_t *p, size_t pLen,
-   const uint8_t *s, size_t sLen, uint_t c, uint8_t *dk, size_t dkLen);
+               const uint8_t *s, size_t sLen, uint_t c, uint8_t *dk,
+               size_t dkLen);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

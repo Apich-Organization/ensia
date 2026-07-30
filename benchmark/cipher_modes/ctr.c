@@ -26,26 +26,26 @@
  *
  * @section Description
  *
- * The Counter (CTR) mode is a confidentiality mode that features the application
- * of the forward cipher to a set of input blocks, called counters, to produce
- * a sequence of output blocks that are exclusive-ORed with the plaintext to
- * produce the ciphertext, and vice versa. Refer to SP 800-38A for more details
+ * The Counter (CTR) mode is a confidentiality mode that features the
+ * application of the forward cipher to a set of input blocks, called counters,
+ * to produce a sequence of output blocks that are exclusive-ORed with the
+ * plaintext to produce the ciphertext, and vice versa. Refer to SP 800-38A for
+ * more details
  *
  * @author Oryx Embedded SARL (www.oryx-embedded.com)
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher_modes/ctr.h"
+#include "core/crypto.h"
 #include "debug.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (CTR_SUPPORT == ENABLED)
-
 
 /**
  * @brief CTR encryption
@@ -59,53 +59,50 @@
  * @return Error code
  **/
 
-__weak_func error_t ctrEncrypt(const CipherAlgo *cipher, void *context, uint_t m,
-   uint8_t *t, const uint8_t *p, uint8_t *c, size_t length)
-{
-   size_t i;
-   size_t n;
-   uint8_t o[16];
+__weak_func error_t ctrEncrypt(const CipherAlgo *cipher, void *context,
+                               uint_t m, uint8_t *t, const uint8_t *p,
+                               uint8_t *c, size_t length) {
+  size_t i;
+  size_t n;
+  uint8_t o[16];
 
-   //The parameter must be a multiple of 8
-   if((m % 8) != 0)
-      return ERROR_INVALID_PARAMETER;
+  // The parameter must be a multiple of 8
+  if ((m % 8) != 0)
+    return ERROR_INVALID_PARAMETER;
 
-   //Determine the size, in bytes, of the specific part of the block
-   //to be incremented
-   m = m / 8;
+  // Determine the size, in bytes, of the specific part of the block
+  // to be incremented
+  m = m / 8;
 
-   //Check the resulting value
-   if(m > cipher->blockSize)
-      return ERROR_INVALID_PARAMETER;
+  // Check the resulting value
+  if (m > cipher->blockSize)
+    return ERROR_INVALID_PARAMETER;
 
-   //Process plaintext
-   while(length > 0)
-   {
-      //CTR mode operates in a block-by-block fashion
-      n = MIN(length, cipher->blockSize);
+  // Process plaintext
+  while (length > 0) {
+    // CTR mode operates in a block-by-block fashion
+    n = MIN(length, cipher->blockSize);
 
-      //Compute O(j) = CIPH(T(j))
-      cipher->encryptBlock(context, t, o);
+    // Compute O(j) = CIPH(T(j))
+    cipher->encryptBlock(context, t, o);
 
-      //Compute C(j) = P(j) XOR T(j)
-      for(i = 0; i < n; i++)
-      {
-         c[i] = p[i] ^ o[i];
-      }
+    // Compute C(j) = P(j) XOR T(j)
+    for (i = 0; i < n; i++) {
+      c[i] = p[i] ^ o[i];
+    }
 
-      //Standard incrementing function
-      ctrIncBlock(t, 1, cipher->blockSize, m);
+    // Standard incrementing function
+    ctrIncBlock(t, 1, cipher->blockSize, m);
 
-      //Next block
-      p += n;
-      c += n;
-      length -= n;
-   }
+    // Next block
+    p += n;
+    c += n;
+    length -= n;
+  }
 
-   //Successful encryption
-   return NO_ERROR;
+  // Successful encryption
+  return NO_ERROR;
 }
-
 
 /**
  * @brief CTR decryption
@@ -120,12 +117,10 @@ __weak_func error_t ctrEncrypt(const CipherAlgo *cipher, void *context, uint_t m
  **/
 
 error_t ctrDecrypt(const CipherAlgo *cipher, void *context, uint_t m,
-   uint8_t *t, const uint8_t *c, uint8_t *p, size_t length)
-{
-   //Decryption is the same the as encryption with P and C interchanged
-   return ctrEncrypt(cipher, context, m, t, c, p, length);
+                   uint8_t *t, const uint8_t *c, uint8_t *p, size_t length) {
+  // Decryption is the same the as encryption with P and C interchanged
+  return ctrEncrypt(cipher, context, m, t, c, p, length);
 }
-
 
 /**
  * @brief Increment counter block
@@ -135,20 +130,18 @@ error_t ctrDecrypt(const CipherAlgo *cipher, void *context, uint_t m,
  * @param[in] m Size of the specific part of the block to be incremented
  **/
 
-void ctrIncBlock(uint8_t *ctr, uint32_t inc, size_t blockSize, size_t m)
-{
-   size_t i;
-   uint32_t temp;
+void ctrIncBlock(uint8_t *ctr, uint32_t inc, size_t blockSize, size_t m) {
+  size_t i;
+  uint32_t temp;
 
-   //The function increments the right-most bytes of the block. The remaining
-   //left-most bytes remain unchanged
-   for(temp = inc, i = 1; i <= m; i++)
-   {
-      //Increment the current byte and propagate the carry
-      temp += ctr[blockSize - i];
-      ctr[blockSize - i] = temp & 0xFF;
-      temp >>= 8;
-   }
+  // The function increments the right-most bytes of the block. The remaining
+  // left-most bytes remain unchanged
+  for (temp = inc, i = 1; i <= m; i++) {
+    // Increment the current byte and propagate the carry
+    temp += ctr[blockSize - i];
+    ctr[blockSize - i] = temp & 0xFF;
+    temp >>= 8;
+  }
 }
 
 #endif

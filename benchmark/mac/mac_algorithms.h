@@ -31,47 +31,47 @@
 #ifndef _MAC_ALGORITHMS_H
 #define _MAC_ALGORITHMS_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//CMAC support?
+// CMAC support?
 #if (CMAC_SUPPORT == ENABLED)
-   #include "mac/cmac.h"
+#include "mac/cmac.h"
 #endif
 
-//HMAC support?
+// HMAC support?
 #if (HMAC_SUPPORT == ENABLED)
-   #include "mac/hmac.h"
+#include "mac/hmac.h"
 #endif
 
-//GMAC support?
+// GMAC support?
 #if (GMAC_SUPPORT == ENABLED)
-   #include "mac/gmac.h"
+#include "mac/gmac.h"
 #endif
 
-//KMAC support?
+// KMAC support?
 #if (KMAC_SUPPORT == ENABLED)
-   #include "mac/kmac.h"
+#include "mac/kmac.h"
 #endif
 
-//XCBC-MAC support?
+// XCBC-MAC support?
 #if (XCBC_MAC_SUPPORT == ENABLED)
-   #include "mac/xcbc_mac.h"
+#include "mac/xcbc_mac.h"
 #endif
 
-//BLAKE2b support?
+// BLAKE2b support?
 #if (BLAKE2B_SUPPORT == ENABLED)
-   #include "mac/blake2b.h"
+#include "mac/blake2b.h"
 #endif
 
-//BLAKE2s support?
+// BLAKE2s support?
 #if (BLAKE2S_SUPPORT == ENABLED)
-   #include "mac/blake2s.h"
+#include "mac/blake2s.h"
 #endif
 
-//Poly1305 support?
+// Poly1305 support?
 #if (POLY1305_SUPPORT == ENABLED)
-   #include "mac/poly1305.h"
+#include "mac/poly1305.h"
 #endif
 
 #endif

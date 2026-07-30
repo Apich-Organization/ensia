@@ -31,58 +31,55 @@
 #ifndef _BLOWFISH_H
 #define _BLOWFISH_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Blowfish block size
+// Blowfish block size
 #define BLOWFISH_BLOCK_SIZE 8
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define BLOWFISH_CIPHER_ALGO (&blowfishCipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Blowfish algorithm context
  **/
 
-typedef struct
-{
-   uint32_t p[18];
-   uint32_t s1[256];
-   uint32_t s2[256];
-   uint32_t s3[256];
-   uint32_t s4[256];
+typedef struct {
+  uint32_t p[18];
+  uint32_t s1[256];
+  uint32_t s2[256];
+  uint32_t s3[256];
+  uint32_t s4[256];
 } BlowfishContext;
 
-
-//Blowfish related constants
+// Blowfish related constants
 extern const CipherAlgo blowfishCipherAlgo;
 
-//Blowfish related functions
+// Blowfish related functions
 error_t blowfishInit(BlowfishContext *context, const uint8_t *key,
-   size_t keyLen);
+                     size_t keyLen);
 
 error_t blowfishInitState(BlowfishContext *context);
 
 error_t blowfishExpandKey(BlowfishContext *context, const uint8_t *salt,
-   size_t saltLen, const uint8_t *key, size_t keyLen);
+                          size_t saltLen, const uint8_t *key, size_t keyLen);
 
 void blowfishEncryptBlock(BlowfishContext *context, const uint8_t *input,
-   uint8_t *output);
+                          uint8_t *output);
 
 void blowfishDecryptBlock(BlowfishContext *context, const uint8_t *input,
-   uint8_t *output);
+                          uint8_t *output);
 
 void blowfishXorBlock(uint8_t *data, const uint8_t *salt, size_t saltLen,
-   size_t *saltIndex);
+                      size_t *saltIndex);
 
 void blowfishDeinit(BlowfishContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

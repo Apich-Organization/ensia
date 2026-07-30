@@ -31,34 +31,31 @@
 #ifndef _ARIA_H
 #define _ARIA_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//ARIA block size
+// ARIA block size
 #define ARIA_BLOCK_SIZE 16
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define ARIA_CIPHER_ALGO (&ariaCipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief ARIA algorithm context
  **/
 
-typedef struct
-{
-   uint_t nr;
-   uint32_t k[16];
-   uint32_t ek[68];
-   uint32_t dk[68];
+typedef struct {
+  uint_t nr;
+  uint32_t k[16];
+  uint32_t ek[68];
+  uint32_t dk[68];
 } AriaContext;
 
-
-//ARIA related constants
+// ARIA related constants
 extern const uint8_t ARIA128_ECB_OID[9];
 extern const uint8_t ARIA128_CBC_OID[9];
 extern const uint8_t ARIA128_CFB_OID[9];
@@ -82,18 +79,18 @@ extern const uint8_t ARIA192_CCM_OID[9];
 extern const uint8_t ARIA256_CCM_OID[9];
 extern const CipherAlgo ariaCipherAlgo;
 
-//ARIA related functions
+// ARIA related functions
 error_t ariaInit(AriaContext *context, const uint8_t *key, size_t keyLen);
 
 void ariaEncryptBlock(AriaContext *context, const uint8_t *input,
-   uint8_t *output);
+                      uint8_t *output);
 
 void ariaDecryptBlock(AriaContext *context, const uint8_t *input,
-   uint8_t *output);
+                      uint8_t *output);
 
 void ariaDeinit(AriaContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

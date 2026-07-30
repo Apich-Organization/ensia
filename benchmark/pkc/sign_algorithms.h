@@ -31,32 +31,32 @@
 #ifndef _SIGN_ALGORITHMS_H
 #define _SIGN_ALGORITHMS_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//RSA support?
+// RSA support?
 #if (RSA_SUPPORT == ENABLED)
-   #include "pkc/rsa.h"
+#include "pkc/rsa.h"
 #endif
 
-//DSA support?
+// DSA support?
 #if (DSA_SUPPORT == ENABLED)
-   #include "pkc/dsa.h"
+#include "pkc/dsa.h"
 #endif
 
-//ECDSA support?
+// ECDSA support?
 #if (ECDSA_SUPPORT == ENABLED)
-   #include "ecc/ecdsa.h"
+#include "ecc/ecdsa.h"
 #endif
 
-//SM2 support?
+// SM2 support?
 #if (SM2_SUPPORT == ENABLED)
-   #include "ecc/sm2.h"
+#include "ecc/sm2.h"
 #endif
 
-//EdDSA support?
+// EdDSA support?
 #if (ED25519_SUPPORT == ENABLED || ED448_SUPPORT == ENABLED)
-   #include "ecc/eddsa.h"
+#include "ecc/eddsa.h"
 #endif
 
 #endif

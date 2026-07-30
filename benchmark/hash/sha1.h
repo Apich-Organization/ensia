@@ -31,52 +31,48 @@
 #ifndef _SHA1_H
 #define _SHA1_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef SHA1_PRIVATE_CONTEXT
-   #define SHA1_PRIVATE_CONTEXT
+#define SHA1_PRIVATE_CONTEXT
 #endif
 
-//SHA-1 block size
+// SHA-1 block size
 #define SHA1_BLOCK_SIZE 64
-//SHA-1 digest size
+// SHA-1 digest size
 #define SHA1_DIGEST_SIZE 20
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define SHA1_MIN_PAD_SIZE 9
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define SHA1_HASH_ALGO (&sha1HashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief SHA-1 algorithm context
  **/
 
-typedef struct
-{
-   uint32_t h[5];
-   union
-   {
-      uint32_t w[16];
-      uint8_t buffer[64];
-   };
-   size_t size;
-   uint64_t totalSize;
-   SHA1_PRIVATE_CONTEXT
+typedef struct {
+  uint32_t h[5];
+  union {
+    uint32_t w[16];
+    uint8_t buffer[64];
+  };
+  size_t size;
+  uint64_t totalSize;
+  SHA1_PRIVATE_CONTEXT
 } Sha1Context;
 
-
-//SHA-1 related constants
+// SHA-1 related constants
 extern const uint8_t SHA1_OID[5];
 extern const HashAlgo sha1HashAlgo;
 
-//SHA-1 related functions
+// SHA-1 related functions
 error_t sha1Compute(const void *data, size_t length, uint8_t *digest);
 void sha1Init(Sha1Context *context);
 void sha1Update(Sha1Context *context, const void *data, size_t length);
@@ -84,7 +80,7 @@ void sha1Final(Sha1Context *context, uint8_t *digest);
 void sha1FinalRaw(Sha1Context *context, uint8_t *digest);
 void sha1ProcessBlock(Sha1Context *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

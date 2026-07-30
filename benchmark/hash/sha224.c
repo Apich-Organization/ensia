@@ -33,37 +33,34 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "hash/sha224.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (SHA224_SUPPORT == ENABLED)
 
-//SHA-224 object identifier (2.16.840.1.101.3.4.2.4)
-const uint8_t SHA224_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x04};
+// SHA-224 object identifier (2.16.840.1.101.3.4.2.4)
+const uint8_t SHA224_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65,
+                               0x03, 0x04, 0x02, 0x04};
 
-//Common interface for hash algorithms
-const HashAlgo sha224HashAlgo =
-{
-   "SHA-224",
-   SHA224_OID,
-   sizeof(SHA224_OID),
-   sizeof(Sha224Context),
-   SHA224_BLOCK_SIZE,
-   SHA224_DIGEST_SIZE,
-   SHA224_MIN_PAD_SIZE,
-   TRUE,
-   (HashAlgoCompute) sha224Compute,
-   (HashAlgoInit) sha224Init,
-   (HashAlgoUpdate) sha224Update,
-   (HashAlgoFinal) sha224Final,
-   NULL
-};
-
+// Common interface for hash algorithms
+const HashAlgo sha224HashAlgo = {"SHA-224",
+                                 SHA224_OID,
+                                 sizeof(SHA224_OID),
+                                 sizeof(Sha224Context),
+                                 SHA224_BLOCK_SIZE,
+                                 SHA224_DIGEST_SIZE,
+                                 SHA224_MIN_PAD_SIZE,
+                                 TRUE,
+                                 (HashAlgoCompute)sha224Compute,
+                                 (HashAlgoInit)sha224Init,
+                                 (HashAlgoUpdate)sha224Update,
+                                 (HashAlgoFinal)sha224Final,
+                                 NULL};
 
 /**
  * @brief Digest a message using SHA-224
@@ -73,69 +70,66 @@ const HashAlgo sha224HashAlgo =
  * @return Error code
  **/
 
-__weak_func error_t sha224Compute(const void *data, size_t length, uint8_t *digest)
-{
+__weak_func error_t sha224Compute(const void *data, size_t length,
+                                  uint8_t *digest) {
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   Sha224Context *context;
+  Sha224Context *context;
 #else
-   Sha224Context context[1];
+  Sha224Context context[1];
 #endif
 
-   //Check parameters
-   if(data == NULL && length != 0)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (data == NULL && length != 0)
+    return ERROR_INVALID_PARAMETER;
 
-   if(digest == NULL)
-      return ERROR_INVALID_PARAMETER;
+  if (digest == NULL)
+    return ERROR_INVALID_PARAMETER;
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate a memory buffer to hold the SHA-224 context
-   context = cryptoAllocMem(sizeof(Sha224Context));
-   //Failed to allocate memory?
-   if(context == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate a memory buffer to hold the SHA-224 context
+  context = cryptoAllocMem(sizeof(Sha224Context));
+  // Failed to allocate memory?
+  if (context == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Initialize the SHA-224 context
-   sha224Init(context);
-   //Digest the message
-   sha224Update(context, data, length);
-   //Finalize the SHA-224 message digest
-   sha224Final(context, digest);
+  // Initialize the SHA-224 context
+  sha224Init(context);
+  // Digest the message
+  sha224Update(context, data, length);
+  // Finalize the SHA-224 message digest
+  sha224Final(context, digest);
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Free previously allocated memory
-   cryptoFreeMem(context);
+  // Free previously allocated memory
+  cryptoFreeMem(context);
 #endif
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Initialize SHA-224 message digest context
  * @param[in] context Pointer to the SHA-224 context to initialize
  **/
 
-__weak_func void sha224Init(Sha224Context *context)
-{
-   //Set initial hash value
-   context->h[0] = 0xC1059ED8;
-   context->h[1] = 0x367CD507;
-   context->h[2] = 0x3070DD17;
-   context->h[3] = 0xF70E5939;
-   context->h[4] = 0xFFC00B31;
-   context->h[5] = 0x68581511;
-   context->h[6] = 0x64F98FA7;
-   context->h[7] = 0xBEFA4FA4;
+__weak_func void sha224Init(Sha224Context *context) {
+  // Set initial hash value
+  context->h[0] = 0xC1059ED8;
+  context->h[1] = 0x367CD507;
+  context->h[2] = 0x3070DD17;
+  context->h[3] = 0xF70E5939;
+  context->h[4] = 0xFFC00B31;
+  context->h[5] = 0x68581511;
+  context->h[6] = 0x64F98FA7;
+  context->h[7] = 0xBEFA4FA4;
 
-   //Number of bytes in the buffer
-   context->size = 0;
-   //Total length of the message
-   context->totalSize = 0;
+  // Number of bytes in the buffer
+  context->size = 0;
+  // Total length of the message
+  context->totalSize = 0;
 }
-
 
 /**
  * @brief Update the SHA-224 context with a portion of the message being hashed
@@ -144,12 +138,11 @@ __weak_func void sha224Init(Sha224Context *context)
  * @param[in] length Length of the buffer
  **/
 
-__weak_func void sha224Update(Sha224Context *context, const void *data, size_t length)
-{
-   //The function is defined in the exact same manner as SHA-256
-   sha256Update(context, data, length);
+__weak_func void sha224Update(Sha224Context *context, const void *data,
+                              size_t length) {
+  // The function is defined in the exact same manner as SHA-256
+  sha256Update(context, data, length);
 }
-
 
 /**
  * @brief Finish the SHA-224 message digest
@@ -157,15 +150,14 @@ __weak_func void sha224Update(Sha224Context *context, const void *data, size_t l
  * @param[out] digest Calculated digest
  **/
 
-__weak_func void sha224Final(Sha224Context *context, uint8_t *digest)
-{
-   uint8_t temp[SHA256_DIGEST_SIZE];
+__weak_func void sha224Final(Sha224Context *context, uint8_t *digest) {
+  uint8_t temp[SHA256_DIGEST_SIZE];
 
-   //The function is defined in the exact same manner as SHA-256
-   sha256Final(context, temp);
+  // The function is defined in the exact same manner as SHA-256
+  sha256Final(context, temp);
 
-   //Copy the resulting digest
-   osMemcpy(digest, temp, SHA224_DIGEST_SIZE);
+  // Copy the resulting digest
+  osMemcpy(digest, temp, SHA224_DIGEST_SIZE);
 }
 
 #endif

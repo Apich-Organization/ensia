@@ -31,53 +31,50 @@
 #ifndef _TEA_H
 #define _TEA_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef TEA_PRIVATE_CONTEXT
-   #define TEA_PRIVATE_CONTEXT
+#define TEA_PRIVATE_CONTEXT
 #endif
 
-//TEA block size
+// TEA block size
 #define TEA_BLOCK_SIZE 8
-//TEA number of rounds
+// TEA number of rounds
 #define TEA_NB_ROUNDS 32
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define TEA_CIPHER_ALGO (&teaCipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief TEA algorithm context
  **/
 
-typedef struct
-{
-   uint32_t k[4];
-   TEA_PRIVATE_CONTEXT
+typedef struct {
+  uint32_t k[4];
+  TEA_PRIVATE_CONTEXT
 } TeaContext;
 
-
-//TEA related constants
+// TEA related constants
 extern const CipherAlgo teaCipherAlgo;
 
-//TEA related functions
+// TEA related functions
 error_t teaInit(TeaContext *context, const uint8_t *key, size_t keyLen);
 
 void teaEncryptBlock(TeaContext *context, const uint8_t *input,
-   uint8_t *output);
+                     uint8_t *output);
 
 void teaDecryptBlock(TeaContext *context, const uint8_t *input,
-   uint8_t *output);
+                     uint8_t *output);
 
 void teaDeinit(TeaContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

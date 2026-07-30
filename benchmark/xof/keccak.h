@@ -31,104 +31,101 @@
 #ifndef _KECCAK_H
 #define _KECCAK_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//The binary logarithm of the lane size
+// The binary logarithm of the lane size
 #ifndef KECCAK_L
-   #define KECCAK_L 6
+#define KECCAK_L 6
 #endif
 
-//Check lane size
+// Check lane size
 #if (KECCAK_L == 3)
-   //Base type that represents a lane
-   typedef uint8_t keccak_lane_t;
-   //Rotate left operation
-   #define KECCAK_ROL(a, n) ROL8(a, (n) % 8)
-   //String to lane conversion
-   #define KECCAK_LOAD_LANE(p) p[0]
-   //Lane to string conversion
-   #define KECCAK_STORE_LANE(a, p) p[0] = a
+// Base type that represents a lane
+typedef uint8_t keccak_lane_t;
+// Rotate left operation
+#define KECCAK_ROL(a, n) ROL8(a, (n) % 8)
+// String to lane conversion
+#define KECCAK_LOAD_LANE(p) p[0]
+// Lane to string conversion
+#define KECCAK_STORE_LANE(a, p) p[0] = a
 #elif (KECCAK_L == 4)
-   //Base type that represents a lane
-   #define keccak_lane_t uint16_t
-   //Rotate left operation
-   #define KECCAK_ROL(a, n) ROL16(a, (n) % 16)
-   //String to lane conversion
-   #define KECCAK_LOAD_LANE(p) LOAD16LE(p)
-   //Lane to string conversion
-   #define KECCAK_STORE_LANE(a, p) STORE16LE(a, p)
+// Base type that represents a lane
+#define keccak_lane_t uint16_t
+// Rotate left operation
+#define KECCAK_ROL(a, n) ROL16(a, (n) % 16)
+// String to lane conversion
+#define KECCAK_LOAD_LANE(p) LOAD16LE(p)
+// Lane to string conversion
+#define KECCAK_STORE_LANE(a, p) STORE16LE(a, p)
 #elif (KECCAK_L == 5)
-   //Base type that represents a lane
-   #define keccak_lane_t uint32_t
-   //Rotate left operation
-   #define KECCAK_ROL(a, n) ROL32(a, (n) % 32)
-   //String to lane conversion
-   #define KECCAK_LOAD_LANE(p) LOAD32LE(p)
-   //Lane to string conversion
-   #define KECCAK_STORE_LANE(a, p) STORE32LE(a, p)
+// Base type that represents a lane
+#define keccak_lane_t uint32_t
+// Rotate left operation
+#define KECCAK_ROL(a, n) ROL32(a, (n) % 32)
+// String to lane conversion
+#define KECCAK_LOAD_LANE(p) LOAD32LE(p)
+// Lane to string conversion
+#define KECCAK_STORE_LANE(a, p) STORE32LE(a, p)
 #elif (KECCAK_L == 6)
-   //Base type that represents a lane
-   #define keccak_lane_t uint64_t
-   //Rotate left operation
-   #define KECCAK_ROL(a, n) ROL64(a, (n) % 64)
-   //String to lane conversion
-   #define KECCAK_LOAD_LANE(p) LOAD64LE(p)
-   //Lane to string conversion
-   #define KECCAK_STORE_LANE(a, p) STORE64LE(a, p)
+// Base type that represents a lane
+#define keccak_lane_t uint64_t
+// Rotate left operation
+#define KECCAK_ROL(a, n) ROL64(a, (n) % 64)
+// String to lane conversion
+#define KECCAK_LOAD_LANE(p) LOAD64LE(p)
+// Lane to string conversion
+#define KECCAK_STORE_LANE(a, p) STORE64LE(a, p)
 #else
-   #error KECCAK_L parameter is not valid
+#error KECCAK_L parameter is not valid
 #endif
 
-//The lane size of a Keccak-p permutation, in bits
+// The lane size of a Keccak-p permutation, in bits
 #define KECCAK_W_BITS (1 << KECCAK_L)
-//The lane size of a Keccak-p permutation, in bytes
+// The lane size of a Keccak-p permutation, in bytes
 #define KECCAK_W_BYTES ((1 << KECCAK_L) / 8)
 
-//The width of a Keccak-p permutation, in bits
+// The width of a Keccak-p permutation, in bits
 #define KECCAK_B_BITS (KECCAK_W_BITS * 25)
-//The width of a Keccak-p permutation, in bytes
+// The width of a Keccak-p permutation, in bytes
 #define KECCAK_B_BYTES (KECCAK_W_BYTES * 25)
 
-//The number of rounds for a Keccak-p permutation
+// The number of rounds for a Keccak-p permutation
 #define KECCAK_NR (12 + 2 * KECCAK_L)
 
-//Keccak padding byte
+// Keccak padding byte
 #define KECCAK_PAD 0x01
-//SHA-3 padding byte
+// SHA-3 padding byte
 #define KECCAK_SHA3_PAD 0x06
-//SHAKE padding byte
+// SHAKE padding byte
 #define KECCAK_SHAKE_PAD 0x1F
-//cSHAKE padding byte
+// cSHAKE padding byte
 #define KECCAK_CSHAKE_PAD 0x04
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Keccak context
  **/
 
-typedef struct
-{
-   keccak_lane_t a[5][5];
-   uint8_t buffer[24 * KECCAK_W_BYTES];
-   uint_t blockSize;
-   size_t length;
+typedef struct {
+  keccak_lane_t a[5][5];
+  uint8_t buffer[24 * KECCAK_W_BYTES];
+  uint_t blockSize;
+  size_t length;
 } KeccakContext;
 
-
-//Keccak related functions
+// Keccak related functions
 error_t keccakInit(KeccakContext *context, uint_t capacity);
 void keccakAbsorb(KeccakContext *context, const void *input, size_t length);
 void keccakFinal(KeccakContext *context, uint8_t pad);
 void keccakSqueeze(KeccakContext *context, uint8_t *output, size_t length);
 void keccakPermutBlock(KeccakContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

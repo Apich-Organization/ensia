@@ -31,58 +31,55 @@
 #ifndef _WHIRLPOOL_H
 #define _WHIRLPOOL_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Whirlpool block size
+// Whirlpool block size
 #define WHIRLPOOL_BLOCK_SIZE 64
-//Whirlpool digest size
+// Whirlpool digest size
 #define WHIRLPOOL_DIGEST_SIZE 64
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define WHIRLPOOL_MIN_PAD_SIZE 33
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define WHIRLPOOL_HASH_ALGO (&whirlpoolHashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Whirlpool algorithm context
  **/
 
-typedef struct
-{
-   uint64_t h[8];
-   union
-   {
-      uint64_t x[8];
-      uint8_t buffer[64];
-   };
+typedef struct {
+  uint64_t h[8];
+  union {
+    uint64_t x[8];
+    uint8_t buffer[64];
+  };
 
-   uint64_t k[8];
-   uint64_t l[8];
-   uint64_t state[8];
+  uint64_t k[8];
+  uint64_t l[8];
+  uint64_t state[8];
 
-   size_t size;
-   uint64_t totalSize;
+  size_t size;
+  uint64_t totalSize;
 } WhirlpoolContext;
 
-
-//Whirlpool related constants
+// Whirlpool related constants
 extern const uint8_t WHIRLPOOL_OID[6];
 extern const HashAlgo whirlpoolHashAlgo;
 
-//Whirlpool related functions
+// Whirlpool related functions
 error_t whirlpoolCompute(const void *data, size_t length, uint8_t *digest);
 void whirlpoolInit(WhirlpoolContext *context);
-void whirlpoolUpdate(WhirlpoolContext *context, const void *data, size_t length);
+void whirlpoolUpdate(WhirlpoolContext *context, const void *data,
+                     size_t length);
 void whirlpoolFinal(WhirlpoolContext *context, uint8_t *digest);
 void whirlpoolProcessBlock(WhirlpoolContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

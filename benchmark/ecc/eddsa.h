@@ -31,56 +31,51 @@
 #ifndef _EDDSA_H
 #define _EDDSA_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "ecc/ec.h"
 #include "ecc/ec_curves.h"
 
-//Maximum size of EdDSA public keys
+// Maximum size of EdDSA public keys
 #if (ED448_SUPPORT == ENABLED)
-   #define EDDSA_MAX_PUBLIC_KEY_LEN 57
+#define EDDSA_MAX_PUBLIC_KEY_LEN 57
 #else
-   #define EDDSA_MAX_PUBLIC_KEY_LEN 32
+#define EDDSA_MAX_PUBLIC_KEY_LEN 32
 #endif
 
-//Maximum size of EdDSA private keys
+// Maximum size of EdDSA private keys
 #if (ED448_SUPPORT == ENABLED)
-   #define EDDSA_MAX_PRIVATE_KEY_LEN 57
+#define EDDSA_MAX_PRIVATE_KEY_LEN 57
 #else
-   #define EDDSA_MAX_PRIVATE_KEY_LEN 32
+#define EDDSA_MAX_PRIVATE_KEY_LEN 32
 #endif
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief EdDSA public key
  **/
 
-typedef struct
-{
-   const EcCurve *curve;                ///<Elliptic curve parameters
-   uint8_t q[EDDSA_MAX_PUBLIC_KEY_LEN]; ///<Public key
+typedef struct {
+  const EcCurve *curve;                ///< Elliptic curve parameters
+  uint8_t q[EDDSA_MAX_PUBLIC_KEY_LEN]; ///< Public key
 } EddsaPublicKey;
-
 
 /**
  * @brief EdDSA private key
  **/
 
-typedef struct
-{
-   const EcCurve *curve;                 ///<Elliptic curve parameters
-   uint8_t d[EDDSA_MAX_PRIVATE_KEY_LEN]; ///<Private key
-   int_t slot;                           ///<Private key slot
-   EddsaPublicKey q;                     ///<Public key
+typedef struct {
+  const EcCurve *curve;                 ///< Elliptic curve parameters
+  uint8_t d[EDDSA_MAX_PRIVATE_KEY_LEN]; ///< Private key
+  int_t slot;                           ///< Private key slot
+  EddsaPublicKey q;                     ///< Public key
 } EddsaPrivateKey;
 
-
-//EdDSA related functions
+// EdDSA related functions
 void eddsaInitPublicKey(EddsaPublicKey *key);
 void eddsaFreePublicKey(EddsaPublicKey *key);
 
@@ -88,40 +83,41 @@ void eddsaInitPrivateKey(EddsaPrivateKey *key);
 void eddsaFreePrivateKey(EddsaPrivateKey *key);
 
 error_t eddsaGenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
-   const EcCurve *curve, EddsaPrivateKey *privateKey,
-   EddsaPublicKey *publicKey);
+                             const EcCurve *curve, EddsaPrivateKey *privateKey,
+                             EddsaPublicKey *publicKey);
 
 error_t eddsaGeneratePrivateKey(const PrngAlgo *prngAlgo, void *prngContext,
-   const EcCurve *curve, EddsaPrivateKey *privateKey);
+                                const EcCurve *curve,
+                                EddsaPrivateKey *privateKey);
 
 error_t eddsaGeneratePublicKey(const EddsaPrivateKey *privateKey,
-   EddsaPublicKey *publicKey);
+                               EddsaPublicKey *publicKey);
 
 error_t eddsaImportPublicKey(EddsaPublicKey *key, const EcCurve *curve,
-   const uint8_t *input, size_t length);
+                             const uint8_t *input, size_t length);
 
 error_t eddsaExportPublicKey(const EddsaPublicKey *key, uint8_t *output,
-   size_t *written);
+                             size_t *written);
 
 error_t eddsaImportPrivateKey(EddsaPrivateKey *key, const EcCurve *curve,
-   const uint8_t *input, size_t length);
+                              const uint8_t *input, size_t length);
 
 error_t eddsaExportPrivateKey(const EddsaPrivateKey *key, uint8_t *output,
-   size_t *written);
+                              size_t *written);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif
 
-//Ed25519 supported?
+// Ed25519 supported?
 #if (ED25519_SUPPORT == ENABLED)
-   #include "ecc/ed25519.h"
+#include "ecc/ed25519.h"
 #endif
 
-//Ed448 supported?
+// Ed448 supported?
 #if (ED448_SUPPORT == ENABLED)
-   #include "ecc/ed448.h"
+#include "ecc/ed448.h"
 #endif
 
 #endif

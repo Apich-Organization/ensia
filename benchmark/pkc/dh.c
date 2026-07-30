@@ -34,79 +34,70 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "pkc/dh.h"
+#include "core/crypto.h"
 #include "debug.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (DH_SUPPORT == ENABLED)
-
 
 /**
  * @brief Initialize Diffie-Hellman context
  * @param[in] context Pointer to the Diffie-Hellman context
  **/
 
-void dhInit(DhContext *context)
-{
-   //Initialize Diffie-Hellman parameters
-   dhInitParameters(&context->params);
+void dhInit(DhContext *context) {
+  // Initialize Diffie-Hellman parameters
+  dhInitParameters(&context->params);
 
-   //Initialize private and public values
-   mpiInit(&context->xa);
-   mpiInit(&context->ya);
-   mpiInit(&context->yb);
+  // Initialize private and public values
+  mpiInit(&context->xa);
+  mpiInit(&context->ya);
+  mpiInit(&context->yb);
 }
-
 
 /**
  * @brief Release Diffie-Hellman context
  * @param[in] context Pointer to the Diffie-Hellman context
  **/
 
-void dhFree(DhContext *context)
-{
-   //Release Diffie-Hellman parameters
-   dhFreeParameters(&context->params);
+void dhFree(DhContext *context) {
+  // Release Diffie-Hellman parameters
+  dhFreeParameters(&context->params);
 
-   //Release private and public values
-   mpiFree(&context->xa);
-   mpiFree(&context->ya);
-   mpiFree(&context->yb);
+  // Release private and public values
+  mpiFree(&context->xa);
+  mpiFree(&context->ya);
+  mpiFree(&context->yb);
 }
-
 
 /**
  * @brief Initialize Diffie-Hellman parameters
  * @param[in] params Pointer to the Diffie-Hellman parameters
  **/
 
-void dhInitParameters(DhParameters *params)
-{
-   //Initialize prime modulus
-   mpiInit(&params->p);
-   //Initialize generator
-   mpiInit(&params->g);
+void dhInitParameters(DhParameters *params) {
+  // Initialize prime modulus
+  mpiInit(&params->p);
+  // Initialize generator
+  mpiInit(&params->g);
 }
-
 
 /**
  * @brief Release Diffie-Hellman parameters
  * @param[in] params Pointer to the Diffie-Hellman parameters
  **/
 
-void dhFreeParameters(DhParameters *params)
-{
-   //Release prime modulus
-   mpiFree(&params->p);
-   //Release generator
-   mpiFree(&params->g);
+void dhFreeParameters(DhParameters *params) {
+  // Release prime modulus
+  mpiFree(&params->p);
+  // Release generator
+  mpiFree(&params->g);
 }
-
 
 /**
  * @brief Diffie-Hellman key pair generation
@@ -117,61 +108,58 @@ void dhFreeParameters(DhParameters *params)
  **/
 
 error_t dhGenerateKeyPair(DhContext *context, const PrngAlgo *prngAlgo,
-   void *prngContext)
-{
-   error_t error;
-   uint_t k;
+                          void *prngContext) {
+  error_t error;
+  uint_t k;
 
-   //Debug message
-   TRACE_DEBUG("Generating Diffie-Hellman key pair...\r\n");
+  // Debug message
+  TRACE_DEBUG("Generating Diffie-Hellman key pair...\r\n");
 
-   //Get the length in bits of the prime p
-   k = mpiGetBitLength(&context->params.p);
-   //Ensure the length is valid
-   if(k == 0)
-      return ERROR_INVALID_PARAMETER;
+  // Get the length in bits of the prime p
+  k = mpiGetBitLength(&context->params.p);
+  // Ensure the length is valid
+  if (k == 0)
+    return ERROR_INVALID_PARAMETER;
 
-   //The private value shall be randomly generated
-   error = mpiRand(&context->xa, k, prngAlgo, prngContext);
-   //Any error to report?
-   if(error)
+  // The private value shall be randomly generated
+  error = mpiRand(&context->xa, k, prngAlgo, prngContext);
+  // Any error to report?
+  if (error)
+    return error;
+
+  // The private value shall be less than p
+  if (mpiComp(&context->xa, &context->params.p) >= 0) {
+    // Shift value to the right
+    error = mpiShiftRight(&context->xa, 1);
+    // Any error to report?
+    if (error)
       return error;
+  }
 
-   //The private value shall be less than p
-   if(mpiComp(&context->xa, &context->params.p) >= 0)
-   {
-      //Shift value to the right
-      error = mpiShiftRight(&context->xa, 1);
-      //Any error to report?
-      if(error)
-         return error;
-   }
+  // Debug message
+  TRACE_DEBUG("  Private value:\r\n");
+  TRACE_DEBUG_MPI("    ", &context->xa);
 
-   //Debug message
-   TRACE_DEBUG("  Private value:\r\n");
-   TRACE_DEBUG_MPI("    ", &context->xa);
+  // Calculate the corresponding public value (ya = g ^ xa mod p)
+  error = mpiExpModRegular(&context->ya, &context->params.g, &context->xa,
+                           &context->params.p);
+  // Any error to report?
+  if (error)
+    return error;
 
-   //Calculate the corresponding public value (ya = g ^ xa mod p)
-   error = mpiExpModRegular(&context->ya, &context->params.g, &context->xa,
-      &context->params.p);
-   //Any error to report?
-   if(error)
-      return error;
+  // Debug message
+  TRACE_DEBUG("  Public value:\r\n");
+  TRACE_DEBUG_MPI("    ", &context->ya);
 
-   //Debug message
-   TRACE_DEBUG("  Public value:\r\n");
-   TRACE_DEBUG_MPI("    ", &context->ya);
+  // Check public value
+  error = dhCheckPublicKey(context, &context->ya);
+  // Weak public value?
+  if (error)
+    return error;
 
-   //Check public value
-   error = dhCheckPublicKey(context, &context->ya);
-   //Weak public value?
-   if(error)
-      return error;
-
-   //Public value successfully generated
-   return NO_ERROR;
+  // Public value successfully generated
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Export our own public key
@@ -183,28 +171,25 @@ error_t dhGenerateKeyPair(DhContext *context, const PrngAlgo *prngAlgo,
  **/
 
 error_t dhExportPublicKey(DhContext *context, uint8_t *output, size_t *written,
-   MpiFormat format)
-{
-   error_t error;
-   size_t n;
+                          MpiFormat format) {
+  error_t error;
+  size_t n;
 
-   //Retrieve the length of the modulus
-   n = mpiGetByteLength(&context->params.p);
+  // Retrieve the length of the modulus
+  n = mpiGetByteLength(&context->params.p);
 
-   //Export our own public key
-   error = mpiExport(&context->ya, output, n, format);
+  // Export our own public key
+  error = mpiExport(&context->ya, output, n, format);
 
-   //Check status code
-   if(!error)
-   {
-      //Return the length of the octet string
-      *written = n;
-   }
+  // Check status code
+  if (!error) {
+    // Return the length of the octet string
+    *written = n;
+  }
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief Import peer's public key
@@ -216,24 +201,21 @@ error_t dhExportPublicKey(DhContext *context, uint8_t *output, size_t *written,
  **/
 
 error_t dhImportPeerPublicKey(DhContext *context, const uint8_t *input,
-   size_t length, MpiFormat format)
-{
-   error_t error;
+                              size_t length, MpiFormat format) {
+  error_t error;
 
-   //Import peer's public key
-   error = mpiImport(&context->yb, input, length, format);
+  // Import peer's public key
+  error = mpiImport(&context->yb, input, length, format);
 
-   //Check status code
-   if(!error)
-   {
-      //Ensure the public key is acceptable
-      error = dhCheckPublicKey(context, &context->yb);
-   }
+  // Check status code
+  if (!error) {
+    // Ensure the public key is acceptable
+    error = dhCheckPublicKey(context, &context->yb);
+  }
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief Check Diffie-Hellman public value
@@ -242,40 +224,32 @@ error_t dhImportPeerPublicKey(DhContext *context, const uint8_t *input,
  * @return Error code
  **/
 
-error_t dhCheckPublicKey(DhContext *context, const Mpi *publicKey)
-{
-   error_t error;
-   Mpi a;
+error_t dhCheckPublicKey(DhContext *context, const Mpi *publicKey) {
+  error_t error;
+  Mpi a;
 
-   //Initialize multiple precision integer
-   mpiInit(&a);
-   //Precompute p - 1
-   error = mpiSubInt(&a, &context->params.p, 1);
+  // Initialize multiple precision integer
+  mpiInit(&a);
+  // Precompute p - 1
+  error = mpiSubInt(&a, &context->params.p, 1);
 
-   //Check status
-   if(!error)
-   {
-      //Reject weak public values 1 and p - 1
-      if(mpiCompInt(publicKey, 1) <= 0)
-      {
-         error = ERROR_ILLEGAL_PARAMETER;
-      }
-      else if(mpiComp(publicKey, &a) >= 0)
-      {
-         error = ERROR_ILLEGAL_PARAMETER;
-      }
-      else
-      {
-      }
-   }
+  // Check status
+  if (!error) {
+    // Reject weak public values 1 and p - 1
+    if (mpiCompInt(publicKey, 1) <= 0) {
+      error = ERROR_ILLEGAL_PARAMETER;
+    } else if (mpiComp(publicKey, &a) >= 0) {
+      error = ERROR_ILLEGAL_PARAMETER;
+    } else {
+    }
+  }
 
-   //Free previously allocated resources
-   mpiFree(&a);
+  // Free previously allocated resources
+  mpiFree(&a);
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief Compute Diffie-Hellman shared secret
@@ -287,56 +261,54 @@ error_t dhCheckPublicKey(DhContext *context, const Mpi *publicKey)
  **/
 
 error_t dhComputeSharedSecret(DhContext *context, uint8_t *output,
-   size_t outputSize, size_t *outputLen)
-{
-   error_t error;
-   size_t k;
-   Mpi z;
+                              size_t outputSize, size_t *outputLen) {
+  error_t error;
+  size_t k;
+  Mpi z;
 
-   //Debug message
-   TRACE_DEBUG("Computing Diffie-Hellman shared secret...\r\n");
+  // Debug message
+  TRACE_DEBUG("Computing Diffie-Hellman shared secret...\r\n");
 
-   //Get the length in octets of the prime modulus
-   k = mpiGetByteLength(&context->params.p);
+  // Get the length in octets of the prime modulus
+  k = mpiGetByteLength(&context->params.p);
 
-   //Make sure that the output buffer is large enough
-   if(outputSize < k)
-      return ERROR_INVALID_LENGTH;
+  // Make sure that the output buffer is large enough
+  if (outputSize < k)
+    return ERROR_INVALID_LENGTH;
 
-   //The multiple precision integer must be initialized before it can be used
-   mpiInit(&z);
+  // The multiple precision integer must be initialized before it can be used
+  mpiInit(&z);
 
-   //Start of exception handling block
-   do
-   {
-      //Calculate the shared secret key (k = yb ^ xa mod p)
-      error = mpiExpModRegular(&z, &context->yb, &context->xa,
-         &context->params.p);
-      //Any error to report?
-      if(error)
-         break;
+  // Start of exception handling block
+  do {
+    // Calculate the shared secret key (k = yb ^ xa mod p)
+    error =
+        mpiExpModRegular(&z, &context->yb, &context->xa, &context->params.p);
+    // Any error to report?
+    if (error)
+      break;
 
-      //Convert the resulting integer to an octet string
-      error = mpiExport(&z, output, k, MPI_FORMAT_BIG_ENDIAN);
-      //Conversion failed?
-      if(error)
-         break;
+    // Convert the resulting integer to an octet string
+    error = mpiExport(&z, output, k, MPI_FORMAT_BIG_ENDIAN);
+    // Conversion failed?
+    if (error)
+      break;
 
-      //Length of the resulting shared secret
-      *outputLen = k;
+    // Length of the resulting shared secret
+    *outputLen = k;
 
-      //Debug message
-      TRACE_DEBUG("  Shared secret (%" PRIuSIZE " bytes):\r\n", *outputLen);
-      TRACE_DEBUG_ARRAY("    ", output, *outputLen);
+    // Debug message
+    TRACE_DEBUG("  Shared secret (%" PRIuSIZE " bytes):\r\n", *outputLen);
+    TRACE_DEBUG_ARRAY("    ", output, *outputLen);
 
-      //End of exception handling block
-   } while(0);
+    // End of exception handling block
+  } while (0);
 
-   //Release previously allocated resources
-   mpiFree(&z);
+  // Release previously allocated resources
+  mpiFree(&z);
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
 
 #endif

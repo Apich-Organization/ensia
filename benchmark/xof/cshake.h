@@ -31,35 +31,32 @@
 #ifndef _CSHAKE_H
 #define _CSHAKE_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "xof/keccak.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief cSHAKE algorithm context
  **/
 
-typedef struct
-{
-   size_t nameLen;
-   size_t customLen;
-   KeccakContext keccakContext;
+typedef struct {
+  size_t nameLen;
+  size_t customLen;
+  KeccakContext keccakContext;
 } CshakeContext;
 
-
-//cSHAKE related functions
+// cSHAKE related functions
 error_t cshakeCompute(uint_t strength, const void *input, size_t inputLen,
-   const char_t *name, size_t nameLen, const char_t *custom, size_t customLen,
-   uint8_t *output, size_t outputLen);
+                      const char_t *name, size_t nameLen, const char_t *custom,
+                      size_t customLen, uint8_t *output, size_t outputLen);
 
 error_t cshakeInit(CshakeContext *context, uint_t strength, const char_t *name,
-   size_t nameLen, const char_t *custom, size_t customLen);
+                   size_t nameLen, const char_t *custom, size_t customLen);
 
 void cshakeAbsorb(CshakeContext *context, const void *input, size_t length);
 void cshakeFinal(CshakeContext *context);
@@ -67,7 +64,7 @@ void cshakeSqueeze(CshakeContext *context, uint8_t *output, size_t length);
 
 void cshakeLeftEncode(size_t value, uint8_t *buffer, size_t *length);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

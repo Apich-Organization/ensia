@@ -31,53 +31,49 @@
 #ifndef _TIGER_H
 #define _TIGER_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Tiger block size
+// Tiger block size
 #define TIGER_BLOCK_SIZE 64
-//Tiger digest size
+// Tiger digest size
 #define TIGER_DIGEST_SIZE 24
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define TIGER_MIN_PAD_SIZE 9
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define TIGER_HASH_ALGO (&tigerHashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Tiger algorithm context
  **/
 
-typedef struct
-{
-   uint64_t h[3];
-   union
-   {
-      uint64_t x[8];
-      uint8_t buffer[64];
-   };
-   size_t size;
-   uint64_t totalSize;
+typedef struct {
+  uint64_t h[3];
+  union {
+    uint64_t x[8];
+    uint8_t buffer[64];
+  };
+  size_t size;
+  uint64_t totalSize;
 } TigerContext;
 
-
-//Tiger related constants
+// Tiger related constants
 extern const uint8_t TIGER_OID[9];
 extern const HashAlgo tigerHashAlgo;
 
-//Tiger related functions
+// Tiger related functions
 error_t tigerCompute(const void *data, size_t length, uint8_t *digest);
 void tigerInit(TigerContext *context);
 void tigerUpdate(TigerContext *context, const void *data, size_t length);
 void tigerFinal(TigerContext *context, uint8_t *digest);
 void tigerProcessBlock(TigerContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

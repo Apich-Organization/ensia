@@ -31,65 +31,62 @@
 #ifndef _XOF_ALGORITHMS_H
 #define _XOF_ALGORITHMS_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Keccak support?
+// Keccak support?
 #if (KECCAK_SUPPORT == ENABLED)
-   #include "xof/keccak.h"
+#include "xof/keccak.h"
 #endif
 
-//SHAKE support?
+// SHAKE support?
 #if (SHAKE_SUPPORT == ENABLED)
-   #include "xof/shake.h"
+#include "xof/shake.h"
 #endif
 
-//cSHAKE support?
+// cSHAKE support?
 #if (CSHAKE_SUPPORT == ENABLED)
-   #include "xof/cshake.h"
+#include "xof/cshake.h"
 #endif
 
-//Ascon-XOF128 support?
+// Ascon-XOF128 support?
 #if (ASCON_XOF128_SUPPORT == ENABLED)
-   #include "lwc/ascon_xof128.h"
+#include "lwc/ascon_xof128.h"
 #endif
 
-//Ascon-CXOF128 support?
+// Ascon-CXOF128 support?
 #if (ASCON_CXOF128_SUPPORT == ENABLED)
-   #include "lwc/ascon_cxof128.h"
+#include "lwc/ascon_cxof128.h"
 #endif
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Generic XOF algorithm context
  **/
 
-typedef union
-{
+typedef union {
 #if (KECCAK_SUPPORT == ENABLED)
-   KeccakContext keccakContext;
+  KeccakContext keccakContext;
 #endif
 #if (SHAKE_SUPPORT == ENABLED)
-   ShakeContext shakeContext;
+  ShakeContext shakeContext;
 #endif
 #if (CSHAKE_SUPPORT == ENABLED)
-   CshakeContext cshakeContext;
+  CshakeContext cshakeContext;
 #endif
 #if (ASCON_XOF128_SUPPORT == ENABLED)
-   AsconXof128Context asconXof128Context;
+  AsconXof128Context asconXof128Context;
 #endif
 #if (ASCON_CXOF128_SUPPORT == ENABLED)
-   AsconCxof128Context asconCxof128Context;
+  AsconCxof128Context asconCxof128Context;
 #endif
 } XofContext;
 
-
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

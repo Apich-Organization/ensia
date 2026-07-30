@@ -31,38 +31,35 @@
 #ifndef _TRIVIUM_H
 #define _TRIVIUM_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Trivium algorithm context
  **/
 
-typedef struct
-{
-   uint8_t s[36];
+typedef struct {
+  uint8_t s[36];
 } TriviumContext;
 
-
-//Trivium related functions
-error_t triviumInit(TriviumContext *context, const uint8_t *key,
-   size_t keyLen, const uint8_t *iv, size_t ivLen);
+// Trivium related functions
+error_t triviumInit(TriviumContext *context, const uint8_t *key, size_t keyLen,
+                    const uint8_t *iv, size_t ivLen);
 
 void triviumCipher(TriviumContext *context, const uint8_t *input,
-   uint8_t *output, size_t length);
+                   uint8_t *output, size_t length);
 
 uint8_t triviumGenerateBit(TriviumContext *context);
 uint8_t triviumGenerateByte(TriviumContext *context);
 
 void triviumDeinit(TriviumContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

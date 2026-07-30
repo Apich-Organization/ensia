@@ -31,24 +31,23 @@
 #ifndef _SHA384_H
 #define _SHA384_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "hash/sha512.h"
 
-//SHA-384 block size
+// SHA-384 block size
 #define SHA384_BLOCK_SIZE 128
-//SHA-384 digest size
+// SHA-384 digest size
 #define SHA384_DIGEST_SIZE 48
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define SHA384_MIN_PAD_SIZE 17
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define SHA384_HASH_ALGO (&sha384HashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief SHA-384 algorithm context
@@ -56,19 +55,18 @@ extern "C" {
 
 typedef Sha512Context Sha384Context;
 
-
-//SHA-384 related constants
+// SHA-384 related constants
 extern const uint8_t SHA384_OID[9];
 extern const HashAlgo sha384HashAlgo;
 
-//SHA-384 related functions
+// SHA-384 related functions
 error_t sha384Compute(const void *data, size_t length, uint8_t *digest);
 void sha384Init(Sha384Context *context);
 void sha384Update(Sha384Context *context, const void *data, size_t length);
 void sha384Final(Sha384Context *context, uint8_t *digest);
 void sha384FinalRaw(Sha384Context *context, uint8_t *digest);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

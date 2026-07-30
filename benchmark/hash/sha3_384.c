@@ -33,37 +33,34 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "hash/sha3_384.h"
+#include "core/crypto.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (SHA3_384_SUPPORT == ENABLED)
 
-//SHA3-384 object identifier (2.16.840.1.101.3.4.2.9)
-const uint8_t SHA3_384_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x09};
+// SHA3-384 object identifier (2.16.840.1.101.3.4.2.9)
+const uint8_t SHA3_384_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65,
+                                 0x03, 0x04, 0x02, 0x09};
 
-//Common interface for hash algorithms
-const HashAlgo sha3_384HashAlgo =
-{
-   "SHA3-384",
-   SHA3_384_OID,
-   sizeof(SHA3_384_OID),
-   sizeof(Sha3_384Context),
-   SHA3_384_BLOCK_SIZE,
-   SHA3_384_DIGEST_SIZE,
-   SHA3_384_MIN_PAD_SIZE,
-   FALSE,
-   (HashAlgoCompute) sha3_384Compute,
-   (HashAlgoInit) sha3_384Init,
-   (HashAlgoUpdate) sha3_384Update,
-   (HashAlgoFinal) sha3_384Final,
-   NULL
-};
-
+// Common interface for hash algorithms
+const HashAlgo sha3_384HashAlgo = {"SHA3-384",
+                                   SHA3_384_OID,
+                                   sizeof(SHA3_384_OID),
+                                   sizeof(Sha3_384Context),
+                                   SHA3_384_BLOCK_SIZE,
+                                   SHA3_384_DIGEST_SIZE,
+                                   SHA3_384_MIN_PAD_SIZE,
+                                   FALSE,
+                                   (HashAlgoCompute)sha3_384Compute,
+                                   (HashAlgoInit)sha3_384Init,
+                                   (HashAlgoUpdate)sha3_384Update,
+                                   (HashAlgoFinal)sha3_384Final,
+                                   NULL};
 
 /**
  * @brief Digest a message using SHA3-384
@@ -73,57 +70,53 @@ const HashAlgo sha3_384HashAlgo =
  * @return Error code
  **/
 
-error_t sha3_384Compute(const void *data, size_t length, uint8_t *digest)
-{
+error_t sha3_384Compute(const void *data, size_t length, uint8_t *digest) {
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   Sha3_384Context *context;
+  Sha3_384Context *context;
 #else
-   Sha3_384Context context[1];
+  Sha3_384Context context[1];
 #endif
 
-   //Check parameters
-   if(data == NULL && length != 0)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (data == NULL && length != 0)
+    return ERROR_INVALID_PARAMETER;
 
-   if(digest == NULL)
-      return ERROR_INVALID_PARAMETER;
+  if (digest == NULL)
+    return ERROR_INVALID_PARAMETER;
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate a memory buffer to hold the SHA3-384 context
-   context = cryptoAllocMem(sizeof(Sha3_384Context));
-   //Failed to allocate memory?
-   if(context == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate a memory buffer to hold the SHA3-384 context
+  context = cryptoAllocMem(sizeof(Sha3_384Context));
+  // Failed to allocate memory?
+  if (context == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Initialize the SHA3-384 context
-   sha3_384Init(context);
-   //Digest the message
-   sha3_384Update(context, data, length);
-   //Finalize the SHA3-384 message digest
-   sha3_384Final(context, digest);
+  // Initialize the SHA3-384 context
+  sha3_384Init(context);
+  // Digest the message
+  sha3_384Update(context, data, length);
+  // Finalize the SHA3-384 message digest
+  sha3_384Final(context, digest);
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Free previously allocated memory
-   cryptoFreeMem(context);
+  // Free previously allocated memory
+  cryptoFreeMem(context);
 #endif
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Initialize SHA3-384 message digest context
  * @param[in] context Pointer to the SHA3-384 context to initialize
  **/
 
-void sha3_384Init(Sha3_384Context *context)
-{
-   //The capacity of the sponge is twice the digest length
-   keccakInit(context, 2 * 384);
+void sha3_384Init(Sha3_384Context *context) {
+  // The capacity of the sponge is twice the digest length
+  keccakInit(context, 2 * 384);
 }
-
 
 /**
  * @brief Update the SHA3-384 context with a portion of the message being hashed
@@ -132,12 +125,10 @@ void sha3_384Init(Sha3_384Context *context)
  * @param[in] length Length of the buffer
  **/
 
-void sha3_384Update(Sha3_384Context *context, const void *data, size_t length)
-{
-   //Absorb the input data
-   keccakAbsorb(context, data, length);
+void sha3_384Update(Sha3_384Context *context, const void *data, size_t length) {
+  // Absorb the input data
+  keccakAbsorb(context, data, length);
 }
-
 
 /**
  * @brief Finish the SHA3-384 message digest
@@ -145,12 +136,11 @@ void sha3_384Update(Sha3_384Context *context, const void *data, size_t length)
  * @param[out] digest Calculated digest
  **/
 
-void sha3_384Final(Sha3_384Context *context, uint8_t *digest)
-{
-   //Finish absorbing phase (padding byte is 0x06 for SHA-3)
-   keccakFinal(context, KECCAK_SHA3_PAD);
-   //Extract data from the squeezing phase
-   keccakSqueeze(context, digest, SHA3_384_DIGEST_SIZE);
+void sha3_384Final(Sha3_384Context *context, uint8_t *digest) {
+  // Finish absorbing phase (padding byte is 0x06 for SHA-3)
+  keccakFinal(context, KECCAK_SHA3_PAD);
+  // Extract data from the squeezing phase
+  keccakSqueeze(context, digest, SHA3_384_DIGEST_SIZE);
 }
 
 #endif

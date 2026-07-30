@@ -31,41 +31,36 @@
 #ifndef _DH_H
 #define _DH_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "mpi/mpi.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Diffie-Hellman parameters
  **/
 
-typedef struct
-{
-   Mpi p; ///<Prime modulus
-   Mpi g; ///<Generator
+typedef struct {
+  Mpi p; ///< Prime modulus
+  Mpi g; ///< Generator
 } DhParameters;
-
 
 /**
  * @brief Diffie-Hellman context
  **/
 
-typedef struct
-{
-   DhParameters params; //Diffie-Hellman parameters
-   Mpi xa;              ///<One's own private value
-   Mpi ya;              ///<One's own public value
-   Mpi yb;              ///<Peer's public value
+typedef struct {
+  DhParameters params; // Diffie-Hellman parameters
+  Mpi xa;              ///< One's own private value
+  Mpi ya;              ///< One's own public value
+  Mpi yb;              ///< Peer's public value
 } DhContext;
 
-
-//Diffie-Hellman related functions
+// Diffie-Hellman related functions
 void dhInit(DhContext *context);
 void dhFree(DhContext *context);
 
@@ -73,20 +68,20 @@ void dhInitParameters(DhParameters *params);
 void dhFreeParameters(DhParameters *params);
 
 error_t dhGenerateKeyPair(DhContext *context, const PrngAlgo *prngAlgo,
-   void *prngContext);
+                          void *prngContext);
 
 error_t dhExportPublicKey(DhContext *context, uint8_t *output, size_t *written,
-   MpiFormat format);
+                          MpiFormat format);
 
 error_t dhImportPeerPublicKey(DhContext *context, const uint8_t *input,
-   size_t length, MpiFormat format);
+                              size_t length, MpiFormat format);
 
 error_t dhCheckPublicKey(DhContext *context, const Mpi *publicKey);
 
 error_t dhComputeSharedSecret(DhContext *context, uint8_t *output,
-   size_t outputSize, size_t *outputLen);
+                              size_t outputSize, size_t *outputLen);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

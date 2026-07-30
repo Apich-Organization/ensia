@@ -31,62 +31,59 @@
 #ifndef _KEM_H
 #define _KEM_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//ML-KEM-512 key encapsulation mechanism supported?
+// ML-KEM-512 key encapsulation mechanism supported?
 #if (MLKEM512_SUPPORT == ENABLED)
-   #include "pqc/mlkem512.h"
+#include "pqc/mlkem512.h"
 #endif
 
-//ML-KEM-768 key encapsulation mechanism supported?
+// ML-KEM-768 key encapsulation mechanism supported?
 #if (MLKEM768_SUPPORT == ENABLED)
-   #include "pqc/mlkem768.h"
+#include "pqc/mlkem768.h"
 #endif
 
-//ML-KEM-1024 key encapsulation mechanism supported?
+// ML-KEM-1024 key encapsulation mechanism supported?
 #if (MLKEM1024_SUPPORT == ENABLED)
-   #include "pqc/mlkem1024.h"
+#include "pqc/mlkem1024.h"
 #endif
 
-//Streamlined NTRU Prime 761 KEM supported?
+// Streamlined NTRU Prime 761 KEM supported?
 #if (SNTRUP761_SUPPORT == ENABLED)
-   #include "pqc/sntrup761.h"
+#include "pqc/sntrup761.h"
 #endif
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief KEM context
  **/
 
-typedef struct
-{
-   const KemAlgo *kemAlgo; ///<Key encapsulation mechanism
-   uint8_t *sk;            ///<Secret key
-   uint8_t *pk;            ///<Public key
+typedef struct {
+  const KemAlgo *kemAlgo; ///< Key encapsulation mechanism
+  uint8_t *sk;            ///< Secret key
+  uint8_t *pk;            ///< Public key
 } KemContext;
 
-
-//KEM related functions
+// KEM related functions
 void kemInit(KemContext *context, const KemAlgo *kemAlgo);
 void kemFree(KemContext *context);
 
 error_t kemGenerateKeyPair(KemContext *context, const PrngAlgo *prngAlgo,
-   void *prngContext);
+                           void *prngContext);
 
 error_t kemLoadPublicKey(KemContext *context, const uint8_t *pk);
 
 error_t kemEncapsulate(KemContext *context, const PrngAlgo *prngAlgo,
-   void *prngContext, uint8_t *ct, uint8_t *ss);
+                       void *prngContext, uint8_t *ct, uint8_t *ss);
 
 error_t kemDecapsulate(KemContext *context, const uint8_t *ct, uint8_t *ss);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

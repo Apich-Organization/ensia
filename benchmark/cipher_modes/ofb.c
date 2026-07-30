@@ -37,17 +37,16 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher_modes/ofb.h"
+#include "core/crypto.h"
 #include "debug.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (OFB_SUPPORT == ENABLED)
-
 
 /**
  * @brief OFB encryption
@@ -61,53 +60,50 @@
  * @return Error code
  **/
 
-__weak_func error_t ofbEncrypt(const CipherAlgo *cipher, void *context, uint_t s,
-   uint8_t *iv, const uint8_t *p, uint8_t *c, size_t length)
-{
-   size_t i;
-   size_t n;
-   uint8_t o[16];
+__weak_func error_t ofbEncrypt(const CipherAlgo *cipher, void *context,
+                               uint_t s, uint8_t *iv, const uint8_t *p,
+                               uint8_t *c, size_t length) {
+  size_t i;
+  size_t n;
+  uint8_t o[16];
 
-   //The parameter must be a multiple of 8
-   if((s % 8) != 0)
-      return ERROR_INVALID_PARAMETER;
+  // The parameter must be a multiple of 8
+  if ((s % 8) != 0)
+    return ERROR_INVALID_PARAMETER;
 
-   //Determine the size, in bytes, of the plaintext and ciphertext segments
-   s = s / 8;
+  // Determine the size, in bytes, of the plaintext and ciphertext segments
+  s = s / 8;
 
-   //Check the resulting value
-   if(s < 1 || s > cipher->blockSize)
-      return ERROR_INVALID_PARAMETER;
+  // Check the resulting value
+  if (s < 1 || s > cipher->blockSize)
+    return ERROR_INVALID_PARAMETER;
 
-   //Process each plaintext segment
-   while(length > 0)
-   {
-      //Compute the number of bytes to process at a time
-      n = MIN(length, s);
+  // Process each plaintext segment
+  while (length > 0) {
+    // Compute the number of bytes to process at a time
+    n = MIN(length, s);
 
-      //Compute O(j) = CIPH(I(j))
-      cipher->encryptBlock(context, iv, o);
+    // Compute O(j) = CIPH(I(j))
+    cipher->encryptBlock(context, iv, o);
 
-      //Compute C(j) = P(j) XOR MSB(O(j))
-      for(i = 0; i < n; i++)
-      {
-         c[i] = p[i] ^ o[i];
-      }
+    // Compute C(j) = P(j) XOR MSB(O(j))
+    for (i = 0; i < n; i++) {
+      c[i] = p[i] ^ o[i];
+    }
 
-      //Compute I(j+1) = LSB(I(j)) | O(j)
-      osMemmove(iv, iv + s, cipher->blockSize - s);
-      osMemcpy(iv + cipher->blockSize - s, o, s);
+    // Compute I(j+1) = LSB(I(j)) | O(j)
+    osMemmove(iv, iv + s, cipher->blockSize - s);
+    osMemcpy(iv + cipher->blockSize - s, o, s);
 
-      //Next block
-      p += n;
-      c += n;
-      length -= n;
-   }
+    // Next block
+    p += n;
+    c += n;
+    length -= n;
+  }
 
-   //Successful encryption
-   return NO_ERROR;
+  // Successful encryption
+  return NO_ERROR;
 }
-
 
 /**
  * @brief OFB decryption
@@ -122,10 +118,9 @@ __weak_func error_t ofbEncrypt(const CipherAlgo *cipher, void *context, uint_t s
  **/
 
 error_t ofbDecrypt(const CipherAlgo *cipher, void *context, uint_t s,
-   uint8_t *iv, const uint8_t *c, uint8_t *p, size_t length)
-{
-   //Decryption is the same the as encryption with P and C interchanged
-   return ofbEncrypt(cipher, context, s, iv, c, p, length);
+                   uint8_t *iv, const uint8_t *c, uint8_t *p, size_t length) {
+  // Decryption is the same the as encryption with P and C interchanged
+  return ofbEncrypt(cipher, context, s, iv, c, p, length);
 }
 
 #endif

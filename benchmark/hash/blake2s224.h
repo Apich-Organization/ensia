@@ -31,24 +31,23 @@
 #ifndef _BLAKE2S224_H
 #define _BLAKE2S224_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "mac/blake2s.h"
 
-//BLAKE2s-224 block size
+// BLAKE2s-224 block size
 #define BLAKE2S224_BLOCK_SIZE 64
-//BLAKE2s-224 digest size
+// BLAKE2s-224 digest size
 #define BLAKE2S224_DIGEST_SIZE 28
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define BLAKE2S224_MIN_PAD_SIZE 0
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define BLAKE2S224_HASH_ALGO (&blake2s224HashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief BLAKE2s-224 algorithm context
@@ -56,18 +55,18 @@ extern "C" {
 
 typedef Blake2sContext Blake2s224Context;
 
-
-//BLAKE2s-224 related constants
+// BLAKE2s-224 related constants
 extern const uint8_t BLAKE2S224_OID[11];
 extern const HashAlgo blake2s224HashAlgo;
 
-//BLAKE2s-224 related functions
+// BLAKE2s-224 related functions
 error_t blake2s224Compute(const void *data, size_t length, uint8_t *digest);
 void blake2s224Init(Blake2s224Context *context);
-void blake2s224Update(Blake2s224Context *context, const void *data, size_t length);
+void blake2s224Update(Blake2s224Context *context, const void *data,
+                      size_t length);
 void blake2s224Final(Blake2s224Context *context, uint8_t *digest);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

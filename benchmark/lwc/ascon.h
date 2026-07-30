@@ -31,29 +31,26 @@
 #ifndef _ASCON_H
 #define _ASCON_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Ascon state
  **/
 
-typedef struct
-{
-   uint32_t x[10];
+typedef struct {
+  uint32_t x[10];
 } AsconState;
 
-
-//Ascon related functions
+// Ascon related functions
 void asconP(AsconState *s, uint_t nr);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

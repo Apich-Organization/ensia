@@ -31,39 +31,36 @@
 #ifndef _AES_H
 #define _AES_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef AES_PRIVATE_CONTEXT
-   #define AES_PRIVATE_CONTEXT
+#define AES_PRIVATE_CONTEXT
 #endif
 
-//AES block size
+// AES block size
 #define AES_BLOCK_SIZE 16
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define AES_CIPHER_ALGO (&aesCipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief AES algorithm context
  **/
 
-typedef struct
-{
-   uint_t nr;
-   uint32_t ek[60];
-   uint32_t dk[60];
-   AES_PRIVATE_CONTEXT
+typedef struct {
+  uint_t nr;
+  uint32_t ek[60];
+  uint32_t dk[60];
+  AES_PRIVATE_CONTEXT
 } AesContext;
 
-
-//AES related constants
+// AES related constants
 extern const uint8_t AES128_ECB_OID[9];
 extern const uint8_t AES128_CBC_OID[9];
 extern const uint8_t AES128_OFB_OID[9];
@@ -84,18 +81,18 @@ extern const uint8_t AES256_GCM_OID[9];
 extern const uint8_t AES256_CCM_OID[9];
 extern const CipherAlgo aesCipherAlgo;
 
-//AES related functions
+// AES related functions
 error_t aesInit(AesContext *context, const uint8_t *key, size_t keyLen);
 
 void aesEncryptBlock(AesContext *context, const uint8_t *input,
-   uint8_t *output);
+                     uint8_t *output);
 
 void aesDecryptBlock(AesContext *context, const uint8_t *input,
-   uint8_t *output);
+                     uint8_t *output);
 
 void aesDeinit(AesContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

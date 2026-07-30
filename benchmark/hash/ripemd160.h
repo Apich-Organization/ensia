@@ -31,53 +31,50 @@
 #ifndef _RIPEMD160_H
 #define _RIPEMD160_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//RIPEMD-160 block size
+// RIPEMD-160 block size
 #define RIPEMD160_BLOCK_SIZE 64
-//RIPEMD-160 digest size
+// RIPEMD-160 digest size
 #define RIPEMD160_DIGEST_SIZE 20
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define RIPEMD160_MIN_PAD_SIZE 9
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define RIPEMD160_HASH_ALGO (&ripemd160HashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief RIPEMD-160 algorithm context
  **/
 
-typedef struct
-{
-   uint32_t h[5];
-   union
-   {
-      uint32_t x[16];
-      uint8_t buffer[64];
-   };
-   size_t size;
-   uint64_t totalSize;
+typedef struct {
+  uint32_t h[5];
+  union {
+    uint32_t x[16];
+    uint8_t buffer[64];
+  };
+  size_t size;
+  uint64_t totalSize;
 } Ripemd160Context;
 
-
-//RIPEMD-160 related constants
+// RIPEMD-160 related constants
 extern const uint8_t RIPEMD160_OID[5];
 extern const HashAlgo ripemd160HashAlgo;
 
-//RIPEMD-160 related functions
+// RIPEMD-160 related functions
 error_t ripemd160Compute(const void *data, size_t length, uint8_t *digest);
 void ripemd160Init(Ripemd160Context *context);
-void ripemd160Update(Ripemd160Context *context, const void *data, size_t length);
+void ripemd160Update(Ripemd160Context *context, const void *data,
+                     size_t length);
 void ripemd160Final(Ripemd160Context *context, uint8_t *digest);
 void ripemd160ProcessBlock(Ripemd160Context *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

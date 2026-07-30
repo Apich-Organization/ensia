@@ -31,31 +31,31 @@
 #ifndef _SIV_H
 #define _SIV_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Size of the synthetic initialization vector
+// Size of the synthetic initialization vector
 #define SIV_IV_LEN 16
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//SIV related functions
+// SIV related functions
 error_t sivEncrypt(const CipherAlgo *cipher, const uint8_t *k, size_t kLen,
-   const DataChunk *ad, uint_t adLen, const uint8_t *p, uint8_t *c,
-   size_t length, uint8_t *v);
+                   const DataChunk *ad, uint_t adLen, const uint8_t *p,
+                   uint8_t *c, size_t length, uint8_t *v);
 
 error_t sivDecrypt(const CipherAlgo *cipher, const uint8_t *k, size_t kLen,
-   const DataChunk *ad, uint_t adLen, const uint8_t *c, uint8_t *p,
-   size_t length, const uint8_t *v);
+                   const DataChunk *ad, uint_t adLen, const uint8_t *c,
+                   uint8_t *p, size_t length, const uint8_t *v);
 
 void s2v(const CipherAlgo *cipher, const uint8_t *k, size_t kLen,
-   const DataChunk *ad, uint_t adLen, const uint8_t *p, size_t pLen,
-   uint8_t *v);
+         const DataChunk *ad, uint_t adLen, const uint8_t *p, size_t pLen,
+         uint8_t *v);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

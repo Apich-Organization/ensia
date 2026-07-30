@@ -31,46 +31,42 @@
 #ifndef _PRESENT_H
 #define _PRESENT_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//PRESENT block size
+// PRESENT block size
 #define PRESENT_BLOCK_SIZE 8
-//Common interface for encryption algorithms
+// Common interface for encryption algorithms
 #define PRESENT_CIPHER_ALGO (&presentCipherAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief PRESENT algorithm context
  **/
 
-typedef struct
-{
-   uint64_t ks[32];
+typedef struct {
+  uint64_t ks[32];
 } PresentContext;
 
-
-//PRESENT related constants
+// PRESENT related constants
 extern const CipherAlgo presentCipherAlgo;
 
-//PRESENT related functions
-error_t presentInit(PresentContext *context, const uint8_t *key,
-   size_t keyLen);
+// PRESENT related functions
+error_t presentInit(PresentContext *context, const uint8_t *key, size_t keyLen);
 
 void presentEncryptBlock(PresentContext *context, const uint8_t *input,
-   uint8_t *output);
+                         uint8_t *output);
 
 void presentDecryptBlock(PresentContext *context, const uint8_t *input,
-   uint8_t *output);
+                         uint8_t *output);
 
 void presentDeinit(PresentContext *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

@@ -35,17 +35,16 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher_modes/ecb.h"
+#include "core/crypto.h"
 #include "debug.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (ECB_SUPPORT == ENABLED)
-
 
 /**
  * @brief ECB encryption
@@ -58,28 +57,25 @@
  **/
 
 __weak_func error_t ecbEncrypt(const CipherAlgo *cipher, void *context,
-   const uint8_t *p, uint8_t *c, size_t length)
-{
-   //ECB mode operates in a block-by-block fashion
-   while(length >= cipher->blockSize)
-   {
-      //Encrypt current block
-      cipher->encryptBlock(context, p, c);
+                               const uint8_t *p, uint8_t *c, size_t length) {
+  // ECB mode operates in a block-by-block fashion
+  while (length >= cipher->blockSize) {
+    // Encrypt current block
+    cipher->encryptBlock(context, p, c);
 
-      //Next block
-      p += cipher->blockSize;
-      c += cipher->blockSize;
-      length -= cipher->blockSize;
-   }
+    // Next block
+    p += cipher->blockSize;
+    c += cipher->blockSize;
+    length -= cipher->blockSize;
+  }
 
-   //The plaintext must be a multiple of the block size
-   if(length != 0)
-      return ERROR_INVALID_LENGTH;
+  // The plaintext must be a multiple of the block size
+  if (length != 0)
+    return ERROR_INVALID_LENGTH;
 
-   //Successful encryption
-   return NO_ERROR;
+  // Successful encryption
+  return NO_ERROR;
 }
-
 
 /**
  * @brief ECB decryption
@@ -92,26 +88,24 @@ __weak_func error_t ecbEncrypt(const CipherAlgo *cipher, void *context,
  **/
 
 __weak_func error_t ecbDecrypt(const CipherAlgo *cipher, void *context,
-   const uint8_t *c, uint8_t *p, size_t length)
-{
-   //ECB mode operates in a block-by-block fashion
-   while(length >= cipher->blockSize)
-   {
-      //Decrypt current block
-      cipher->decryptBlock(context, c, p);
+                               const uint8_t *c, uint8_t *p, size_t length) {
+  // ECB mode operates in a block-by-block fashion
+  while (length >= cipher->blockSize) {
+    // Decrypt current block
+    cipher->decryptBlock(context, c, p);
 
-      //Next block
-      c += cipher->blockSize;
-      p += cipher->blockSize;
-      length -= cipher->blockSize;
-   }
+    // Next block
+    c += cipher->blockSize;
+    p += cipher->blockSize;
+    length -= cipher->blockSize;
+  }
 
-   //The ciphertext must be a multiple of the block size
-   if(length != 0)
-      return ERROR_INVALID_LENGTH;
+  // The ciphertext must be a multiple of the block size
+  if (length != 0)
+    return ERROR_INVALID_LENGTH;
 
-   //Successful encryption
-   return NO_ERROR;
+  // Successful encryption
+  return NO_ERROR;
 }
 
 #endif

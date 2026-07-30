@@ -34,19 +34,18 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "aead/siv.h"
-#include "mac/cmac.h"
 #include "cipher_modes/ctr.h"
+#include "core/crypto.h"
 #include "debug.h"
+#include "mac/cmac.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (SIV_SUPPORT == ENABLED)
-
 
 /**
  * @brief Authenticated encryption using SIV
@@ -63,58 +62,56 @@
  **/
 
 error_t sivEncrypt(const CipherAlgo *cipher, const uint8_t *k, size_t kLen,
-   const DataChunk *ad, uint_t adLen, const uint8_t *p, uint8_t *c,
-   size_t length, uint8_t *v)
-{
-   const uint8_t *k1;
-   const uint8_t *k2;
-   uint8_t q[16];
-   CipherContext cipherContext;
+                   const DataChunk *ad, uint_t adLen, const uint8_t *p,
+                   uint8_t *c, size_t length, uint8_t *v) {
+  const uint8_t *k1;
+  const uint8_t *k2;
+  uint8_t q[16];
+  CipherContext cipherContext;
 
-   //Check parameters
-   if(cipher == NULL || k == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (cipher == NULL || k == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //SIV supports only symmetric block ciphers whose block size is 128 bits
-   if(cipher->type != CIPHER_ALGO_TYPE_BLOCK || cipher->blockSize != 16)
-      return ERROR_INVALID_PARAMETER;
+  // SIV supports only symmetric block ciphers whose block size is 128 bits
+  if (cipher->type != CIPHER_ALGO_TYPE_BLOCK || cipher->blockSize != 16)
+    return ERROR_INVALID_PARAMETER;
 
-   //SIV takes as input a key K of length 256, 384, or 512 bits
-   if(kLen != 32 && kLen != 48 && kLen != 64)
-      return ERROR_INVALID_PARAMETER;
+  // SIV takes as input a key K of length 256, 384, or 512 bits
+  if (kLen != 32 && kLen != 48 && kLen != 64)
+    return ERROR_INVALID_PARAMETER;
 
-   //The number of components in the vector is not greater than 126 (refer to
-   //RFC 5297, section 2.6)
-   if(adLen > 126)
-      return ERROR_INVALID_PARAMETER;
+  // The number of components in the vector is not greater than 126 (refer to
+  // RFC 5297, section 2.6)
+  if (adLen > 126)
+    return ERROR_INVALID_PARAMETER;
 
-   //The key is split into equal halves. K1 is used for S2V and K2 is used
-   //for CTR
-   kLen /= 2;
-   k1 = k;
-   k2 = k + kLen;
+  // The key is split into equal halves. K1 is used for S2V and K2 is used
+  // for CTR
+  kLen /= 2;
+  k1 = k;
+  k2 = k + kLen;
 
-   //Compute V = S2V(K1, AD, P)
-   s2v(cipher, k1, kLen, ad, adLen, p, length, v);
+  // Compute V = S2V(K1, AD, P)
+  s2v(cipher, k1, kLen, ad, adLen, p, length, v);
 
-   //The output of S2V is a synthetic IV that represents the initial counter
-   //to CTR
-   osMemcpy(q, v, 16);
+  // The output of S2V is a synthetic IV that represents the initial counter
+  // to CTR
+  osMemcpy(q, v, 16);
 
-   //The 31st and 63rd bit (where the rightmost bit is the 0th) of the counter
-   //are zeroed out just prior to being used by CTR for optimization purposes
-   q[8] &= 0x7F;
-   q[12] &= 0x7F;
+  // The 31st and 63rd bit (where the rightmost bit is the 0th) of the counter
+  // are zeroed out just prior to being used by CTR for optimization purposes
+  q[8] &= 0x7F;
+  q[12] &= 0x7F;
 
-   //K2 is used for CTR
-   cipher->init(&cipherContext, k2, kLen);
-   //Encrypt plaintext
-   ctrEncrypt(cipher, &cipherContext, 128, q, p, c, length);
+  // K2 is used for CTR
+  cipher->init(&cipherContext, k2, kLen);
+  // Encrypt plaintext
+  ctrEncrypt(cipher, &cipherContext, 128, q, p, c, length);
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Authenticated decryption using SIV
@@ -131,67 +128,64 @@ error_t sivEncrypt(const CipherAlgo *cipher, const uint8_t *k, size_t kLen,
  **/
 
 error_t sivDecrypt(const CipherAlgo *cipher, const uint8_t *k, size_t kLen,
-   const DataChunk *ad, uint_t adLen, const uint8_t *c, uint8_t *p,
-   size_t length, const uint8_t *v)
-{
-   size_t i;
-   uint8_t mask;
-   const uint8_t *k1;
-   const uint8_t *k2;
-   uint8_t q[16];
-   uint8_t t[16];
-   CipherContext cipherContext;
+                   const DataChunk *ad, uint_t adLen, const uint8_t *c,
+                   uint8_t *p, size_t length, const uint8_t *v) {
+  size_t i;
+  uint8_t mask;
+  const uint8_t *k1;
+  const uint8_t *k2;
+  uint8_t q[16];
+  uint8_t t[16];
+  CipherContext cipherContext;
 
-   //Check parameters
-   if(cipher == NULL || k == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (cipher == NULL || k == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //SIV supports only symmetric block ciphers whose block size is 128 bits
-   if(cipher->type != CIPHER_ALGO_TYPE_BLOCK || cipher->blockSize != 16)
-      return ERROR_INVALID_PARAMETER;
+  // SIV supports only symmetric block ciphers whose block size is 128 bits
+  if (cipher->type != CIPHER_ALGO_TYPE_BLOCK || cipher->blockSize != 16)
+    return ERROR_INVALID_PARAMETER;
 
-   //SIV takes as input a key K of length 256, 384, or 512 bits
-   if(kLen != 32 && kLen != 48 && kLen != 64)
-      return ERROR_INVALID_PARAMETER;
+  // SIV takes as input a key K of length 256, 384, or 512 bits
+  if (kLen != 32 && kLen != 48 && kLen != 64)
+    return ERROR_INVALID_PARAMETER;
 
-   //The number of components in the vector is not greater than 126 (refer to
-   //RFC 5297, section 2.7)
-   if(adLen > 126)
-      return ERROR_INVALID_PARAMETER;
+  // The number of components in the vector is not greater than 126 (refer to
+  // RFC 5297, section 2.7)
+  if (adLen > 126)
+    return ERROR_INVALID_PARAMETER;
 
-   //The key is split into equal halves. K1 is used for S2V and K2 is used
-   //for CTR
-   kLen /= 2;
-   k1 = k;
-   k2 = k + kLen;
+  // The key is split into equal halves. K1 is used for S2V and K2 is used
+  // for CTR
+  kLen /= 2;
+  k1 = k;
+  k2 = k + kLen;
 
-   //the synthetic IV that represents the initial counter to CTR
-   osMemcpy(q, v, 16);
+  // the synthetic IV that represents the initial counter to CTR
+  osMemcpy(q, v, 16);
 
-   //The 31st and 63rd bit (where the rightmost bit is the 0th) of the counter
-   //are zeroed out just prior to being used by CTR for optimization purposes
-   q[8] &= 0x7F;
-   q[12] &= 0x7F;
+  // The 31st and 63rd bit (where the rightmost bit is the 0th) of the counter
+  // are zeroed out just prior to being used by CTR for optimization purposes
+  q[8] &= 0x7F;
+  q[12] &= 0x7F;
 
-   //K2 is used for CTR
-   cipher->init(&cipherContext, k2, kLen);
-   //Decrypt ciphertext
-   ctrDecrypt(cipher, &cipherContext, 128, q, c, p, length);
+  // K2 is used for CTR
+  cipher->init(&cipherContext, k2, kLen);
+  // Decrypt ciphertext
+  ctrDecrypt(cipher, &cipherContext, 128, q, c, p, length);
 
-   //T = S2V(K1, AD1, ..., ADn, P)
-   s2v(cipher, k1, kLen, ad, adLen, p, length, t);
+  // T = S2V(K1, AD1, ..., ADn, P)
+  s2v(cipher, k1, kLen, ad, adLen, p, length, t);
 
-   //The calculated synthetic IV is bitwise compared to the received IV. The
-   //message is authenticated if and only if the IVs match
-   for(mask = 0, i = 0; i < 16; i++)
-   {
-      mask |= t[i] ^ v[i];
-   }
+  // The calculated synthetic IV is bitwise compared to the received IV. The
+  // message is authenticated if and only if the IVs match
+  for (mask = 0, i = 0; i < 16; i++) {
+    mask |= t[i] ^ v[i];
+  }
 
-   //Return status code
-   return (mask == 0) ? NO_ERROR : ERROR_FAILURE;
+  // Return status code
+  return (mask == 0) ? NO_ERROR : ERROR_FAILURE;
 }
-
 
 /**
  * @brief S2V operation
@@ -206,65 +200,60 @@ error_t sivDecrypt(const CipherAlgo *cipher, const uint8_t *k, size_t kLen,
  **/
 
 void s2v(const CipherAlgo *cipher, const uint8_t *k, size_t kLen,
-   const DataChunk *ad, uint_t adLen, const uint8_t *p, size_t pLen,
-   uint8_t *v)
-{
-   uint_t i;
-   uint8_t d[16];
-   uint8_t t[16];
-   CmacContext cmacContext;
+         const DataChunk *ad, uint_t adLen, const uint8_t *p, size_t pLen,
+         uint8_t *v) {
+  uint_t i;
+  uint8_t d[16];
+  uint8_t t[16];
+  CmacContext cmacContext;
 
-   //The S2V operation is bootstrapped by performing CMAC on a 128-bit
-   //string of zeros
-   osMemset(t, 0, 16);
+  // The S2V operation is bootstrapped by performing CMAC on a 128-bit
+  // string of zeros
+  osMemset(t, 0, 16);
 
-   //Compute D = AES-CMAC(K, <zero>)
-   cmacInit(&cmacContext, cipher, k, kLen);
-   cmacUpdate(&cmacContext, t, 16);
-   cmacFinal(&cmacContext, d, 16);
+  // Compute D = AES-CMAC(K, <zero>)
+  cmacInit(&cmacContext, cipher, k, kLen);
+  cmacUpdate(&cmacContext, t, 16);
+  cmacFinal(&cmacContext, d, 16);
 
-   //Process the vector of associated data
-   for(i = 0; i < adLen; i++)
-   {
-      //Perform doubling
-      cmacMul(d, d, 16, 0x87);
+  // Process the vector of associated data
+  for (i = 0; i < adLen; i++) {
+    // Perform doubling
+    cmacMul(d, d, 16, 0x87);
 
-      //Compute AES-CMAC(K, Si)
-      cmacReset(&cmacContext);
-      cmacUpdate(&cmacContext, ad[i].buffer, ad[i].length);
-      cmacFinal(&cmacContext, t, 16);
+    // Compute AES-CMAC(K, Si)
+    cmacReset(&cmacContext);
+    cmacUpdate(&cmacContext, ad[i].buffer, ad[i].length);
+    cmacFinal(&cmacContext, t, 16);
 
-      //Compute D = dbl(D) xor AES-CMAC(K, Si)
-      cmacXorBlock(d, d, t, 16);
-   }
+    // Compute D = dbl(D) xor AES-CMAC(K, Si)
+    cmacXorBlock(d, d, t, 16);
+  }
 
-   //Initialize CMAC computation
-   cmacReset(&cmacContext);
+  // Initialize CMAC computation
+  cmacReset(&cmacContext);
 
-   //If the length of the final string is less than 128 bits, the output of
-   //the double/xor chain is doubled once more and it is xored with the final
-   //string padded using the padding function pad(X)
-   if(pLen < 16)
-   {
-      //Perform doubling
-      cmacMul(t, d, 16, 0x87);
+  // If the length of the final string is less than 128 bits, the output of
+  // the double/xor chain is doubled once more and it is xored with the final
+  // string padded using the padding function pad(X)
+  if (pLen < 16) {
+    // Perform doubling
+    cmacMul(t, d, 16, 0x87);
 
-      //Calcuate T = dbl(D) xor pad(Sn)
-      cmacXorBlock(t, t, p, pLen);
-      t[pLen] ^= 0x80;
-   }
-   else
-   {
-      //Update CMAC computation
-      cmacUpdate(&cmacContext, p, pLen - 16);
+    // Calcuate T = dbl(D) xor pad(Sn)
+    cmacXorBlock(t, t, p, pLen);
+    t[pLen] ^= 0x80;
+  } else {
+    // Update CMAC computation
+    cmacUpdate(&cmacContext, p, pLen - 16);
 
-      //Calculate T = Sn xorend D
-      cmacXorBlock(t, p + pLen - 16, d, 16);
-   }
+    // Calculate T = Sn xorend D
+    cmacXorBlock(t, p + pLen - 16, d, 16);
+  }
 
-   //That result is input to a final CMAC operation to produce the output V
-   cmacUpdate(&cmacContext, t, 16);
-   cmacFinal(&cmacContext, v, 16);
+  // That result is input to a final CMAC operation to produce the output V
+  cmacUpdate(&cmacContext, t, 16);
+  cmacFinal(&cmacContext, v, 16);
 }
 
 #endif

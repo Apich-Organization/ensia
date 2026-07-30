@@ -28,71 +28,77 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "ecc/ecdsa.h"
+#include "core/crypto.h"
+#include "debug.h"
 #include "ecc/ec_misc.h"
 #include "encoding/asn1.h"
 #include "rng/hmac_drbg.h"
-#include "debug.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (ECDSA_SUPPORT == ENABLED)
 
-//ECDSA with SHA-1 OID (1.2.840.10045.4.1)
-const uint8_t ECDSA_WITH_SHA1_OID[7] = {0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x01};
-//ECDSA with SHA-224 OID (1.2.840.10045.4.3.1)
-const uint8_t ECDSA_WITH_SHA224_OID[8] = {0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03, 0x01};
-//ECDSA with SHA-256 OID (1.2.840.10045.4.3.2)
-const uint8_t ECDSA_WITH_SHA256_OID[8] = {0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03, 0x02};
-//ECDSA with SHA-384 OID (1.2.840.10045.4.3.3)
-const uint8_t ECDSA_WITH_SHA384_OID[8] = {0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03, 0x03};
-//ECDSA with SHA-512 OID (1.2.840.10045.4.3.4)
-const uint8_t ECDSA_WITH_SHA512_OID[8] = {0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03, 0x04};
-//ECDSA with SHA-3-224 OID (2.16.840.1.101.3.4.3.9)
-const uint8_t ECDSA_WITH_SHA3_224_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x09};
-//ECDSA with SHA-3-256 OID (2.16.840.1.101.3.4.3.10)
-const uint8_t ECDSA_WITH_SHA3_256_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x0A};
-//ECDSA with SHA-3-384 OID (2.16.840.1.101.3.4.3.11)
-const uint8_t ECDSA_WITH_SHA3_384_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x0B};
-//ECDSA with SHA-3-512 OID (2.16.840.1.101.3.4.3.12)
-const uint8_t ECDSA_WITH_SHA3_512_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x0C};
-//ECDSA with SHAKE128 OID (1.3.6.1.5.5.7.6.32)
-const uint8_t ECDSA_WITH_SHAKE128_OID[8] = {0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x06, 0x20};
-//ECDSA with SHAKE256 OID (1.3.6.1.5.5.7.6.33)
-const uint8_t ECDSA_WITH_SHAKE256_OID[8] = {0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x06, 0x21};
-
+// ECDSA with SHA-1 OID (1.2.840.10045.4.1)
+const uint8_t ECDSA_WITH_SHA1_OID[7] = {0x2A, 0x86, 0x48, 0xCE,
+                                        0x3D, 0x04, 0x01};
+// ECDSA with SHA-224 OID (1.2.840.10045.4.3.1)
+const uint8_t ECDSA_WITH_SHA224_OID[8] = {0x2A, 0x86, 0x48, 0xCE,
+                                          0x3D, 0x04, 0x03, 0x01};
+// ECDSA with SHA-256 OID (1.2.840.10045.4.3.2)
+const uint8_t ECDSA_WITH_SHA256_OID[8] = {0x2A, 0x86, 0x48, 0xCE,
+                                          0x3D, 0x04, 0x03, 0x02};
+// ECDSA with SHA-384 OID (1.2.840.10045.4.3.3)
+const uint8_t ECDSA_WITH_SHA384_OID[8] = {0x2A, 0x86, 0x48, 0xCE,
+                                          0x3D, 0x04, 0x03, 0x03};
+// ECDSA with SHA-512 OID (1.2.840.10045.4.3.4)
+const uint8_t ECDSA_WITH_SHA512_OID[8] = {0x2A, 0x86, 0x48, 0xCE,
+                                          0x3D, 0x04, 0x03, 0x04};
+// ECDSA with SHA-3-224 OID (2.16.840.1.101.3.4.3.9)
+const uint8_t ECDSA_WITH_SHA3_224_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65,
+                                            0x03, 0x04, 0x03, 0x09};
+// ECDSA with SHA-3-256 OID (2.16.840.1.101.3.4.3.10)
+const uint8_t ECDSA_WITH_SHA3_256_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65,
+                                            0x03, 0x04, 0x03, 0x0A};
+// ECDSA with SHA-3-384 OID (2.16.840.1.101.3.4.3.11)
+const uint8_t ECDSA_WITH_SHA3_384_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65,
+                                            0x03, 0x04, 0x03, 0x0B};
+// ECDSA with SHA-3-512 OID (2.16.840.1.101.3.4.3.12)
+const uint8_t ECDSA_WITH_SHA3_512_OID[9] = {0x60, 0x86, 0x48, 0x01, 0x65,
+                                            0x03, 0x04, 0x03, 0x0C};
+// ECDSA with SHAKE128 OID (1.3.6.1.5.5.7.6.32)
+const uint8_t ECDSA_WITH_SHAKE128_OID[8] = {0x2B, 0x06, 0x01, 0x05,
+                                            0x05, 0x07, 0x06, 0x20};
+// ECDSA with SHAKE256 OID (1.3.6.1.5.5.7.6.33)
+const uint8_t ECDSA_WITH_SHAKE256_OID[8] = {0x2B, 0x06, 0x01, 0x05,
+                                            0x05, 0x07, 0x06, 0x21};
 
 /**
  * @brief Initialize an ECDSA signature
  * @param[in] signature Pointer to the ECDSA signature to initialize
  **/
 
-void ecdsaInitSignature(EcdsaSignature *signature)
-{
-   //Initialize elliptic curve parameters
-   signature->curve = NULL;
+void ecdsaInitSignature(EcdsaSignature *signature) {
+  // Initialize elliptic curve parameters
+  signature->curve = NULL;
 
-   //Initialize (R, S) integer pair
-   ecScalarSetInt(signature->r, 0, EC_MAX_ORDER_SIZE);
-   ecScalarSetInt(signature->s, 0, EC_MAX_ORDER_SIZE);
+  // Initialize (R, S) integer pair
+  ecScalarSetInt(signature->r, 0, EC_MAX_ORDER_SIZE);
+  ecScalarSetInt(signature->s, 0, EC_MAX_ORDER_SIZE);
 }
-
 
 /**
  * @brief Release an ECDSA signature
  * @param[in] signature Pointer to the ECDSA signature to free
  **/
 
-void ecdsaFreeSignature(EcdsaSignature *signature)
-{
-   //Clear ECDSA signature
-   osMemset(signature, 0, sizeof(EcdsaSignature));
+void ecdsaFreeSignature(EcdsaSignature *signature) {
+  // Clear ECDSA signature
+  osMemset(signature, 0, sizeof(EcdsaSignature));
 }
-
 
 /**
  * @brief Import an ECDSA signature
@@ -105,163 +111,151 @@ void ecdsaFreeSignature(EcdsaSignature *signature)
  **/
 
 error_t ecdsaImportSignature(EcdsaSignature *signature, const EcCurve *curve,
-   const uint8_t *input, size_t length, EcdsaSignatureFormat format)
-{
-   error_t error;
-   size_t n;
+                             const uint8_t *input, size_t length,
+                             EcdsaSignatureFormat format) {
+  error_t error;
+  size_t n;
 
-   //Check parameters
-   if(signature == NULL || curve == NULL || input == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (signature == NULL || curve == NULL || input == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Get the length of the order, in bytes
-   n = (curve->orderSize + 7) / 8;
+  // Get the length of the order, in bytes
+  n = (curve->orderSize + 7) / 8;
 
-   //Debug message
-   TRACE_DEBUG("Importing ECDSA signature...\r\n");
+  // Debug message
+  TRACE_DEBUG("Importing ECDSA signature...\r\n");
 
-   //Dump ECDSA signature
-   TRACE_DEBUG("  signature:\r\n");
-   TRACE_DEBUG_ARRAY("    ", input, length);
+  // Dump ECDSA signature
+  TRACE_DEBUG("  signature:\r\n");
+  TRACE_DEBUG_ARRAY("    ", input, length);
 
-   //Check the format of the ECDSA signature
-   if(format == ECDSA_SIGNATURE_FORMAT_ASN1)
-   {
-      Asn1Tag tag;
+  // Check the format of the ECDSA signature
+  if (format == ECDSA_SIGNATURE_FORMAT_ASN1) {
+    Asn1Tag tag;
 
-      //Display ASN.1 structure
-      error = asn1DumpObject(input, length, 0);
-      //Any error to report?
-      if(error)
-         return error;
+    // Display ASN.1 structure
+    error = asn1DumpObject(input, length, 0);
+    // Any error to report?
+    if (error)
+      return error;
 
-      //Read the contents of the ASN.1 structure
-      error = asn1ReadSequence(input, length, &tag);
-      //Failed to decode ASN.1 tag?
-      if(error)
-         return error;
+    // Read the contents of the ASN.1 structure
+    error = asn1ReadSequence(input, length, &tag);
+    // Failed to decode ASN.1 tag?
+    if (error)
+      return error;
 
-      //Malformed ECDSA signature?
-      if(length != tag.totalLength)
-         return ERROR_INVALID_SYNTAX;
+    // Malformed ECDSA signature?
+    if (length != tag.totalLength)
+      return ERROR_INVALID_SYNTAX;
 
-      //Point to the first field
-      input = tag.value;
-      length = tag.length;
+    // Point to the first field
+    input = tag.value;
+    length = tag.length;
 
-      //Read the integer R
-      error = asn1ReadTag(input, length, &tag);
-      //Failed to decode ASN.1 tag?
-      if(error)
-         return error;
+    // Read the integer R
+    error = asn1ReadTag(input, length, &tag);
+    // Failed to decode ASN.1 tag?
+    if (error)
+      return error;
 
-      //Enforce encoding, class and type
-      error = asn1CheckTag(&tag, FALSE, ASN1_CLASS_UNIVERSAL,
-         ASN1_TYPE_INTEGER);
-      //Invalid tag?
-      if(error)
-         return error;
+    // Enforce encoding, class and type
+    error = asn1CheckTag(&tag, FALSE, ASN1_CLASS_UNIVERSAL, ASN1_TYPE_INTEGER);
+    // Invalid tag?
+    if (error)
+      return error;
 
-      //Make sure R is a positive integer
-      if(tag.length == 0 || (tag.value[0] & 0x80) != 0)
-         return ERROR_INVALID_SYNTAX;
+    // Make sure R is a positive integer
+    if (tag.length == 0 || (tag.value[0] & 0x80) != 0)
+      return ERROR_INVALID_SYNTAX;
 
-      //Convert the octet string to an integer
-      error = ecScalarImport(signature->r, EC_MAX_ORDER_SIZE, tag.value,
-         tag.length, EC_SCALAR_FORMAT_BIG_ENDIAN);
-      //Any error to report?
-      if(error)
-         return error;
+    // Convert the octet string to an integer
+    error = ecScalarImport(signature->r, EC_MAX_ORDER_SIZE, tag.value,
+                           tag.length, EC_SCALAR_FORMAT_BIG_ENDIAN);
+    // Any error to report?
+    if (error)
+      return error;
 
-      //Point to the next field
-      input += tag.totalLength;
-      length -= tag.totalLength;
+    // Point to the next field
+    input += tag.totalLength;
+    length -= tag.totalLength;
 
-      //Read the integer S
-      error = asn1ReadTag(input, length, &tag);
-      //Failed to decode ASN.1 tag?
-      if(error)
-         return error;
+    // Read the integer S
+    error = asn1ReadTag(input, length, &tag);
+    // Failed to decode ASN.1 tag?
+    if (error)
+      return error;
 
-      //Enforce encoding, class and type
-      error = asn1CheckTag(&tag, FALSE, ASN1_CLASS_UNIVERSAL,
-         ASN1_TYPE_INTEGER);
-      //Invalid tag?
-      if(error)
-         return error;
+    // Enforce encoding, class and type
+    error = asn1CheckTag(&tag, FALSE, ASN1_CLASS_UNIVERSAL, ASN1_TYPE_INTEGER);
+    // Invalid tag?
+    if (error)
+      return error;
 
-      //Make sure S is a positive integer
-      if(tag.length == 0 || (tag.value[0] & 0x80) != 0)
-         return ERROR_INVALID_SYNTAX;
+    // Make sure S is a positive integer
+    if (tag.length == 0 || (tag.value[0] & 0x80) != 0)
+      return ERROR_INVALID_SYNTAX;
 
-      //Convert the octet string to an integer
-      error = ecScalarImport(signature->s, EC_MAX_ORDER_SIZE, tag.value,
-         tag.length, EC_SCALAR_FORMAT_BIG_ENDIAN);
-      //Any error to report?
-      if(error)
-         return error;
+    // Convert the octet string to an integer
+    error = ecScalarImport(signature->s, EC_MAX_ORDER_SIZE, tag.value,
+                           tag.length, EC_SCALAR_FORMAT_BIG_ENDIAN);
+    // Any error to report?
+    if (error)
+      return error;
 
-      //Malformed ECDSA signature?
-      if(length != tag.totalLength)
-         return ERROR_INVALID_SYNTAX;
+    // Malformed ECDSA signature?
+    if (length != tag.totalLength)
+      return ERROR_INVALID_SYNTAX;
 
-      //Dump (R, S) integer pair
-      TRACE_DEBUG("  r:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", signature->r, EC_MAX_ORDER_SIZE);
-      TRACE_DEBUG("  s:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", signature->s, EC_MAX_ORDER_SIZE);
-   }
-   else if(format == ECDSA_SIGNATURE_FORMAT_RAW)
-   {
-      //Check the length of the octet string
-      if(length != (n * 2))
-         return ERROR_INVALID_LENGTH;
+    // Dump (R, S) integer pair
+    TRACE_DEBUG("  r:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", signature->r, EC_MAX_ORDER_SIZE);
+    TRACE_DEBUG("  s:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", signature->s, EC_MAX_ORDER_SIZE);
+  } else if (format == ECDSA_SIGNATURE_FORMAT_RAW) {
+    // Check the length of the octet string
+    if (length != (n * 2))
+      return ERROR_INVALID_LENGTH;
 
-      //Convert R to an integer
-      error = ecScalarImport(signature->r, EC_MAX_ORDER_SIZE, input, n,
-         EC_SCALAR_FORMAT_BIG_ENDIAN);
-      //Any error to report?
-      if(error)
-         return error;
+    // Convert R to an integer
+    error = ecScalarImport(signature->r, EC_MAX_ORDER_SIZE, input, n,
+                           EC_SCALAR_FORMAT_BIG_ENDIAN);
+    // Any error to report?
+    if (error)
+      return error;
 
-      //Convert S to an integer
-      error = ecScalarImport(signature->s, EC_MAX_ORDER_SIZE,
-         input + n, n, EC_SCALAR_FORMAT_BIG_ENDIAN);
-      //Any error to report?
-      if(error)
-         return error;
-   }
-   else if(format == ECDSA_SIGNATURE_FORMAT_RAW_R)
-   {
-      //Convert R to an integer
-      error = ecScalarImport(signature->r, EC_MAX_ORDER_SIZE, input, length,
-         EC_SCALAR_FORMAT_BIG_ENDIAN);
-      //Any error to report?
-      if(error)
-         return error;
-   }
-   else if(format == ECDSA_SIGNATURE_FORMAT_RAW_S)
-   {
-      //Convert S to an integer
-      error = ecScalarImport(signature->s, EC_MAX_ORDER_SIZE, input, length,
-         EC_SCALAR_FORMAT_BIG_ENDIAN);
-      //Any error to report?
-      if(error)
-         return error;
-   }
-   else
-   {
-      //Invalid format
-      return ERROR_INVALID_PARAMETER;
-   }
+    // Convert S to an integer
+    error = ecScalarImport(signature->s, EC_MAX_ORDER_SIZE, input + n, n,
+                           EC_SCALAR_FORMAT_BIG_ENDIAN);
+    // Any error to report?
+    if (error)
+      return error;
+  } else if (format == ECDSA_SIGNATURE_FORMAT_RAW_R) {
+    // Convert R to an integer
+    error = ecScalarImport(signature->r, EC_MAX_ORDER_SIZE, input, length,
+                           EC_SCALAR_FORMAT_BIG_ENDIAN);
+    // Any error to report?
+    if (error)
+      return error;
+  } else if (format == ECDSA_SIGNATURE_FORMAT_RAW_S) {
+    // Convert S to an integer
+    error = ecScalarImport(signature->s, EC_MAX_ORDER_SIZE, input, length,
+                           EC_SCALAR_FORMAT_BIG_ENDIAN);
+    // Any error to report?
+    if (error)
+      return error;
+  } else {
+    // Invalid format
+    return ERROR_INVALID_PARAMETER;
+  }
 
-   //Save elliptic curve parameters
-   signature->curve = curve;
+  // Save elliptic curve parameters
+  signature->curve = curve;
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
-
 
 /**
  * @brief Export an ECDSA signature
@@ -273,213 +267,196 @@ error_t ecdsaImportSignature(EcdsaSignature *signature, const EcCurve *curve,
  **/
 
 error_t ecdsaExportSignature(const EcdsaSignature *signature, uint8_t *output,
-   size_t *written, EcdsaSignatureFormat format)
-{
-   error_t error;
-   size_t k;
-   size_t n;
-   size_t length;
-   size_t orderLen;
-   uint8_t *p;
-   Asn1Tag tag;
+                             size_t *written, EcdsaSignatureFormat format) {
+  error_t error;
+  size_t k;
+  size_t n;
+  size_t length;
+  size_t orderLen;
+  uint8_t *p;
+  Asn1Tag tag;
 
-   //Check parameters
-   if(signature == NULL || written == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (signature == NULL || written == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Invalid elliptic curve?
-   if(signature->curve == NULL)
-      return ERROR_INVALID_ELLIPTIC_CURVE;
+  // Invalid elliptic curve?
+  if (signature->curve == NULL)
+    return ERROR_INVALID_ELLIPTIC_CURVE;
 
-   //Get the length of the order, in words
-   orderLen = (signature->curve->orderSize + 31) / 32;
+  // Get the length of the order, in words
+  orderLen = (signature->curve->orderSize + 31) / 32;
 
-   //Debug message
-   TRACE_DEBUG("Exporting ECDSA signature...\r\n");
+  // Debug message
+  TRACE_DEBUG("Exporting ECDSA signature...\r\n");
 
-   //Dump (R, S) integer pair
-   TRACE_DEBUG("  r:\r\n");
-   TRACE_DEBUG_EC_SCALAR("    ", signature->r, orderLen);
-   TRACE_DEBUG("  s:\r\n");
-   TRACE_DEBUG_EC_SCALAR("    ", signature->s, orderLen);
+  // Dump (R, S) integer pair
+  TRACE_DEBUG("  r:\r\n");
+  TRACE_DEBUG_EC_SCALAR("    ", signature->r, orderLen);
+  TRACE_DEBUG("  s:\r\n");
+  TRACE_DEBUG_EC_SCALAR("    ", signature->s, orderLen);
 
-   //Check the format of the ECDSA signature
-   if(format == ECDSA_SIGNATURE_FORMAT_ASN1)
-   {
-      //Point to the buffer where to write the ASN.1 structure
-      p = output;
-      //Length of the ASN.1 structure
-      length = 0;
+  // Check the format of the ECDSA signature
+  if (format == ECDSA_SIGNATURE_FORMAT_ASN1) {
+    // Point to the buffer where to write the ASN.1 structure
+    p = output;
+    // Length of the ASN.1 structure
+    length = 0;
 
-      //R is always  encoded in the smallest possible number of octets
-      k = ecScalarGetBitLength(signature->r, orderLen) / 8 + 1;
+    // R is always  encoded in the smallest possible number of octets
+    k = ecScalarGetBitLength(signature->r, orderLen) / 8 + 1;
 
-      //R is represented by an integer
-      tag.constructed = FALSE;
-      tag.objClass = ASN1_CLASS_UNIVERSAL;
-      tag.objType = ASN1_TYPE_INTEGER;
-      tag.length = k;
+    // R is represented by an integer
+    tag.constructed = FALSE;
+    tag.objClass = ASN1_CLASS_UNIVERSAL;
+    tag.objType = ASN1_TYPE_INTEGER;
+    tag.length = k;
 
-      //Write the corresponding ASN.1 tag
-      error = asn1WriteHeader(&tag, FALSE, p, &n);
-      //Any error to report?
-      if(error)
-         return error;
+    // Write the corresponding ASN.1 tag
+    error = asn1WriteHeader(&tag, FALSE, p, &n);
+    // Any error to report?
+    if (error)
+      return error;
 
-      //Advance data pointer
-      ASN1_INC_POINTER(p, n);
-      length += n;
+    // Advance data pointer
+    ASN1_INC_POINTER(p, n);
+    length += n;
 
-      //If the output parameter is NULL, then the function calculates the
-      //length of the ASN.1 structure without copying any data
-      if(p != NULL)
-      {
-         //Convert R to an octet string
-         error = ecScalarExport(signature->r, EC_MAX_ORDER_SIZE, p, k,
-            EC_SCALAR_FORMAT_BIG_ENDIAN);
-         //Any error to report?
-         if(error)
-            return error;
-      }
+    // If the output parameter is NULL, then the function calculates the
+    // length of the ASN.1 structure without copying any data
+    if (p != NULL) {
+      // Convert R to an octet string
+      error = ecScalarExport(signature->r, EC_MAX_ORDER_SIZE, p, k,
+                             EC_SCALAR_FORMAT_BIG_ENDIAN);
+      // Any error to report?
+      if (error)
+        return error;
+    }
 
-      //Advance data pointer
-      ASN1_INC_POINTER(p, k);
-      length += k;
+    // Advance data pointer
+    ASN1_INC_POINTER(p, k);
+    length += k;
 
-      //S is always  encoded in the smallest possible number of octets
-      k = ecScalarGetBitLength(signature->s, orderLen) / 8 + 1;
+    // S is always  encoded in the smallest possible number of octets
+    k = ecScalarGetBitLength(signature->s, orderLen) / 8 + 1;
 
-      //S is represented by an integer
-      tag.constructed = FALSE;
-      tag.objClass = ASN1_CLASS_UNIVERSAL;
-      tag.objType = ASN1_TYPE_INTEGER;
-      tag.length = k;
+    // S is represented by an integer
+    tag.constructed = FALSE;
+    tag.objClass = ASN1_CLASS_UNIVERSAL;
+    tag.objType = ASN1_TYPE_INTEGER;
+    tag.length = k;
 
-      //Write the corresponding ASN.1 tag
-      error = asn1WriteHeader(&tag, FALSE, p, &n);
-      //Any error to report?
-      if(error)
-         return error;
+    // Write the corresponding ASN.1 tag
+    error = asn1WriteHeader(&tag, FALSE, p, &n);
+    // Any error to report?
+    if (error)
+      return error;
 
-      //Advance data pointer
-      ASN1_INC_POINTER(p, n);
-      length += n;
+    // Advance data pointer
+    ASN1_INC_POINTER(p, n);
+    length += n;
 
-      //If the output parameter is NULL, then the function calculates the
-      //length of the ASN.1 structure without copying any data
-      if(p != NULL)
-      {
-         //Convert S to an octet string
-         error = ecScalarExport(signature->s, EC_MAX_ORDER_SIZE, p, k,
-            EC_SCALAR_FORMAT_BIG_ENDIAN);
-         //Any error to report?
-         if(error)
-            return error;
-      }
+    // If the output parameter is NULL, then the function calculates the
+    // length of the ASN.1 structure without copying any data
+    if (p != NULL) {
+      // Convert S to an octet string
+      error = ecScalarExport(signature->s, EC_MAX_ORDER_SIZE, p, k,
+                             EC_SCALAR_FORMAT_BIG_ENDIAN);
+      // Any error to report?
+      if (error)
+        return error;
+    }
 
-      //Advance data pointer
-      ASN1_INC_POINTER(p, k);
-      length += k;
+    // Advance data pointer
+    ASN1_INC_POINTER(p, k);
+    length += k;
 
-      //The (R, S) integer pair is encapsulated within a sequence
-      tag.constructed = TRUE;
-      tag.objClass = ASN1_CLASS_UNIVERSAL;
-      tag.objType = ASN1_TYPE_SEQUENCE;
-      tag.length = length;
+    // The (R, S) integer pair is encapsulated within a sequence
+    tag.constructed = TRUE;
+    tag.objClass = ASN1_CLASS_UNIVERSAL;
+    tag.objType = ASN1_TYPE_SEQUENCE;
+    tag.length = length;
 
-      //Write the corresponding ASN.1 tag
-      error = asn1InsertHeader(&tag, output, &n);
-      //Any error to report?
-      if(error)
-         return error;
+    // Write the corresponding ASN.1 tag
+    error = asn1InsertHeader(&tag, output, &n);
+    // Any error to report?
+    if (error)
+      return error;
 
-      //Total length of the ASN.1 structure
-      *written = length + n;
-   }
-   else if(format == ECDSA_SIGNATURE_FORMAT_RAW)
-   {
-      //Get the length of the order, in bytes
-      n = (signature->curve->orderSize + 7) / 8;
+    // Total length of the ASN.1 structure
+    *written = length + n;
+  } else if (format == ECDSA_SIGNATURE_FORMAT_RAW) {
+    // Get the length of the order, in bytes
+    n = (signature->curve->orderSize + 7) / 8;
 
-      //If the output parameter is NULL, then the function calculates the
-      //length of the octet string without copying any data
-      if(output != NULL)
-      {
-         //Convert R to an octet string
-         error = ecScalarExport(signature->r, (n + 3) / 4, output, n,
-            EC_SCALAR_FORMAT_BIG_ENDIAN);
-         //Any error to report?
-         if(error)
-            return error;
+    // If the output parameter is NULL, then the function calculates the
+    // length of the octet string without copying any data
+    if (output != NULL) {
+      // Convert R to an octet string
+      error = ecScalarExport(signature->r, (n + 3) / 4, output, n,
+                             EC_SCALAR_FORMAT_BIG_ENDIAN);
+      // Any error to report?
+      if (error)
+        return error;
 
-         //Convert S to an octet string
-         error = ecScalarExport(signature->s, (n + 3) / 4, output + n, n,
-            EC_SCALAR_FORMAT_BIG_ENDIAN);
-         //Any error to report?
-         if(error)
-            return error;
-      }
+      // Convert S to an octet string
+      error = ecScalarExport(signature->s, (n + 3) / 4, output + n, n,
+                             EC_SCALAR_FORMAT_BIG_ENDIAN);
+      // Any error to report?
+      if (error)
+        return error;
+    }
 
-      //Length of the resulting octet string
-      *written = 2 * n;
-   }
-   else if(format == ECDSA_SIGNATURE_FORMAT_RAW_R)
-   {
-      //Get the length of the order, in bytes
-      n = (signature->curve->orderSize + 7) / 8;
+    // Length of the resulting octet string
+    *written = 2 * n;
+  } else if (format == ECDSA_SIGNATURE_FORMAT_RAW_R) {
+    // Get the length of the order, in bytes
+    n = (signature->curve->orderSize + 7) / 8;
 
-      //If the output parameter is NULL, then the function calculates the
-      //length of the octet string without copying any data
-      if(output != NULL)
-      {
-         //Convert R to an octet string
-         error = ecScalarExport(signature->r, (n + 3) / 4, output, n,
-            EC_SCALAR_FORMAT_BIG_ENDIAN);
-         //Any error to report?
-         if(error)
-            return error;
-      }
+    // If the output parameter is NULL, then the function calculates the
+    // length of the octet string without copying any data
+    if (output != NULL) {
+      // Convert R to an octet string
+      error = ecScalarExport(signature->r, (n + 3) / 4, output, n,
+                             EC_SCALAR_FORMAT_BIG_ENDIAN);
+      // Any error to report?
+      if (error)
+        return error;
+    }
 
-      //Length of the resulting octet string
-      *written = n;
-   }
-   else if(format == ECDSA_SIGNATURE_FORMAT_RAW_S)
-   {
-      //Get the length of the order, in bytes
-      n = (signature->curve->orderSize + 7) / 8;
+    // Length of the resulting octet string
+    *written = n;
+  } else if (format == ECDSA_SIGNATURE_FORMAT_RAW_S) {
+    // Get the length of the order, in bytes
+    n = (signature->curve->orderSize + 7) / 8;
 
-      //If the output parameter is NULL, then the function calculates the
-      //length of the octet string without copying any data
-      if(output != NULL)
-      {
-         //Convert S to an octet string
-         error = ecScalarExport(signature->s, (n + 3) / 4, output, n,
-            EC_SCALAR_FORMAT_BIG_ENDIAN);
-         //Any error to report?
-         if(error)
-            return error;
-      }
+    // If the output parameter is NULL, then the function calculates the
+    // length of the octet string without copying any data
+    if (output != NULL) {
+      // Convert S to an octet string
+      error = ecScalarExport(signature->s, (n + 3) / 4, output, n,
+                             EC_SCALAR_FORMAT_BIG_ENDIAN);
+      // Any error to report?
+      if (error)
+        return error;
+    }
 
-      //Length of the resulting octet string
-      *written = n;
-   }
-   else
-   {
-      //Invalid format
-      return ERROR_INVALID_PARAMETER;
-   }
+    // Length of the resulting octet string
+    *written = n;
+  } else {
+    // Invalid format
+    return ERROR_INVALID_PARAMETER;
+  }
 
-   //Dump ECDSA signature
-   if(output != NULL)
-   {
-      TRACE_DEBUG("  signature:\r\n");
-      TRACE_DEBUG_ARRAY("    ", output, *written);
-   }
+  // Dump ECDSA signature
+  if (output != NULL) {
+    TRACE_DEBUG("  signature:\r\n");
+    TRACE_DEBUG_ARRAY("    ", output, *written);
+  }
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
-
 
 /**
  * @brief ECDSA signature generation
@@ -492,167 +469,158 @@ error_t ecdsaExportSignature(const EcdsaSignature *signature, uint8_t *output,
  * @return Error code
  **/
 
-__weak_func error_t ecdsaGenerateSignature(const PrngAlgo *prngAlgo,
-   void *prngContext, const EcPrivateKey *privateKey, const uint8_t *digest,
-   size_t digestLen, EcdsaSignature *signature)
-{
-   error_t error;
-   uint_t n;
-   uint_t pLen;
-   uint_t qLen;
+__weak_func error_t ecdsaGenerateSignature(
+    const PrngAlgo *prngAlgo, void *prngContext, const EcPrivateKey *privateKey,
+    const uint8_t *digest, size_t digestLen, EcdsaSignature *signature) {
+  error_t error;
+  uint_t n;
+  uint_t pLen;
+  uint_t qLen;
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   EcdsaGenerateSignatureState *state;
+  EcdsaGenerateSignatureState *state;
 #else
-   EcdsaGenerateSignatureState state[1];
+  EcdsaGenerateSignatureState state[1];
 #endif
 
-   //Check parameters
-   if(privateKey == NULL || digest == NULL || signature == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (privateKey == NULL || digest == NULL || signature == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Invalid elliptic curve?
-   if(privateKey->curve == NULL)
-      return ERROR_INVALID_ELLIPTIC_CURVE;
+  // Invalid elliptic curve?
+  if (privateKey->curve == NULL)
+    return ERROR_INVALID_ELLIPTIC_CURVE;
 
-   //Get the length of the modulus, in words
-   pLen = (privateKey->curve->fieldSize + 31) / 32;
-   //Get the length of the order, in words
-   qLen = (privateKey->curve->orderSize + 31) / 32;
+  // Get the length of the modulus, in words
+  pLen = (privateKey->curve->fieldSize + 31) / 32;
+  // Get the length of the order, in words
+  qLen = (privateKey->curve->orderSize + 31) / 32;
 
-   //Debug message
-   TRACE_DEBUG("ECDSA signature generation...\r\n");
-   TRACE_DEBUG("  curve: %s\r\n", privateKey->curve->name);
-   TRACE_DEBUG("  private key:\r\n");
-   TRACE_DEBUG_EC_SCALAR("    ", privateKey->d, qLen);
-   TRACE_DEBUG("  digest:\r\n");
-   TRACE_DEBUG_ARRAY("    ", digest, digestLen);
+  // Debug message
+  TRACE_DEBUG("ECDSA signature generation...\r\n");
+  TRACE_DEBUG("  curve: %s\r\n", privateKey->curve->name);
+  TRACE_DEBUG("  private key:\r\n");
+  TRACE_DEBUG_EC_SCALAR("    ", privateKey->d, qLen);
+  TRACE_DEBUG("  digest:\r\n");
+  TRACE_DEBUG_ARRAY("    ", digest, digestLen);
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate working state
-   state = cryptoAllocMem(sizeof(EcdsaGenerateSignatureState));
-   //Failed to allocate memory?
-   if(state == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate working state
+  state = cryptoAllocMem(sizeof(EcdsaGenerateSignatureState));
+  // Failed to allocate memory?
+  if (state == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Initialize working state
-   osMemset(state, 0, sizeof(EcdsaGenerateSignatureState));
+  // Initialize working state
+  osMemset(state, 0, sizeof(EcdsaGenerateSignatureState));
 
-   //Initialize (R, S) integer pair
-   ecScalarSetInt(signature->r, 0, EC_MAX_ORDER_SIZE);
-   ecScalarSetInt(signature->s, 0, EC_MAX_ORDER_SIZE);
+  // Initialize (R, S) integer pair
+  ecScalarSetInt(signature->r, 0, EC_MAX_ORDER_SIZE);
+  ecScalarSetInt(signature->s, 0, EC_MAX_ORDER_SIZE);
 
-   //Let N be the bit length of q
-   n = privateKey->curve->orderSize;
-   //Compute N = MIN(N, outlen)
-   n = MIN(n, digestLen * 8);
+  // Let N be the bit length of q
+  n = privateKey->curve->orderSize;
+  // Compute N = MIN(N, outlen)
+  n = MIN(n, digestLen * 8);
 
-   //Convert the digest to an integer
-   error = ecScalarImport(state->z, qLen, digest, (n + 7) / 8,
-      EC_SCALAR_FORMAT_BIG_ENDIAN);
+  // Convert the digest to an integer
+  error = ecScalarImport(state->z, qLen, digest, (n + 7) / 8,
+                         EC_SCALAR_FORMAT_BIG_ENDIAN);
 
-   //Check status code
-   if(!error)
-   {
-      uint32_t c;
-      uint32_t z2[EC_MAX_ORDER_SIZE];
+  // Check status code
+  if (!error) {
+    uint32_t c;
+    uint32_t z2[EC_MAX_ORDER_SIZE];
 
-      //Keep the leftmost N bits of the hash value
-      if((n % 8) != 0)
-      {
-         ecScalarShiftRight(state->z, state->z, 8 - (n % 8), qLen);
+    // Keep the leftmost N bits of the hash value
+    if ((n % 8) != 0) {
+      ecScalarShiftRight(state->z, state->z, 8 - (n % 8), qLen);
+    }
+
+    // Debug message
+    TRACE_DEBUG("  z:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", state->z, qLen);
+
+    // z is reduced modulo q. The modular reduction can be implemented with a
+    // simple conditional subtraction
+    c = ecScalarSub(z2, state->z, privateKey->curve->q, qLen);
+    ecScalarSelect(state->z, z2, state->z, c, qLen);
+  }
+
+  // ECDSA signature generation process
+  while (!error) {
+    // Generate a random number k such as 0 < k < q - 1
+    error = ecScalarRand(privateKey->curve, state->k, prngAlgo, prngContext);
+
+    // Check status code
+    if (!error) {
+      // Debug message
+      TRACE_DEBUG("  k:\r\n");
+      TRACE_DEBUG_EC_SCALAR("    ", state->k, qLen);
+
+      // Compute R1 = (x1, y1) = k.G
+      error = ecMulRegular(privateKey->curve, &state->r1, state->k,
+                           &privateKey->curve->g);
+    }
+
+    // Check status code
+    if (!error) {
+      // Convert R1 to affine representation
+      error = ecAffinify(privateKey->curve, &state->r1, &state->r1);
+    }
+
+    // Check status code
+    if (!error) {
+      // Debug message
+      TRACE_DEBUG("  x1:\r\n");
+      TRACE_DEBUG_EC_SCALAR("    ", state->r1.x, pLen);
+      TRACE_DEBUG("  y1:\r\n");
+      TRACE_DEBUG_EC_SCALAR("    ", state->r1.y, pLen);
+
+      // Compute r = x1 mod q
+      ecScalarMod(signature->r, state->r1.x, pLen, privateKey->curve->q, qLen);
+      // Compute k ^ -1 mod q
+      ecScalarInvMod(privateKey->curve, state->k, state->k);
+
+      // Compute s = k ^ -1 * (z + x * r) mod q
+      ecScalarMulMod(privateKey->curve, signature->s, privateKey->d,
+                     signature->r);
+      ecScalarAddMod(privateKey->curve, signature->s, signature->s, state->z);
+      ecScalarMulMod(privateKey->curve, signature->s, signature->s, state->k);
+
+      // The values of r and s shall be checked to determine if r = 0 or s = 0.
+      // If either r = 0 or s = 0, a new value of k shall be generated, and the
+      // signature shall be recalculated (refer to FIPS 186-5, section 6.4.1)
+      if (ecScalarCompInt(signature->r, 0, qLen) != 0 &&
+          ecScalarCompInt(signature->s, 0, qLen) != 0) {
+        break;
       }
+    }
+  }
 
-      //Debug message
-      TRACE_DEBUG("  z:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", state->z, qLen);
+  // Check status code
+  if (!error) {
+    // Save elliptic curve parameters
+    signature->curve = privateKey->curve;
 
-      //z is reduced modulo q. The modular reduction can be implemented with a
-      //simple conditional subtraction
-      c = ecScalarSub(z2, state->z, privateKey->curve->q, qLen);
-      ecScalarSelect(state->z, z2, state->z, c, qLen);
-   }
+    // Debug message
+    TRACE_DEBUG("  r:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", signature->r, qLen);
+    TRACE_DEBUG("  s:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", signature->s, qLen);
+  }
 
-   //ECDSA signature generation process
-   while(!error)
-   {
-      //Generate a random number k such as 0 < k < q - 1
-      error = ecScalarRand(privateKey->curve, state->k, prngAlgo, prngContext);
-
-      //Check status code
-      if(!error)
-      {
-         //Debug message
-         TRACE_DEBUG("  k:\r\n");
-         TRACE_DEBUG_EC_SCALAR("    ", state->k, qLen);
-
-         //Compute R1 = (x1, y1) = k.G
-         error = ecMulRegular(privateKey->curve, &state->r1, state->k,
-            &privateKey->curve->g);
-      }
-
-      //Check status code
-      if(!error)
-      {
-         //Convert R1 to affine representation
-         error = ecAffinify(privateKey->curve, &state->r1, &state->r1);
-      }
-
-      //Check status code
-      if(!error)
-      {
-         //Debug message
-         TRACE_DEBUG("  x1:\r\n");
-         TRACE_DEBUG_EC_SCALAR("    ", state->r1.x, pLen);
-         TRACE_DEBUG("  y1:\r\n");
-         TRACE_DEBUG_EC_SCALAR("    ", state->r1.y, pLen);
-
-         //Compute r = x1 mod q
-         ecScalarMod(signature->r, state->r1.x, pLen, privateKey->curve->q, qLen);
-         //Compute k ^ -1 mod q
-         ecScalarInvMod(privateKey->curve, state->k, state->k);
-
-         //Compute s = k ^ -1 * (z + x * r) mod q
-         ecScalarMulMod(privateKey->curve, signature->s, privateKey->d, signature->r);
-         ecScalarAddMod(privateKey->curve, signature->s, signature->s, state->z);
-         ecScalarMulMod(privateKey->curve, signature->s, signature->s, state->k);
-
-         //The values of r and s shall be checked to determine if r = 0 or s = 0.
-         //If either r = 0 or s = 0, a new value of k shall be generated, and the
-         //signature shall be recalculated (refer to FIPS 186-5, section 6.4.1)
-         if(ecScalarCompInt(signature->r, 0, qLen) != 0 &&
-            ecScalarCompInt(signature->s, 0, qLen) != 0)
-         {
-            break;
-         }
-      }
-   }
-
-   //Check status code
-   if(!error)
-   {
-      //Save elliptic curve parameters
-      signature->curve = privateKey->curve;
-
-      //Debug message
-      TRACE_DEBUG("  r:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", signature->r, qLen);
-      TRACE_DEBUG("  s:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", signature->s, qLen);
-   }
-
-   //Erase working state
-   osMemset(state, 0, sizeof(EcdsaGenerateSignatureState));
+  // Erase working state
+  osMemset(state, 0, sizeof(EcdsaGenerateSignatureState));
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Release working state
-   cryptoFreeMem(state);
+  // Release working state
+  cryptoFreeMem(state);
 #endif
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief Deterministic ECDSA signature generation
@@ -664,160 +632,154 @@ __weak_func error_t ecdsaGenerateSignature(const PrngAlgo *prngAlgo,
  **/
 
 error_t ecdsaGenerateDeterministicSignature(const EcPrivateKey *privateKey,
-   const HashAlgo *hashAlgo, const uint8_t *digest, EcdsaSignature *signature)
-{
-   error_t error;
-   uint_t n;
-   uint_t pLen;
-   uint_t qLen;
+                                            const HashAlgo *hashAlgo,
+                                            const uint8_t *digest,
+                                            EcdsaSignature *signature) {
+  error_t error;
+  uint_t n;
+  uint_t pLen;
+  uint_t qLen;
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   EcdsaGenerateSignatureState *state;
+  EcdsaGenerateSignatureState *state;
 #else
-   EcdsaGenerateSignatureState state[1];
+  EcdsaGenerateSignatureState state[1];
 #endif
 
-   //Check parameters
-   if(hashAlgo == NULL || privateKey == NULL || digest == NULL ||
-      signature == NULL)
-   {
-      return ERROR_INVALID_PARAMETER;
-   }
+  // Check parameters
+  if (hashAlgo == NULL || privateKey == NULL || digest == NULL ||
+      signature == NULL) {
+    return ERROR_INVALID_PARAMETER;
+  }
 
-   //Invalid elliptic curve?
-   if(privateKey->curve == NULL)
-      return ERROR_INVALID_ELLIPTIC_CURVE;
+  // Invalid elliptic curve?
+  if (privateKey->curve == NULL)
+    return ERROR_INVALID_ELLIPTIC_CURVE;
 
-   //Get the length of the modulus, in words
-   pLen = (privateKey->curve->fieldSize + 31) / 32;
-   //Get the length of the order, in words
-   qLen = (privateKey->curve->orderSize + 31) / 32;
+  // Get the length of the modulus, in words
+  pLen = (privateKey->curve->fieldSize + 31) / 32;
+  // Get the length of the order, in words
+  qLen = (privateKey->curve->orderSize + 31) / 32;
 
-   //Debug message
-   TRACE_DEBUG("ECDSA signature generation...\r\n");
-   TRACE_DEBUG("  curve: %s\r\n", privateKey->curve->name);
-   TRACE_DEBUG("  private key:\r\n");
-   TRACE_DEBUG_EC_SCALAR("    ", privateKey->d, qLen);
-   TRACE_DEBUG("  digest:\r\n");
-   TRACE_DEBUG_ARRAY("    ", digest, hashAlgo->digestSize);
+  // Debug message
+  TRACE_DEBUG("ECDSA signature generation...\r\n");
+  TRACE_DEBUG("  curve: %s\r\n", privateKey->curve->name);
+  TRACE_DEBUG("  private key:\r\n");
+  TRACE_DEBUG_EC_SCALAR("    ", privateKey->d, qLen);
+  TRACE_DEBUG("  digest:\r\n");
+  TRACE_DEBUG_ARRAY("    ", digest, hashAlgo->digestSize);
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate working state
-   state = cryptoAllocMem(sizeof(EcdsaGenerateSignatureState));
-   //Failed to allocate memory?
-   if(state == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate working state
+  state = cryptoAllocMem(sizeof(EcdsaGenerateSignatureState));
+  // Failed to allocate memory?
+  if (state == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Initialize working state
-   osMemset(state, 0, sizeof(EcdsaGenerateSignatureState));
+  // Initialize working state
+  osMemset(state, 0, sizeof(EcdsaGenerateSignatureState));
 
-   //Initialize (R, S) integer pair
-   ecScalarSetInt(signature->r, 0, EC_MAX_ORDER_SIZE);
-   ecScalarSetInt(signature->s, 0, EC_MAX_ORDER_SIZE);
+  // Initialize (R, S) integer pair
+  ecScalarSetInt(signature->r, 0, EC_MAX_ORDER_SIZE);
+  ecScalarSetInt(signature->s, 0, EC_MAX_ORDER_SIZE);
 
-   //Let N be the bit length of q
-   n = privateKey->curve->orderSize;
-   //Compute N = MIN(N, outlen)
-   n = MIN(n, hashAlgo->digestSize * 8);
+  // Let N be the bit length of q
+  n = privateKey->curve->orderSize;
+  // Compute N = MIN(N, outlen)
+  n = MIN(n, hashAlgo->digestSize * 8);
 
-   //Convert the digest to an integer
-   error = ecScalarImport(state->z, qLen, digest, (n + 7) / 8,
-      EC_SCALAR_FORMAT_BIG_ENDIAN);
+  // Convert the digest to an integer
+  error = ecScalarImport(state->z, qLen, digest, (n + 7) / 8,
+                         EC_SCALAR_FORMAT_BIG_ENDIAN);
 
-   //Check status code
-   if(!error)
-   {
-      uint32_t c;
-      uint32_t z2[EC_MAX_ORDER_SIZE];
+  // Check status code
+  if (!error) {
+    uint32_t c;
+    uint32_t z2[EC_MAX_ORDER_SIZE];
 
-      //Keep the leftmost N bits of the hash value
-      if((n % 8) != 0)
-      {
-         ecScalarShiftRight(state->z, state->z, 8 - (n % 8), qLen);
-      }
+    // Keep the leftmost N bits of the hash value
+    if ((n % 8) != 0) {
+      ecScalarShiftRight(state->z, state->z, 8 - (n % 8), qLen);
+    }
 
-      //Debug message
-      TRACE_DEBUG("  z:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", state->z, qLen);
+    // Debug message
+    TRACE_DEBUG("  z:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", state->z, qLen);
 
-      //z is reduced modulo q. The modular reduction can be implemented with a
-      //simple conditional subtraction
-      c = ecScalarSub(z2, state->z, privateKey->curve->q, qLen);
-      ecScalarSelect(state->z, z2, state->z, c, qLen);
+    // z is reduced modulo q. The modular reduction can be implemented with a
+    // simple conditional subtraction
+    c = ecScalarSub(z2, state->z, privateKey->curve->q, qLen);
+    ecScalarSelect(state->z, z2, state->z, c, qLen);
 
-      //Compute the pseudorandom k for signature generation
-      error = ecdsaGenerateK(privateKey->curve, hashAlgo, privateKey->d,
-         state->z, state->k);
-   }
+    // Compute the pseudorandom k for signature generation
+    error = ecdsaGenerateK(privateKey->curve, hashAlgo, privateKey->d, state->z,
+                           state->k);
+  }
 
-   //Check status code
-   if(!error)
-   {
-      //Debug message
-      TRACE_DEBUG("  k:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", state->k, qLen);
+  // Check status code
+  if (!error) {
+    // Debug message
+    TRACE_DEBUG("  k:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", state->k, qLen);
 
-      //Compute R1 = (x1, y1) = k.G
-      error = ecMulRegular(privateKey->curve, &state->r1, state->k,
-         &privateKey->curve->g);
-   }
+    // Compute R1 = (x1, y1) = k.G
+    error = ecMulRegular(privateKey->curve, &state->r1, state->k,
+                         &privateKey->curve->g);
+  }
 
-   //Check status code
-   if(!error)
-   {
-      //Convert R1 to affine representation
-      error = ecAffinify(privateKey->curve, &state->r1, &state->r1);
-   }
+  // Check status code
+  if (!error) {
+    // Convert R1 to affine representation
+    error = ecAffinify(privateKey->curve, &state->r1, &state->r1);
+  }
 
-   //Check status code
-   if(!error)
-   {
-      //Debug message
-      TRACE_DEBUG("  x1:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", state->r1.x, pLen);
-      TRACE_DEBUG("  y1:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", state->r1.y, pLen);
+  // Check status code
+  if (!error) {
+    // Debug message
+    TRACE_DEBUG("  x1:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", state->r1.x, pLen);
+    TRACE_DEBUG("  y1:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", state->r1.y, pLen);
 
-      //Compute r = x1 mod q
-      ecScalarMod(signature->r, state->r1.x, pLen, privateKey->curve->q, qLen);
-      //Compute k ^ -1 mod q
-      ecScalarInvMod(privateKey->curve, state->k, state->k);
+    // Compute r = x1 mod q
+    ecScalarMod(signature->r, state->r1.x, pLen, privateKey->curve->q, qLen);
+    // Compute k ^ -1 mod q
+    ecScalarInvMod(privateKey->curve, state->k, state->k);
 
-      //Compute s = k ^ -1 * (z + x * r) mod q
-      ecScalarMulMod(privateKey->curve, signature->s, privateKey->d, signature->r);
-      ecScalarAddMod(privateKey->curve, signature->s, signature->s, state->z);
-      ecScalarMulMod(privateKey->curve, signature->s, signature->s, state->k);
+    // Compute s = k ^ -1 * (z + x * r) mod q
+    ecScalarMulMod(privateKey->curve, signature->s, privateKey->d,
+                   signature->r);
+    ecScalarAddMod(privateKey->curve, signature->s, signature->s, state->z);
+    ecScalarMulMod(privateKey->curve, signature->s, signature->s, state->k);
 
-      //Save elliptic curve parameters
-      signature->curve = privateKey->curve;
+    // Save elliptic curve parameters
+    signature->curve = privateKey->curve;
 
-      //Debug message
-      TRACE_DEBUG("  r:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", signature->r, qLen);
-      TRACE_DEBUG("  s:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", signature->s, qLen);
+    // Debug message
+    TRACE_DEBUG("  r:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", signature->r, qLen);
+    TRACE_DEBUG("  s:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", signature->s, qLen);
 
-      //If r = 0 or if s = 0, and k was generated deterministically, then
-      //output failure (refer to FIPS 186-5, section 6.4.1)
-      if(ecScalarCompInt(signature->r, 0, qLen) == 0 ||
-         ecScalarCompInt(signature->s, 0, qLen) == 0)
-      {
-         error = ERROR_FAILURE;
-      }
-   }
+    // If r = 0 or if s = 0, and k was generated deterministically, then
+    // output failure (refer to FIPS 186-5, section 6.4.1)
+    if (ecScalarCompInt(signature->r, 0, qLen) == 0 ||
+        ecScalarCompInt(signature->s, 0, qLen) == 0) {
+      error = ERROR_FAILURE;
+    }
+  }
 
-   //Erase working state
-   osMemset(state, 0, sizeof(EcdsaGenerateSignatureState));
+  // Erase working state
+  osMemset(state, 0, sizeof(EcdsaGenerateSignatureState));
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Release working state
-   cryptoFreeMem(state);
+  // Release working state
+  cryptoFreeMem(state);
 #endif
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
-
 
 /**
  * @brief Generation of pseudorandom k
@@ -830,114 +792,103 @@ error_t ecdsaGenerateDeterministicSignature(const EcPrivateKey *privateKey,
  **/
 
 error_t ecdsaGenerateK(const EcCurve *curve, const HashAlgo *hashAlgo,
-   const uint32_t *x, const uint32_t *h, uint32_t *k)
-{
+                       const uint32_t *x, const uint32_t *h, uint32_t *k) {
 #if (HMAC_DRBG_SUPPORT == ENABLED)
-   error_t error;
-   size_t n;
-   uint8_t seed[EC_MAX_ORDER_SIZE * 8];
-   uint8_t t[EC_MAX_ORDER_SIZE * 4];
-   uint32_t q[EC_MAX_ORDER_SIZE];
+  error_t error;
+  size_t n;
+  uint8_t seed[EC_MAX_ORDER_SIZE * 8];
+  uint8_t t[EC_MAX_ORDER_SIZE * 4];
+  uint32_t q[EC_MAX_ORDER_SIZE];
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   HmacDrbgContext *hmacDrbgContext;
+  HmacDrbgContext *hmacDrbgContext;
 #else
-   HmacDrbgContext hmacDrbgContext[1];
+  HmacDrbgContext hmacDrbgContext[1];
 #endif
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate HMAC_DRBG context
-   hmacDrbgContext = cryptoAllocMem(sizeof(HmacDrbgContext));
-   //Failed to allocate memory?
-   if(hmacDrbgContext == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate HMAC_DRBG context
+  hmacDrbgContext = cryptoAllocMem(sizeof(HmacDrbgContext));
+  // Failed to allocate memory?
+  if (hmacDrbgContext == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Get the length of the order, in bytes
-   n = (curve->orderSize + 7) / 8;
+  // Get the length of the order, in bytes
+  n = (curve->orderSize + 7) / 8;
 
-   //Instantiate HMAC_DRBG using HMAC parameterized with the same hash function
-   //H as the one used for processing the message that is to be signed (refer
-   //to RFC 6979, section 3.3)
-   error = hmacDrbgInit(hmacDrbgContext, hashAlgo);
+  // Instantiate HMAC_DRBG using HMAC parameterized with the same hash function
+  // H as the one used for processing the message that is to be signed (refer
+  // to RFC 6979, section 3.3)
+  error = hmacDrbgInit(hmacDrbgContext, hashAlgo);
 
-   //Check status code
-   if(!error)
-   {
-      //The private key is used as entropy string
-      error = ecScalarExport(x, (n + 3) / 4, seed, n,
-         EC_SCALAR_FORMAT_BIG_ENDIAN);
-   }
+  // Check status code
+  if (!error) {
+    // The private key is used as entropy string
+    error =
+        ecScalarExport(x, (n + 3) / 4, seed, n, EC_SCALAR_FORMAT_BIG_ENDIAN);
+  }
 
-   //Check status code
-   if(!error)
-   {
-      //The hashed message (truncated and expanded by bits2octets) is used as
-      //nonce. The entropy string and nonce are simply concatenated into the
-      //initial seed
-      error = ecScalarExport(h, (n + 3) / 4, seed + n, n,
-         EC_SCALAR_FORMAT_BIG_ENDIAN);
-   }
+  // Check status code
+  if (!error) {
+    // The hashed message (truncated and expanded by bits2octets) is used as
+    // nonce. The entropy string and nonce are simply concatenated into the
+    // initial seed
+    error = ecScalarExport(h, (n + 3) / 4, seed + n, n,
+                           EC_SCALAR_FORMAT_BIG_ENDIAN);
+  }
 
-   //Check status code
-   if(!error)
-   {
-      //For deterministic ECDSA, we want HMAC_DRBG to run with the entropy
-      //string and nonce that we specify, without accessing an actual entropy
-      //source
-      error = hmacDrbgSeed(hmacDrbgContext, seed, n * 2);
-   }
+  // Check status code
+  if (!error) {
+    // For deterministic ECDSA, we want HMAC_DRBG to run with the entropy
+    // string and nonce that we specify, without accessing an actual entropy
+    // source
+    error = hmacDrbgSeed(hmacDrbgContext, seed, n * 2);
+  }
 
-   //Repeat this step until an acceptable value is obtained
-   while(!error)
-   {
-      //Generate a candidate value for k by requesting qlen bits from HMAC_DRBG
-      error = hmacDrbgGenerate(hmacDrbgContext, t, n);
+  // Repeat this step until an acceptable value is obtained
+  while (!error) {
+    // Generate a candidate value for k by requesting qlen bits from HMAC_DRBG
+    error = hmacDrbgGenerate(hmacDrbgContext, t, n);
 
-      //Check status code
-      if(!error)
-      {
-         //The resulting value is then converted to an integer value using the
-         //big-endian convention
-         error = ecScalarImport(k, (n + 3) / 4, t, n,
-            EC_SCALAR_FORMAT_BIG_ENDIAN);
+    // Check status code
+    if (!error) {
+      // The resulting value is then converted to an integer value using the
+      // big-endian convention
+      error = ecScalarImport(k, (n + 3) / 4, t, n, EC_SCALAR_FORMAT_BIG_ENDIAN);
+    }
+
+    // Check status code
+    if (!error) {
+      // The qlen leftmost bits are kept, and subsequent bits are discarded
+      if (curve->orderSize < (n * 8)) {
+        ecScalarShiftRight(k, k, (n * 8) - curve->orderSize, (n + 3) / 4);
       }
 
-      //Check status code
-      if(!error)
-      {
-         //The qlen leftmost bits are kept, and subsequent bits are discarded
-         if(curve->orderSize < (n * 8))
-         {
-            ecScalarShiftRight(k, k, (n * 8) - curve->orderSize, (n + 3) / 4);
-         }
+      // Precompte q-1
+      ecScalarSubInt(q, curve->q, 1, (n + 3) / 4);
 
-         //Precompte q-1
-         ecScalarSubInt(q, curve->q, 1, (n + 3) / 4);
-
-         //If that value of k is within the [1,q-1] range, and is suitable for
-         //ECDSA, then the generation of k is finished
-         if(ecScalarCompInt(k, 0, (n + 3) / 4) > 0 &&
-            ecScalarComp(k, q, (n + 3) / 4) < 0)
-         {
-            //The obtained value of k can be used in ECDSA
-            break;
-         }
+      // If that value of k is within the [1,q-1] range, and is suitable for
+      // ECDSA, then the generation of k is finished
+      if (ecScalarCompInt(k, 0, (n + 3) / 4) > 0 &&
+          ecScalarComp(k, q, (n + 3) / 4) < 0) {
+        // The obtained value of k can be used in ECDSA
+        break;
       }
-   }
+    }
+  }
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Release working state
-   cryptoFreeMem(hmacDrbgContext);
+  // Release working state
+  cryptoFreeMem(hmacDrbgContext);
 #endif
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 #else
-   //HMAC_DRBG is not implemented
-   return ERROR_NOT_IMPLEMENTED;
+  // HMAC_DRBG is not implemented
+  return ERROR_NOT_IMPLEMENTED;
 #endif
 }
-
 
 /**
  * @brief ECDSA signature verification
@@ -949,157 +900,148 @@ error_t ecdsaGenerateK(const EcCurve *curve, const HashAlgo *hashAlgo,
  **/
 
 __weak_func error_t ecdsaVerifySignature(const EcPublicKey *publicKey,
-   const uint8_t *digest, size_t digestLen, const EcdsaSignature *signature)
-{
-   error_t error;
-   uint_t n;
-   uint_t pLen;
-   uint_t qLen;
+                                         const uint8_t *digest,
+                                         size_t digestLen,
+                                         const EcdsaSignature *signature) {
+  error_t error;
+  uint_t n;
+  uint_t pLen;
+  uint_t qLen;
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   EcdsaVerifySignatureState *state;
+  EcdsaVerifySignatureState *state;
 #else
-   EcdsaVerifySignatureState state[1];
+  EcdsaVerifySignatureState state[1];
 #endif
 
-   //Check parameters
-   if(publicKey == NULL || digest == NULL || signature == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (publicKey == NULL || digest == NULL || signature == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //Invalid elliptic curve?
-   if(publicKey->curve == NULL)
-      return ERROR_INVALID_ELLIPTIC_CURVE;
+  // Invalid elliptic curve?
+  if (publicKey->curve == NULL)
+    return ERROR_INVALID_ELLIPTIC_CURVE;
 
-   //Get the length of the modulus, in words
-   pLen = (publicKey->curve->fieldSize + 31) / 32;
-   //Get the length of the order, in words
-   qLen = (publicKey->curve->orderSize + 31) / 32;
+  // Get the length of the modulus, in words
+  pLen = (publicKey->curve->fieldSize + 31) / 32;
+  // Get the length of the order, in words
+  qLen = (publicKey->curve->orderSize + 31) / 32;
 
-   //Debug message
-   TRACE_DEBUG("ECDSA signature verification...\r\n");
-   TRACE_DEBUG("  curve: %s\r\n", publicKey->curve->name);
-   TRACE_DEBUG("  public key X:\r\n");
-   TRACE_DEBUG_EC_SCALAR("    ", publicKey->q.x, pLen);
-   TRACE_DEBUG("  public key Y:\r\n");
-   TRACE_DEBUG_EC_SCALAR("    ", publicKey->q.y, pLen);
-   TRACE_DEBUG("  digest:\r\n");
-   TRACE_DEBUG_ARRAY("    ", digest, digestLen);
-   TRACE_DEBUG("  r:\r\n");
-   TRACE_DEBUG_EC_SCALAR("    ", signature->r, qLen);
-   TRACE_DEBUG("  s:\r\n");
-   TRACE_DEBUG_EC_SCALAR("    ", signature->s, qLen);
+  // Debug message
+  TRACE_DEBUG("ECDSA signature verification...\r\n");
+  TRACE_DEBUG("  curve: %s\r\n", publicKey->curve->name);
+  TRACE_DEBUG("  public key X:\r\n");
+  TRACE_DEBUG_EC_SCALAR("    ", publicKey->q.x, pLen);
+  TRACE_DEBUG("  public key Y:\r\n");
+  TRACE_DEBUG_EC_SCALAR("    ", publicKey->q.y, pLen);
+  TRACE_DEBUG("  digest:\r\n");
+  TRACE_DEBUG_ARRAY("    ", digest, digestLen);
+  TRACE_DEBUG("  r:\r\n");
+  TRACE_DEBUG_EC_SCALAR("    ", signature->r, qLen);
+  TRACE_DEBUG("  s:\r\n");
+  TRACE_DEBUG_EC_SCALAR("    ", signature->s, qLen);
 
-   //Verify that the public key is on the curve
-   if(!ecIsPointAffine(publicKey->curve, &publicKey->q))
-   {
-      return ERROR_INVALID_SIGNATURE;
-   }
+  // Verify that the public key is on the curve
+  if (!ecIsPointAffine(publicKey->curve, &publicKey->q)) {
+    return ERROR_INVALID_SIGNATURE;
+  }
 
-   //The verifier shall check that 0 < r < q
-   if(ecScalarCompInt(signature->r, 0, EC_MAX_ORDER_SIZE) <= 0 ||
-      ecScalarComp(signature->r, publicKey->curve->q, EC_MAX_ORDER_SIZE) >= 0)
-   {
-      //If the condition is violated, the signature shall be rejected as invalid
-      return ERROR_INVALID_SIGNATURE;
-   }
+  // The verifier shall check that 0 < r < q
+  if (ecScalarCompInt(signature->r, 0, EC_MAX_ORDER_SIZE) <= 0 ||
+      ecScalarComp(signature->r, publicKey->curve->q, EC_MAX_ORDER_SIZE) >= 0) {
+    // If the condition is violated, the signature shall be rejected as invalid
+    return ERROR_INVALID_SIGNATURE;
+  }
 
-   //The verifier shall check that 0 < s < q
-   if(ecScalarCompInt(signature->s, 0, EC_MAX_ORDER_SIZE) <= 0 ||
-      ecScalarComp(signature->s, publicKey->curve->q, EC_MAX_ORDER_SIZE) >= 0)
-   {
-      //If the condition is violated, the signature shall be rejected as invalid
-      return ERROR_INVALID_SIGNATURE;
-   }
+  // The verifier shall check that 0 < s < q
+  if (ecScalarCompInt(signature->s, 0, EC_MAX_ORDER_SIZE) <= 0 ||
+      ecScalarComp(signature->s, publicKey->curve->q, EC_MAX_ORDER_SIZE) >= 0) {
+    // If the condition is violated, the signature shall be rejected as invalid
+    return ERROR_INVALID_SIGNATURE;
+  }
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate working state
-   state = cryptoAllocMem(sizeof(EcdsaVerifySignatureState));
-   //Failed to allocate memory?
-   if(state == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate working state
+  state = cryptoAllocMem(sizeof(EcdsaVerifySignatureState));
+  // Failed to allocate memory?
+  if (state == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Initialize working state
-   osMemset(state, 0, sizeof(EcdsaVerifySignatureState));
+  // Initialize working state
+  osMemset(state, 0, sizeof(EcdsaVerifySignatureState));
 
-   //Let N be the bit length of q
-   n = publicKey->curve->orderSize;
-   //Compute N = MIN(N, outlen)
-   n = MIN(n, digestLen * 8);
+  // Let N be the bit length of q
+  n = publicKey->curve->orderSize;
+  // Compute N = MIN(N, outlen)
+  n = MIN(n, digestLen * 8);
 
-   //Convert the digest to an integer
-   error = ecScalarImport(state->z, qLen, digest, (n + 7) / 8,
-      EC_SCALAR_FORMAT_BIG_ENDIAN);
+  // Convert the digest to an integer
+  error = ecScalarImport(state->z, qLen, digest, (n + 7) / 8,
+                         EC_SCALAR_FORMAT_BIG_ENDIAN);
 
-   //Check status code
-   if(!error)
-   {
-      //Keep the leftmost N bits of the hash value
-      if((n % 8) != 0)
-      {
-         ecScalarShiftRight(state->z, state->z, 8 - (n % 8), qLen);
-      }
+  // Check status code
+  if (!error) {
+    // Keep the leftmost N bits of the hash value
+    if ((n % 8) != 0) {
+      ecScalarShiftRight(state->z, state->z, 8 - (n % 8), qLen);
+    }
 
-      //Compute w = s ^ -1 mod q
-      ecScalarInvMod(publicKey->curve, state->w, signature->s);
+    // Compute w = s ^ -1 mod q
+    ecScalarInvMod(publicKey->curve, state->w, signature->s);
 
-      //Compute u1 = z * w mod q
-      ecScalarMulMod(publicKey->curve, state->u1, state->z, state->w);
-      //Compute u2 = r * w mod q
-      ecScalarMulMod(publicKey->curve, state->u2, signature->r, state->w);
+    // Compute u1 = z * w mod q
+    ecScalarMulMod(publicKey->curve, state->u1, state->z, state->w);
+    // Compute u2 = r * w mod q
+    ecScalarMulMod(publicKey->curve, state->u2, signature->r, state->w);
 
-      //Convert the public key to projective representation
-      ecProjectify(publicKey->curve, &state->v1, &publicKey->q);
+    // Convert the public key to projective representation
+    ecProjectify(publicKey->curve, &state->v1, &publicKey->q);
 
-      //Compute V0 = (x0, y0) = u1.G + u2.Q
-      error = ecTwinMul(publicKey->curve, &state->v0, state->u1,
-         &publicKey->curve->g, state->u2, &state->v1);
-   }
+    // Compute V0 = (x0, y0) = u1.G + u2.Q
+    error = ecTwinMul(publicKey->curve, &state->v0, state->u1,
+                      &publicKey->curve->g, state->u2, &state->v1);
+  }
 
-   //Check status code
-   if(!error)
-   {
-      //Convert V0 to affine representation
-      error = ecAffinify(publicKey->curve, &state->v0, &state->v0);
-   }
+  // Check status code
+  if (!error) {
+    // Convert V0 to affine representation
+    error = ecAffinify(publicKey->curve, &state->v0, &state->v0);
+  }
 
-   //Check status code
-   if(!error)
-   {
-      //Debug message
-      TRACE_DEBUG("  x0:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", state->v0.x, pLen);
-      TRACE_DEBUG("  y0:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", state->v0.y, pLen);
+  // Check status code
+  if (!error) {
+    // Debug message
+    TRACE_DEBUG("  x0:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", state->v0.x, pLen);
+    TRACE_DEBUG("  y0:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", state->v0.y, pLen);
 
-      //Compute v = x0 mod q
-      ecScalarMod(state->v, state->v0.x, pLen, publicKey->curve->q, qLen);
+    // Compute v = x0 mod q
+    ecScalarMod(state->v, state->v0.x, pLen, publicKey->curve->q, qLen);
 
-      //Debug message
-      TRACE_DEBUG("  v:\r\n");
-      TRACE_DEBUG_EC_SCALAR("    ", state->v, qLen);
+    // Debug message
+    TRACE_DEBUG("  v:\r\n");
+    TRACE_DEBUG_EC_SCALAR("    ", state->v, qLen);
 
-      //If v = r, then the signature is verified. If v does not equal r, then the
-      //message or the signature may have been modified
-      if(ecScalarComp(state->v, signature->r, qLen) == 0)
-      {
-         error = NO_ERROR;
-      }
-      else
-      {
-         error = ERROR_INVALID_SIGNATURE;
-      }
-   }
+    // If v = r, then the signature is verified. If v does not equal r, then the
+    // message or the signature may have been modified
+    if (ecScalarComp(state->v, signature->r, qLen) == 0) {
+      error = NO_ERROR;
+    } else {
+      error = ERROR_INVALID_SIGNATURE;
+    }
+  }
 
-   //Erase working state
-   osMemset(state, 0, sizeof(EcdsaVerifySignatureState));
+  // Erase working state
+  osMemset(state, 0, sizeof(EcdsaVerifySignatureState));
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Release working state
-   cryptoFreeMem(state);
+  // Release working state
+  cryptoFreeMem(state);
 #endif
 
-   //Return status code
-   return error;
+  // Return status code
+  return error;
 }
 
 #endif

@@ -31,39 +31,39 @@
 #ifndef _MLKEM1024_H
 #define _MLKEM1024_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Public key length
+// Public key length
 #define MLKEM1024_PUBLIC_KEY_LEN 1568
-//Secret key length
+// Secret key length
 #define MLKEM1024_SECRET_KEY_LEN 3168
-//Ciphertext length
+// Ciphertext length
 #define MLKEM1024_CIPHERTEXT_LEN 1568
-//Shared secret length
+// Shared secret length
 #define MLKEM1024_SHARED_SECRET_LEN 32
 
-//Common interface for key encapsulation mechanisms (KEM)
+// Common interface for key encapsulation mechanisms (KEM)
 #define MLKEM1024_KEM_ALGO (&mlkem1024KemAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//ML-KEM-1024 related constants
+// ML-KEM-1024 related constants
 extern const KemAlgo mlkem1024KemAlgo;
 
-//ML-KEM-1024 related functions
+// ML-KEM-1024 related functions
 error_t mlkem1024GenerateKeyPair(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *pk, uint8_t *sk);
+                                 uint8_t *pk, uint8_t *sk);
 
 error_t mlkem1024Encapsulate(const PrngAlgo *prngAlgo, void *prngContext,
-   uint8_t *ct, uint8_t *ss, const uint8_t *pk);
+                             uint8_t *ct, uint8_t *ss, const uint8_t *pk);
 
 error_t mlkem1024Decapsulate(uint8_t *ss, const uint8_t *ct, const uint8_t *sk);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

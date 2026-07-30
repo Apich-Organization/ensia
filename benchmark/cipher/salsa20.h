@@ -31,18 +31,18 @@
 #ifndef _SALSA20_H
 #define _SALSA20_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Salsa20 related functions
+// Salsa20 related functions
 void salsa20ProcessBlock(const uint8_t *input, uint8_t *output, uint_t nr);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

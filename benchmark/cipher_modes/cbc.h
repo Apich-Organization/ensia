@@ -31,22 +31,22 @@
 #ifndef _CBC_H
 #define _CBC_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//CBC encryption and decryption routines
-error_t cbcEncrypt(const CipherAlgo *cipher, void *context,
-   uint8_t *iv, const uint8_t *p, uint8_t *c, size_t length);
+// CBC encryption and decryption routines
+error_t cbcEncrypt(const CipherAlgo *cipher, void *context, uint8_t *iv,
+                   const uint8_t *p, uint8_t *c, size_t length);
 
-error_t cbcDecrypt(const CipherAlgo *cipher, void *context,
-   uint8_t *iv, const uint8_t *c, uint8_t *p, size_t length);
+error_t cbcDecrypt(const CipherAlgo *cipher, void *context, uint8_t *iv,
+                   const uint8_t *c, uint8_t *p, size_t length);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

@@ -31,44 +31,42 @@
 #ifndef _CMAC_H
 #define _CMAC_H
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher/cipher_algorithms.h"
+#include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef CMAC_PRIVATE_CONTEXT
-   #define CMAC_PRIVATE_CONTEXT
+#define CMAC_PRIVATE_CONTEXT
 #endif
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief CMAC algorithm context
  **/
 
-typedef struct
-{
-   const CipherAlgo *cipher;
-   CipherContext cipherContext;
-   uint8_t k1[MAX_CIPHER_BLOCK_SIZE];
-   uint8_t k2[MAX_CIPHER_BLOCK_SIZE];
-   uint8_t buffer[MAX_CIPHER_BLOCK_SIZE];
-   size_t bufferLength;
-   uint8_t mac[MAX_CIPHER_BLOCK_SIZE];
-   CMAC_PRIVATE_CONTEXT
+typedef struct {
+  const CipherAlgo *cipher;
+  CipherContext cipherContext;
+  uint8_t k1[MAX_CIPHER_BLOCK_SIZE];
+  uint8_t k2[MAX_CIPHER_BLOCK_SIZE];
+  uint8_t buffer[MAX_CIPHER_BLOCK_SIZE];
+  size_t bufferLength;
+  uint8_t mac[MAX_CIPHER_BLOCK_SIZE];
+  CMAC_PRIVATE_CONTEXT
 } CmacContext;
 
-
-//CMAC related functions
+// CMAC related functions
 error_t cmacCompute(const CipherAlgo *cipher, const void *key, size_t keyLen,
-   const void *data, size_t dataLen, uint8_t *mac, size_t macLen);
+                    const void *data, size_t dataLen, uint8_t *mac,
+                    size_t macLen);
 
 error_t cmacInit(CmacContext *context, const CipherAlgo *cipher,
-   const void *key, size_t keyLen);
+                 const void *key, size_t keyLen);
 
 void cmacReset(CmacContext *context);
 void cmacUpdate(CmacContext *context, const void *data, size_t dataLen);
@@ -78,7 +76,7 @@ void cmacDeinit(CmacContext *context);
 void cmacMul(uint8_t *x, const uint8_t *a, size_t n, uint8_t rb);
 void cmacXorBlock(uint8_t *x, const uint8_t *a, const uint8_t *b, size_t n);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

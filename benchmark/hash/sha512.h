@@ -31,63 +31,59 @@
 #ifndef _SHA512_H
 #define _SHA512_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef SHA512_PRIVATE_CONTEXT
-   #define SHA512_PRIVATE_CONTEXT
+#define SHA512_PRIVATE_CONTEXT
 #endif
 
-//SHA-512 block size
+// SHA-512 block size
 #define SHA512_BLOCK_SIZE 128
-//SHA-512 digest size
+// SHA-512 digest size
 #define SHA512_DIGEST_SIZE 64
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define SHA512_MIN_PAD_SIZE 17
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define SHA512_HASH_ALGO (&sha512HashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief SHA-512 algorithm context
  **/
 
-typedef struct
-{
-   uint64_t h[8];
-   union
-   {
-      uint64_t w[16];
-      uint8_t buffer[128];
-   };
-   size_t size;
-   uint64_t totalSize;
-   SHA512_PRIVATE_CONTEXT
+typedef struct {
+  uint64_t h[8];
+  union {
+    uint64_t w[16];
+    uint8_t buffer[128];
+  };
+  size_t size;
+  uint64_t totalSize;
+  SHA512_PRIVATE_CONTEXT
 } Sha512Context;
-
 
 #if (SHA512_SUPPORT == ENABLED)
 
-//SHA-512 related constants
+// SHA-512 related constants
 extern const uint8_t SHA512_OID[9];
 extern const HashAlgo sha512HashAlgo;
 
 #endif
 
-//SHA-512 related functions
+// SHA-512 related functions
 error_t sha512Compute(const void *data, size_t length, uint8_t *digest);
 void sha512Init(Sha512Context *context);
 void sha512Update(Sha512Context *context, const void *data, size_t length);
 void sha512Final(Sha512Context *context, uint8_t *digest);
 void sha512ProcessBlock(Sha512Context *context);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

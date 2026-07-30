@@ -31,13 +31,12 @@
 #ifndef _CRYPTO_H
 #define _CRYPTO_H
 
-//Dependencies
-#include "os_port.h"
+// Dependencies
+#include "cpu_endian.h"
 #include "crypto_config.h"
 #include "crypto_legacy.h"
-#include "cpu_endian.h"
 #include "error.h"
-
+#include "os_port.h"
 
 /*
  * CycloneCRYPTO Open is licensed under GPL version 2. In particular:
@@ -62,1194 +61,1200 @@
  */
 
 #ifndef GPL_LICENSE_TERMS_ACCEPTED
-   #error Before compiling CycloneCRYPTO Open, you must accept the terms of the GPL license
+#error Before compiling CycloneCRYPTO Open, you must accept the terms of the GPL license
 #endif
 
-//Version string
+// Version string
 #define CYCLONE_CRYPTO_VERSION_STRING "2.6.4"
-//Major version
+// Major version
 #define CYCLONE_CRYPTO_MAJOR_VERSION 2
-//Minor version
+// Minor version
 #define CYCLONE_CRYPTO_MINOR_VERSION 6
-//Revision number
+// Revision number
 #define CYCLONE_CRYPTO_REV_NUMBER 4
 
-//Static memory allocation
+// Static memory allocation
 #ifndef CRYPTO_STATIC_MEM_SUPPORT
-   #define CRYPTO_STATIC_MEM_SUPPORT DISABLED
-#elif (CRYPTO_STATIC_MEM_SUPPORT != ENABLED && CRYPTO_STATIC_MEM_SUPPORT != DISABLED)
-   #error CRYPTO_STATIC_MEM_SUPPORT parameter is not valid
+#define CRYPTO_STATIC_MEM_SUPPORT DISABLED
+#elif (CRYPTO_STATIC_MEM_SUPPORT != ENABLED &&                                 \
+       CRYPTO_STATIC_MEM_SUPPORT != DISABLED)
+#error CRYPTO_STATIC_MEM_SUPPORT parameter is not valid
 #endif
 
-//Multiple precision integer support
+// Multiple precision integer support
 #ifndef MPI_SUPPORT
-   #define MPI_SUPPORT ENABLED
+#define MPI_SUPPORT ENABLED
 #elif (MPI_SUPPORT != ENABLED && MPI_SUPPORT != DISABLED)
-   #error MPI_SUPPORT parameter is not valid
+#error MPI_SUPPORT parameter is not valid
 #endif
 
-//Assembly optimizations for time-critical routines
+// Assembly optimizations for time-critical routines
 #ifndef MPI_ASM_SUPPORT
-   #define MPI_ASM_SUPPORT DISABLED
+#define MPI_ASM_SUPPORT DISABLED
 #elif (MPI_ASM_SUPPORT != ENABLED && MPI_ASM_SUPPORT != DISABLED)
-   #error MPI_ASM_SUPPORT parameter is not valid
+#error MPI_ASM_SUPPORT parameter is not valid
 #endif
 
-//Base64 encoding support
+// Base64 encoding support
 #ifndef BASE64_SUPPORT
-   #define BASE64_SUPPORT ENABLED
+#define BASE64_SUPPORT ENABLED
 #elif (BASE64_SUPPORT != ENABLED && BASE64_SUPPORT != DISABLED)
-   #error BASE64_SUPPORT parameter is not valid
+#error BASE64_SUPPORT parameter is not valid
 #endif
 
-//Base64url encoding support
+// Base64url encoding support
 #ifndef BASE64URL_SUPPORT
-   #define BASE64URL_SUPPORT ENABLED
+#define BASE64URL_SUPPORT ENABLED
 #elif (BASE64URL_SUPPORT != ENABLED && BASE64URL_SUPPORT != DISABLED)
-   #error BASE64URL_SUPPORT parameter is not valid
+#error BASE64URL_SUPPORT parameter is not valid
 #endif
 
-//Radix64 encoding support
+// Radix64 encoding support
 #ifndef RADIX64_SUPPORT
-   #define RADIX64_SUPPORT ENABLED
+#define RADIX64_SUPPORT ENABLED
 #elif (RADIX64_SUPPORT != ENABLED && RADIX64_SUPPORT != DISABLED)
-   #error RADIX64_SUPPORT parameter is not valid
+#error RADIX64_SUPPORT parameter is not valid
 #endif
 
-//MD2 hash support
+// MD2 hash support
 #ifndef MD2_SUPPORT
-   #define MD2_SUPPORT DISABLED
+#define MD2_SUPPORT DISABLED
 #elif (MD2_SUPPORT != ENABLED && MD2_SUPPORT != DISABLED)
-   #error MD2_SUPPORT parameter is not valid
+#error MD2_SUPPORT parameter is not valid
 #endif
 
-//MD4 hash support
+// MD4 hash support
 #ifndef MD4_SUPPORT
-   #define MD4_SUPPORT DISABLED
+#define MD4_SUPPORT DISABLED
 #elif (MD4_SUPPORT != ENABLED && MD4_SUPPORT != DISABLED)
-   #error MD4_SUPPORT parameter is not valid
+#error MD4_SUPPORT parameter is not valid
 #endif
 
-//MD5 hash support
+// MD5 hash support
 #ifndef MD5_SUPPORT
-   #define MD5_SUPPORT DISABLED
+#define MD5_SUPPORT DISABLED
 #elif (MD5_SUPPORT != ENABLED && MD5_SUPPORT != DISABLED)
-   #error MD5_SUPPORT parameter is not valid
+#error MD5_SUPPORT parameter is not valid
 #endif
 
-//RIPEMD-128 hash support
+// RIPEMD-128 hash support
 #ifndef RIPEMD128_SUPPORT
-   #define RIPEMD128_SUPPORT DISABLED
+#define RIPEMD128_SUPPORT DISABLED
 #elif (RIPEMD128_SUPPORT != ENABLED && RIPEMD128_SUPPORT != DISABLED)
-   #error RIPEMD128_SUPPORT parameter is not valid
+#error RIPEMD128_SUPPORT parameter is not valid
 #endif
 
-//RIPEMD-160 hash support
+// RIPEMD-160 hash support
 #ifndef RIPEMD160_SUPPORT
-   #define RIPEMD160_SUPPORT DISABLED
+#define RIPEMD160_SUPPORT DISABLED
 #elif (RIPEMD160_SUPPORT != ENABLED && RIPEMD160_SUPPORT != DISABLED)
-   #error RIPEMD160_SUPPORT parameter is not valid
+#error RIPEMD160_SUPPORT parameter is not valid
 #endif
 
-//SHA-1 hash support
+// SHA-1 hash support
 #ifndef SHA1_SUPPORT
-   #define SHA1_SUPPORT ENABLED
+#define SHA1_SUPPORT ENABLED
 #elif (SHA1_SUPPORT != ENABLED && SHA1_SUPPORT != DISABLED)
-   #error SHA1_SUPPORT parameter is not valid
+#error SHA1_SUPPORT parameter is not valid
 #endif
 
-//SHA-224 hash support
+// SHA-224 hash support
 #ifndef SHA224_SUPPORT
-   #define SHA224_SUPPORT ENABLED
+#define SHA224_SUPPORT ENABLED
 #elif (SHA224_SUPPORT != ENABLED && SHA224_SUPPORT != DISABLED)
-   #error SHA224_SUPPORT parameter is not valid
+#error SHA224_SUPPORT parameter is not valid
 #endif
 
-//SHA-256 hash support
+// SHA-256 hash support
 #ifndef SHA256_SUPPORT
-   #define SHA256_SUPPORT ENABLED
+#define SHA256_SUPPORT ENABLED
 #elif (SHA256_SUPPORT != ENABLED && SHA256_SUPPORT != DISABLED)
-   #error SHA256_SUPPORT parameter is not valid
+#error SHA256_SUPPORT parameter is not valid
 #endif
 
-//SHA-384 hash support
+// SHA-384 hash support
 #ifndef SHA384_SUPPORT
-   #define SHA384_SUPPORT ENABLED
+#define SHA384_SUPPORT ENABLED
 #elif (SHA384_SUPPORT != ENABLED && SHA384_SUPPORT != DISABLED)
-   #error SHA384_SUPPORT parameter is not valid
+#error SHA384_SUPPORT parameter is not valid
 #endif
 
-//SHA-512 hash support
+// SHA-512 hash support
 #ifndef SHA512_SUPPORT
-   #define SHA512_SUPPORT ENABLED
+#define SHA512_SUPPORT ENABLED
 #elif (SHA512_SUPPORT != ENABLED && SHA512_SUPPORT != DISABLED)
-   #error SHA512_SUPPORT parameter is not valid
+#error SHA512_SUPPORT parameter is not valid
 #endif
 
-//SHA-512/224 hash support
+// SHA-512/224 hash support
 #ifndef SHA512_224_SUPPORT
-   #define SHA512_224_SUPPORT DISABLED
+#define SHA512_224_SUPPORT DISABLED
 #elif (SHA512_224_SUPPORT != ENABLED && SHA512_224_SUPPORT != DISABLED)
-   #error SHA512_224_SUPPORT parameter is not valid
+#error SHA512_224_SUPPORT parameter is not valid
 #endif
 
-//SHA-512/256 hash support
+// SHA-512/256 hash support
 #ifndef SHA512_256_SUPPORT
-   #define SHA512_256_SUPPORT DISABLED
+#define SHA512_256_SUPPORT DISABLED
 #elif (SHA512_256_SUPPORT != ENABLED && SHA512_256_SUPPORT != DISABLED)
-   #error SHA512_256_SUPPORT parameter is not valid
+#error SHA512_256_SUPPORT parameter is not valid
 #endif
 
-//SHA3-224 hash support
+// SHA3-224 hash support
 #ifndef SHA3_224_SUPPORT
-   #define SHA3_224_SUPPORT DISABLED
+#define SHA3_224_SUPPORT DISABLED
 #elif (SHA3_224_SUPPORT != ENABLED && SHA3_224_SUPPORT != DISABLED)
-   #error SHA3_224_SUPPORT parameter is not valid
+#error SHA3_224_SUPPORT parameter is not valid
 #endif
 
-//SHA3-256 hash support
+// SHA3-256 hash support
 #ifndef SHA3_256_SUPPORT
-   #define SHA3_256_SUPPORT DISABLED
+#define SHA3_256_SUPPORT DISABLED
 #elif (SHA3_256_SUPPORT != ENABLED && SHA3_256_SUPPORT != DISABLED)
-   #error SHA3_256_SUPPORT parameter is not valid
+#error SHA3_256_SUPPORT parameter is not valid
 #endif
 
-//SHA3-384 hash support
+// SHA3-384 hash support
 #ifndef SHA3_384_SUPPORT
-   #define SHA3_384_SUPPORT DISABLED
+#define SHA3_384_SUPPORT DISABLED
 #elif (SHA3_384_SUPPORT != ENABLED && SHA3_384_SUPPORT != DISABLED)
-   #error SHA3_384_SUPPORT parameter is not valid
+#error SHA3_384_SUPPORT parameter is not valid
 #endif
 
-//SHA3-512 hash support
+// SHA3-512 hash support
 #ifndef SHA3_512_SUPPORT
-   #define SHA3_512_SUPPORT DISABLED
+#define SHA3_512_SUPPORT DISABLED
 #elif (SHA3_512_SUPPORT != ENABLED && SHA3_512_SUPPORT != DISABLED)
-   #error SHA3_512_SUPPORT parameter is not valid
+#error SHA3_512_SUPPORT parameter is not valid
 #endif
 
-//Ascon-Hash256 hash support
+// Ascon-Hash256 hash support
 #ifndef ASCON_HASH256_SUPPORT
-   #define ASCON_HASH256_SUPPORT DISABLED
+#define ASCON_HASH256_SUPPORT DISABLED
 #elif (ASCON_HASH256_SUPPORT != ENABLED && ASCON_HASH256_SUPPORT != DISABLED)
-   #error ASCON_HASH256_SUPPORT parameter is not valid
+#error ASCON_HASH256_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2b support
+// BLAKE2b support
 #ifndef BLAKE2B_SUPPORT
-   #define BLAKE2B_SUPPORT DISABLED
+#define BLAKE2B_SUPPORT DISABLED
 #elif (BLAKE2B_SUPPORT != ENABLED && BLAKE2B_SUPPORT != DISABLED)
-   #error BLAKE2B_SUPPORT parameter is not valid
+#error BLAKE2B_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2b-160 hash support
+// BLAKE2b-160 hash support
 #ifndef BLAKE2B160_SUPPORT
-   #define BLAKE2B160_SUPPORT DISABLED
+#define BLAKE2B160_SUPPORT DISABLED
 #elif (BLAKE2B160_SUPPORT != ENABLED && BLAKE2B160_SUPPORT != DISABLED)
-   #error BLAKE2B160_SUPPORT parameter is not valid
+#error BLAKE2B160_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2b-256 hash support
+// BLAKE2b-256 hash support
 #ifndef BLAKE2B256_SUPPORT
-   #define BLAKE2B256_SUPPORT DISABLED
+#define BLAKE2B256_SUPPORT DISABLED
 #elif (BLAKE2B256_SUPPORT != ENABLED && BLAKE2B256_SUPPORT != DISABLED)
-   #error BLAKE2B256_SUPPORT parameter is not valid
+#error BLAKE2B256_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2b-384 hash support
+// BLAKE2b-384 hash support
 #ifndef BLAKE2B384_SUPPORT
-   #define BLAKE2B384_SUPPORT DISABLED
+#define BLAKE2B384_SUPPORT DISABLED
 #elif (BLAKE2B384_SUPPORT != ENABLED && BLAKE2B384_SUPPORT != DISABLED)
-   #error BLAKE2B384_SUPPORT parameter is not valid
+#error BLAKE2B384_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2b-512 hash support
+// BLAKE2b-512 hash support
 #ifndef BLAKE2B512_SUPPORT
-   #define BLAKE2B512_SUPPORT DISABLED
+#define BLAKE2B512_SUPPORT DISABLED
 #elif (BLAKE2B512_SUPPORT != ENABLED && BLAKE2B512_SUPPORT != DISABLED)
-   #error BLAKE2B512_SUPPORT parameter is not valid
+#error BLAKE2B512_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2s support
+// BLAKE2s support
 #ifndef BLAKE2S_SUPPORT
-   #define BLAKE2S_SUPPORT DISABLED
+#define BLAKE2S_SUPPORT DISABLED
 #elif (BLAKE2S_SUPPORT != ENABLED && BLAKE2S_SUPPORT != DISABLED)
-   #error BLAKE2S_SUPPORT parameter is not valid
+#error BLAKE2S_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2s-128 hash support
+// BLAKE2s-128 hash support
 #ifndef BLAKE2S128_SUPPORT
-   #define BLAKE2S128_SUPPORT DISABLED
+#define BLAKE2S128_SUPPORT DISABLED
 #elif (BLAKE2S128_SUPPORT != ENABLED && BLAKE2S128_SUPPORT != DISABLED)
-   #error BLAKE2S128_SUPPORT parameter is not valid
+#error BLAKE2S128_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2s-160 hash support
+// BLAKE2s-160 hash support
 #ifndef BLAKE2S160_SUPPORT
-   #define BLAKE2S160_SUPPORT DISABLED
+#define BLAKE2S160_SUPPORT DISABLED
 #elif (BLAKE2S160_SUPPORT != ENABLED && BLAKE2S160_SUPPORT != DISABLED)
-   #error BLAKE2S160_SUPPORT parameter is not valid
+#error BLAKE2S160_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2s-224 hash support
+// BLAKE2s-224 hash support
 #ifndef BLAKE2S224_SUPPORT
-   #define BLAKE2S224_SUPPORT DISABLED
+#define BLAKE2S224_SUPPORT DISABLED
 #elif (BLAKE2S224_SUPPORT != ENABLED && BLAKE2S224_SUPPORT != DISABLED)
-   #error BLAKE2S224_SUPPORT parameter is not valid
+#error BLAKE2S224_SUPPORT parameter is not valid
 #endif
 
-//BLAKE2s-256 hash support
+// BLAKE2s-256 hash support
 #ifndef BLAKE2S256_SUPPORT
-   #define BLAKE2S256_SUPPORT DISABLED
+#define BLAKE2S256_SUPPORT DISABLED
 #elif (BLAKE2S256_SUPPORT != ENABLED && BLAKE2S256_SUPPORT != DISABLED)
-   #error BLAKE2S256_SUPPORT parameter is not valid
+#error BLAKE2S256_SUPPORT parameter is not valid
 #endif
 
-//SM3 hash support
+// SM3 hash support
 #ifndef SM3_SUPPORT
-   #define SM3_SUPPORT DISABLED
+#define SM3_SUPPORT DISABLED
 #elif (SM3_SUPPORT != ENABLED && SM3_SUPPORT != DISABLED)
-   #error SM3_SUPPORT parameter is not valid
+#error SM3_SUPPORT parameter is not valid
 #endif
 
-//Tiger hash support
+// Tiger hash support
 #ifndef TIGER_SUPPORT
-   #define TIGER_SUPPORT DISABLED
+#define TIGER_SUPPORT DISABLED
 #elif (TIGER_SUPPORT != ENABLED && TIGER_SUPPORT != DISABLED)
-   #error TIGER_SUPPORT parameter is not valid
+#error TIGER_SUPPORT parameter is not valid
 #endif
 
-//Whirlpool hash support
+// Whirlpool hash support
 #ifndef WHIRLPOOL_SUPPORT
-   #define WHIRLPOOL_SUPPORT DISABLED
+#define WHIRLPOOL_SUPPORT DISABLED
 #elif (WHIRLPOOL_SUPPORT != ENABLED && WHIRLPOOL_SUPPORT != DISABLED)
-   #error WHIRLPOOL_SUPPORT parameter is not valid
+#error WHIRLPOOL_SUPPORT parameter is not valid
 #endif
 
-//Keccak support
+// Keccak support
 #ifndef KECCAK_SUPPORT
-   #define KECCAK_SUPPORT DISABLED
+#define KECCAK_SUPPORT DISABLED
 #elif (KECCAK_SUPPORT != ENABLED && KECCAK_SUPPORT != DISABLED)
-   #error KECCAK_SUPPORT parameter is not valid
+#error KECCAK_SUPPORT parameter is not valid
 #endif
 
-//SHAKE support
+// SHAKE support
 #ifndef SHAKE_SUPPORT
-   #define SHAKE_SUPPORT DISABLED
+#define SHAKE_SUPPORT DISABLED
 #elif (SHAKE_SUPPORT != ENABLED && SHAKE_SUPPORT != DISABLED)
-   #error SHAKE_SUPPORT parameter is not valid
+#error SHAKE_SUPPORT parameter is not valid
 #endif
 
-//cSHAKE support
+// cSHAKE support
 #ifndef CSHAKE_SUPPORT
-   #define CSHAKE_SUPPORT DISABLED
+#define CSHAKE_SUPPORT DISABLED
 #elif (CSHAKE_SUPPORT != ENABLED && CSHAKE_SUPPORT != DISABLED)
-   #error CSHAKE_SUPPORT parameter is not valid
+#error CSHAKE_SUPPORT parameter is not valid
 #endif
 
-//Ascon-XOF128 support
+// Ascon-XOF128 support
 #ifndef ASCON_XOF128_SUPPORT
-   #define ASCON_XOF128_SUPPORT DISABLED
+#define ASCON_XOF128_SUPPORT DISABLED
 #elif (ASCON_XOF128_SUPPORT != ENABLED && ASCON_XOF128_SUPPORT != DISABLED)
-   #error ASCON_XOF128_SUPPORT parameter is not valid
+#error ASCON_XOF128_SUPPORT parameter is not valid
 #endif
 
-//Ascon-CXOF128 support
+// Ascon-CXOF128 support
 #ifndef ASCON_CXOF128_SUPPORT
-   #define ASCON_CXOF128_SUPPORT DISABLED
+#define ASCON_CXOF128_SUPPORT DISABLED
 #elif (ASCON_CXOF128_SUPPORT != ENABLED && ASCON_CXOF128_SUPPORT != DISABLED)
-   #error ASCON_CXOF128_SUPPORT parameter is not valid
+#error ASCON_CXOF128_SUPPORT parameter is not valid
 #endif
 
-//CMAC support
+// CMAC support
 #ifndef CMAC_SUPPORT
-   #define CMAC_SUPPORT DISABLED
+#define CMAC_SUPPORT DISABLED
 #elif (CMAC_SUPPORT != ENABLED && CMAC_SUPPORT != DISABLED)
-   #error CMAC_SUPPORT parameter is not valid
+#error CMAC_SUPPORT parameter is not valid
 #endif
 
-//HMAC support
+// HMAC support
 #ifndef HMAC_SUPPORT
-   #define HMAC_SUPPORT ENABLED
+#define HMAC_SUPPORT ENABLED
 #elif (HMAC_SUPPORT != ENABLED && HMAC_SUPPORT != DISABLED)
-   #error HMAC_SUPPORT parameter is not valid
+#error HMAC_SUPPORT parameter is not valid
 #endif
 
-//GMAC support
+// GMAC support
 #ifndef GMAC_SUPPORT
-   #define GMAC_SUPPORT DISABLED
+#define GMAC_SUPPORT DISABLED
 #elif (GMAC_SUPPORT != ENABLED && GMAC_SUPPORT != DISABLED)
-   #error GMAC_SUPPORT parameter is not valid
+#error GMAC_SUPPORT parameter is not valid
 #endif
 
-//KMAC support
+// KMAC support
 #ifndef KMAC_SUPPORT
-   #define KMAC_SUPPORT DISABLED
+#define KMAC_SUPPORT DISABLED
 #elif (KMAC_SUPPORT != ENABLED && KMAC_SUPPORT != DISABLED)
-   #error KMAC_SUPPORT parameter is not valid
+#error KMAC_SUPPORT parameter is not valid
 #endif
 
-//XCBC-MAC support
+// XCBC-MAC support
 #ifndef XCBC_MAC_SUPPORT
-   #define XCBC_MAC_SUPPORT DISABLED
+#define XCBC_MAC_SUPPORT DISABLED
 #elif (XCBC_MAC_SUPPORT != ENABLED && XCBC_MAC_SUPPORT != DISABLED)
-   #error XCBC_MAC_SUPPORT parameter is not valid
+#error XCBC_MAC_SUPPORT parameter is not valid
 #endif
 
-//Poly1305 support
+// Poly1305 support
 #ifndef POLY1305_SUPPORT
-   #define POLY1305_SUPPORT DISABLED
+#define POLY1305_SUPPORT DISABLED
 #elif (POLY1305_SUPPORT != ENABLED && POLY1305_SUPPORT != DISABLED)
-   #error POLY1305_SUPPORT parameter is not valid
+#error POLY1305_SUPPORT parameter is not valid
 #endif
 
-//RC2 block cipher support
+// RC2 block cipher support
 #ifndef RC2_SUPPORT
-   #define RC2_SUPPORT DISABLED
+#define RC2_SUPPORT DISABLED
 #elif (RC2_SUPPORT != ENABLED && RC2_SUPPORT != DISABLED)
-   #error RC2_SUPPORT parameter is not valid
+#error RC2_SUPPORT parameter is not valid
 #endif
 
-//RC4 stream cipher support
+// RC4 stream cipher support
 #ifndef RC4_SUPPORT
-   #define RC4_SUPPORT DISABLED
+#define RC4_SUPPORT DISABLED
 #elif (RC4_SUPPORT != ENABLED && RC4_SUPPORT != DISABLED)
-   #error RC4_SUPPORT parameter is not valid
+#error RC4_SUPPORT parameter is not valid
 #endif
 
-//RC6 block cipher support
+// RC6 block cipher support
 #ifndef RC6_SUPPORT
-   #define RC6_SUPPORT DISABLED
+#define RC6_SUPPORT DISABLED
 #elif (RC6_SUPPORT != ENABLED && RC6_SUPPORT != DISABLED)
-   #error RC6_SUPPORT parameter is not valid
+#error RC6_SUPPORT parameter is not valid
 #endif
 
-//CAST-128 block cipher support
+// CAST-128 block cipher support
 #ifndef CAST128_SUPPORT
-   #define CAST128_SUPPORT DISABLED
+#define CAST128_SUPPORT DISABLED
 #elif (CAST128_SUPPORT != ENABLED && CAST128_SUPPORT != DISABLED)
-   #error CAST128_SUPPORT parameter is not valid
+#error CAST128_SUPPORT parameter is not valid
 #endif
 
-//CAST-256 block cipher support
+// CAST-256 block cipher support
 #ifndef CAST256_SUPPORT
-   #define CAST256_SUPPORT DISABLED
+#define CAST256_SUPPORT DISABLED
 #elif (CAST256_SUPPORT != ENABLED && CAST256_SUPPORT != DISABLED)
-   #error CAST256_SUPPORT parameter is not valid
+#error CAST256_SUPPORT parameter is not valid
 #endif
 
-//IDEA block cipher support
+// IDEA block cipher support
 #ifndef IDEA_SUPPORT
-   #define IDEA_SUPPORT DISABLED
+#define IDEA_SUPPORT DISABLED
 #elif (IDEA_SUPPORT != ENABLED && IDEA_SUPPORT != DISABLED)
-   #error IDEA_SUPPORT parameter is not valid
+#error IDEA_SUPPORT parameter is not valid
 #endif
 
-//DES block cipher support
+// DES block cipher support
 #ifndef DES_SUPPORT
-   #define DES_SUPPORT DISABLED
+#define DES_SUPPORT DISABLED
 #elif (DES_SUPPORT != ENABLED && DES_SUPPORT != DISABLED)
-   #error DES_SUPPORT parameter is not valid
+#error DES_SUPPORT parameter is not valid
 #endif
 
-//Triple DES block cipher support
+// Triple DES block cipher support
 #ifndef DES3_SUPPORT
-   #define DES3_SUPPORT DISABLED
+#define DES3_SUPPORT DISABLED
 #elif (DES3_SUPPORT != ENABLED && DES3_SUPPORT != DISABLED)
-   #error DES3_SUPPORT parameter is not valid
+#error DES3_SUPPORT parameter is not valid
 #endif
 
-//AES block cipher support
+// AES block cipher support
 #ifndef AES_SUPPORT
-   #define AES_SUPPORT ENABLED
+#define AES_SUPPORT ENABLED
 #elif (AES_SUPPORT != ENABLED && AES_SUPPORT != DISABLED)
-   #error AES_SUPPORT parameter is not valid
+#error AES_SUPPORT parameter is not valid
 #endif
 
-//Blowfish block cipher support
+// Blowfish block cipher support
 #ifndef BLOWFISH_SUPPORT
-   #define BLOWFISH_SUPPORT DISABLED
+#define BLOWFISH_SUPPORT DISABLED
 #elif (BLOWFISH_SUPPORT != ENABLED && BLOWFISH_SUPPORT != DISABLED)
-   #error BLOWFISH_SUPPORT parameter is not valid
+#error BLOWFISH_SUPPORT parameter is not valid
 #endif
 
-//Twofish block cipher support
+// Twofish block cipher support
 #ifndef TWOFISH_SUPPORT
-   #define TWOFISH_SUPPORT DISABLED
+#define TWOFISH_SUPPORT DISABLED
 #elif (TWOFISH_SUPPORT != ENABLED && TWOFISH_SUPPORT != DISABLED)
-   #error TWOFISH_SUPPORT parameter is not valid
+#error TWOFISH_SUPPORT parameter is not valid
 #endif
 
-//MARS block cipher support
+// MARS block cipher support
 #ifndef MARS_SUPPORT
-   #define MARS_SUPPORT DISABLED
+#define MARS_SUPPORT DISABLED
 #elif (MARS_SUPPORT != ENABLED && MARS_SUPPORT != DISABLED)
-   #error MARS_SUPPORT parameter is not valid
+#error MARS_SUPPORT parameter is not valid
 #endif
 
-//Serpent block cipher support
+// Serpent block cipher support
 #ifndef SERPENT_SUPPORT
-   #define SERPENT_SUPPORT DISABLED
+#define SERPENT_SUPPORT DISABLED
 #elif (SERPENT_SUPPORT != ENABLED && SERPENT_SUPPORT != DISABLED)
-   #error SERPENT_SUPPORT parameter is not valid
+#error SERPENT_SUPPORT parameter is not valid
 #endif
 
-//Camellia block cipher support
+// Camellia block cipher support
 #ifndef CAMELLIA_SUPPORT
-   #define CAMELLIA_SUPPORT DISABLED
+#define CAMELLIA_SUPPORT DISABLED
 #elif (CAMELLIA_SUPPORT != ENABLED && CAMELLIA_SUPPORT != DISABLED)
-   #error CAMELLIA_SUPPORT parameter is not valid
+#error CAMELLIA_SUPPORT parameter is not valid
 #endif
 
-//ARIA block cipher support
+// ARIA block cipher support
 #ifndef ARIA_SUPPORT
-   #define ARIA_SUPPORT DISABLED
+#define ARIA_SUPPORT DISABLED
 #elif (ARIA_SUPPORT != ENABLED && ARIA_SUPPORT != DISABLED)
-   #error ARIA_SUPPORT parameter is not valid
+#error ARIA_SUPPORT parameter is not valid
 #endif
 
-//SEED block cipher support
+// SEED block cipher support
 #ifndef SEED_SUPPORT
-   #define SEED_SUPPORT DISABLED
+#define SEED_SUPPORT DISABLED
 #elif (SEED_SUPPORT != ENABLED && SEED_SUPPORT != DISABLED)
-   #error SEED_SUPPORT parameter is not valid
+#error SEED_SUPPORT parameter is not valid
 #endif
 
-//SM4 block cipher support
+// SM4 block cipher support
 #ifndef SM4_SUPPORT
-   #define SM4_SUPPORT DISABLED
+#define SM4_SUPPORT DISABLED
 #elif (SM4_SUPPORT != ENABLED && SM4_SUPPORT != DISABLED)
-   #error SM4_SUPPORT parameter is not valid
+#error SM4_SUPPORT parameter is not valid
 #endif
 
-//PRESENT block cipher support
+// PRESENT block cipher support
 #ifndef PRESENT_SUPPORT
-   #define PRESENT_SUPPORT DISABLED
+#define PRESENT_SUPPORT DISABLED
 #elif (PRESENT_SUPPORT != ENABLED && PRESENT_SUPPORT != DISABLED)
-   #error PRESENT_SUPPORT parameter is not valid
+#error PRESENT_SUPPORT parameter is not valid
 #endif
 
-//TEA block cipher support
+// TEA block cipher support
 #ifndef TEA_SUPPORT
-   #define TEA_SUPPORT DISABLED
+#define TEA_SUPPORT DISABLED
 #elif (TEA_SUPPORT != ENABLED && TEA_SUPPORT != DISABLED)
-   #error TEA_SUPPORT parameter is not valid
+#error TEA_SUPPORT parameter is not valid
 #endif
 
-//XTEA block cipher support
+// XTEA block cipher support
 #ifndef XTEA_SUPPORT
-   #define XTEA_SUPPORT DISABLED
+#define XTEA_SUPPORT DISABLED
 #elif (XTEA_SUPPORT != ENABLED && XTEA_SUPPORT != DISABLED)
-   #error XTEA_SUPPORT parameter is not valid
+#error XTEA_SUPPORT parameter is not valid
 #endif
 
-//ChaCha stream cipher support
+// ChaCha stream cipher support
 #ifndef CHACHA_SUPPORT
-   #define CHACHA_SUPPORT DISABLED
+#define CHACHA_SUPPORT DISABLED
 #elif (CHACHA_SUPPORT != ENABLED && CHACHA_SUPPORT != DISABLED)
-   #error CHACHA_SUPPORT parameter is not valid
+#error CHACHA_SUPPORT parameter is not valid
 #endif
 
-//Salsa20 stream cipher support
+// Salsa20 stream cipher support
 #ifndef SALSA20_SUPPORT
-   #define SALSA20_SUPPORT DISABLED
+#define SALSA20_SUPPORT DISABLED
 #elif (SALSA20_SUPPORT != ENABLED && SALSA20_SUPPORT != DISABLED)
-   #error SALSA20_SUPPORT parameter is not valid
+#error SALSA20_SUPPORT parameter is not valid
 #endif
 
-//Trivium stream cipher support
+// Trivium stream cipher support
 #ifndef TRIVIUM_SUPPORT
-   #define TRIVIUM_SUPPORT DISABLED
+#define TRIVIUM_SUPPORT DISABLED
 #elif (TRIVIUM_SUPPORT != ENABLED && TRIVIUM_SUPPORT != DISABLED)
-   #error TRIVIUM_SUPPORT parameter is not valid
+#error TRIVIUM_SUPPORT parameter is not valid
 #endif
 
-//ZUC stream cipher support
+// ZUC stream cipher support
 #ifndef ZUC_SUPPORT
-   #define ZUC_SUPPORT DISABLED
+#define ZUC_SUPPORT DISABLED
 #elif (ZUC_SUPPORT != ENABLED && ZUC_SUPPORT != DISABLED)
-   #error ZUC_SUPPORT parameter is not valid
+#error ZUC_SUPPORT parameter is not valid
 #endif
 
-//ECB mode support
+// ECB mode support
 #ifndef ECB_SUPPORT
-   #define ECB_SUPPORT ENABLED
+#define ECB_SUPPORT ENABLED
 #elif (ECB_SUPPORT != ENABLED && ECB_SUPPORT != DISABLED)
-   #error ECB_SUPPORT parameter is not valid
+#error ECB_SUPPORT parameter is not valid
 #endif
 
-//CBC mode support
+// CBC mode support
 #ifndef CBC_SUPPORT
-   #define CBC_SUPPORT ENABLED
+#define CBC_SUPPORT ENABLED
 #elif (CBC_SUPPORT != ENABLED && CBC_SUPPORT != DISABLED)
-   #error CBC_SUPPORT parameter is not valid
+#error CBC_SUPPORT parameter is not valid
 #endif
 
-//CFB mode support
+// CFB mode support
 #ifndef CFB_SUPPORT
-   #define CFB_SUPPORT ENABLED
+#define CFB_SUPPORT ENABLED
 #elif (CFB_SUPPORT != ENABLED && CFB_SUPPORT != DISABLED)
-   #error CFB_SUPPORT parameter is not valid
+#error CFB_SUPPORT parameter is not valid
 #endif
 
-//OFB mode support
+// OFB mode support
 #ifndef OFB_SUPPORT
-   #define OFB_SUPPORT ENABLED
+#define OFB_SUPPORT ENABLED
 #elif (OFB_SUPPORT != ENABLED && OFB_SUPPORT != DISABLED)
-   #error OFB_SUPPORT parameter is not valid
+#error OFB_SUPPORT parameter is not valid
 #endif
 
-//CTR mode support
+// CTR mode support
 #ifndef CTR_SUPPORT
-   #define CTR_SUPPORT ENABLED
+#define CTR_SUPPORT ENABLED
 #elif (CTR_SUPPORT != ENABLED && CTR_SUPPORT != DISABLED)
-   #error CTR_SUPPORT parameter is not valid
+#error CTR_SUPPORT parameter is not valid
 #endif
 
-//XTS mode support
+// XTS mode support
 #ifndef XTS_SUPPORT
-   #define XTS_SUPPORT ENABLED
+#define XTS_SUPPORT ENABLED
 #elif (XTS_SUPPORT != ENABLED && XTS_SUPPORT != DISABLED)
-   #error XTS_SUPPORT parameter is not valid
+#error XTS_SUPPORT parameter is not valid
 #endif
 
-//CCM mode support
+// CCM mode support
 #ifndef CCM_SUPPORT
-   #define CCM_SUPPORT ENABLED
+#define CCM_SUPPORT ENABLED
 #elif (CCM_SUPPORT != ENABLED && CCM_SUPPORT != DISABLED)
-   #error CCM_SUPPORT parameter is not valid
+#error CCM_SUPPORT parameter is not valid
 #endif
 
-//GCM mode support
+// GCM mode support
 #ifndef GCM_SUPPORT
-   #define GCM_SUPPORT ENABLED
+#define GCM_SUPPORT ENABLED
 #elif (GCM_SUPPORT != ENABLED && GCM_SUPPORT != DISABLED)
-   #error GCM_SUPPORT parameter is not valid
+#error GCM_SUPPORT parameter is not valid
 #endif
 
-//SIV mode support
+// SIV mode support
 #ifndef SIV_SUPPORT
-   #define SIV_SUPPORT DISABLED
+#define SIV_SUPPORT DISABLED
 #elif (SIV_SUPPORT != ENABLED && SIV_SUPPORT != DISABLED)
-   #error SIV_SUPPORT parameter is not valid
+#error SIV_SUPPORT parameter is not valid
 #endif
 
-//Ascon-AEAD128 support
+// Ascon-AEAD128 support
 #ifndef ASCON_AEAD128_SUPPORT
-   #define ASCON_AEAD128_SUPPORT DISABLED
+#define ASCON_AEAD128_SUPPORT DISABLED
 #elif (ASCON_AEAD128_SUPPORT != ENABLED && ASCON_AEAD128_SUPPORT != DISABLED)
-   #error ASCON_AEAD128_SUPPORT parameter is not valid
+#error ASCON_AEAD128_SUPPORT parameter is not valid
 #endif
 
-//ChaCha20Poly1305 support
+// ChaCha20Poly1305 support
 #ifndef CHACHA20_POLY1305_SUPPORT
-   #define CHACHA20_POLY1305_SUPPORT DISABLED
-#elif (CHACHA20_POLY1305_SUPPORT != ENABLED && CHACHA20_POLY1305_SUPPORT != DISABLED)
-   #error CHACHA20_POLY1305_SUPPORT parameter is not valid
+#define CHACHA20_POLY1305_SUPPORT DISABLED
+#elif (CHACHA20_POLY1305_SUPPORT != ENABLED &&                                 \
+       CHACHA20_POLY1305_SUPPORT != DISABLED)
+#error CHACHA20_POLY1305_SUPPORT parameter is not valid
 #endif
 
-//Diffie-Hellman support
+// Diffie-Hellman support
 #ifndef DH_SUPPORT
-   #define DH_SUPPORT DISABLED
+#define DH_SUPPORT DISABLED
 #elif (DH_SUPPORT != ENABLED && DH_SUPPORT != DISABLED)
-   #error DH_SUPPORT parameter is not valid
+#error DH_SUPPORT parameter is not valid
 #endif
 
-//RSA support
+// RSA support
 #ifndef RSA_SUPPORT
-   #define RSA_SUPPORT ENABLED
+#define RSA_SUPPORT ENABLED
 #elif (RSA_SUPPORT != ENABLED && RSA_SUPPORT != DISABLED)
-   #error RSA_SUPPORT parameter is not valid
+#error RSA_SUPPORT parameter is not valid
 #endif
 
-//DSA support
+// DSA support
 #ifndef DSA_SUPPORT
-   #define DSA_SUPPORT DISABLED
+#define DSA_SUPPORT DISABLED
 #elif (DSA_SUPPORT != ENABLED && DSA_SUPPORT != DISABLED)
-   #error DSA_SUPPORT parameter is not valid
+#error DSA_SUPPORT parameter is not valid
 #endif
 
-//Elliptic curve cryptography support
+// Elliptic curve cryptography support
 #ifndef EC_SUPPORT
-   #define EC_SUPPORT ENABLED
+#define EC_SUPPORT ENABLED
 #elif (EC_SUPPORT != ENABLED && EC_SUPPORT != DISABLED)
-   #error EC_SUPPORT parameter is not valid
+#error EC_SUPPORT parameter is not valid
 #endif
 
-//ECDH support
+// ECDH support
 #ifndef ECDH_SUPPORT
-   #define ECDH_SUPPORT ENABLED
+#define ECDH_SUPPORT ENABLED
 #elif (ECDH_SUPPORT != ENABLED && ECDH_SUPPORT != DISABLED)
-   #error ECDH_SUPPORT parameter is not valid
+#error ECDH_SUPPORT parameter is not valid
 #endif
 
-//ECDSA support
+// ECDSA support
 #ifndef ECDSA_SUPPORT
-   #define ECDSA_SUPPORT ENABLED
+#define ECDSA_SUPPORT ENABLED
 #elif (ECDSA_SUPPORT != ENABLED && ECDSA_SUPPORT != DISABLED)
-   #error ECDSA_SUPPORT parameter is not valid
+#error ECDSA_SUPPORT parameter is not valid
 #endif
 
-//Key encapsulation mechanism support
+// Key encapsulation mechanism support
 #ifndef KEM_SUPPORT
-   #define KEM_SUPPORT DISABLED
+#define KEM_SUPPORT DISABLED
 #elif (KEM_SUPPORT != ENABLED && KEM_SUPPORT != DISABLED)
-   #error KEM_SUPPORT parameter is not valid
+#error KEM_SUPPORT parameter is not valid
 #endif
 
-//ML-KEM-512 support
+// ML-KEM-512 support
 #ifndef MLKEM512_SUPPORT
-   #define MLKEM512_SUPPORT DISABLED
+#define MLKEM512_SUPPORT DISABLED
 #elif (MLKEM512_SUPPORT != ENABLED && MLKEM512_SUPPORT != DISABLED)
-   #error MLKEM512_SUPPORT parameter is not valid
+#error MLKEM512_SUPPORT parameter is not valid
 #endif
 
-//ML-KEM-768 support
+// ML-KEM-768 support
 #ifndef MLKEM768_SUPPORT
-   #define MLKEM768_SUPPORT DISABLED
+#define MLKEM768_SUPPORT DISABLED
 #elif (MLKEM768_SUPPORT != ENABLED && MLKEM768_SUPPORT != DISABLED)
-   #error MLKEM768_SUPPORT parameter is not valid
+#error MLKEM768_SUPPORT parameter is not valid
 #endif
 
-//ML-KEM-1024 support
+// ML-KEM-1024 support
 #ifndef MLKEM1024_SUPPORT
-   #define MLKEM1024_SUPPORT DISABLED
+#define MLKEM1024_SUPPORT DISABLED
 #elif (MLKEM1024_SUPPORT != ENABLED && MLKEM1024_SUPPORT != DISABLED)
-   #error MLKEM1024_SUPPORT parameter is not valid
+#error MLKEM1024_SUPPORT parameter is not valid
 #endif
 
-//Streamlined NTRU Prime 761 support
+// Streamlined NTRU Prime 761 support
 #ifndef SNTRUP761_SUPPORT
-   #define SNTRUP761_SUPPORT DISABLED
+#define SNTRUP761_SUPPORT DISABLED
 #elif (SNTRUP761_SUPPORT != ENABLED && SNTRUP761_SUPPORT != DISABLED)
-   #error SNTRUP761_SUPPORT parameter is not valid
+#error SNTRUP761_SUPPORT parameter is not valid
 #endif
 
-//ML-DSA-44 support
+// ML-DSA-44 support
 #ifndef MLDSA44_SUPPORT
-   #define MLDSA44_SUPPORT DISABLED
+#define MLDSA44_SUPPORT DISABLED
 #elif (MLDSA44_SUPPORT != ENABLED && MLDSA44_SUPPORT != DISABLED)
-   #error MLDSA44_SUPPORT parameter is not valid
+#error MLDSA44_SUPPORT parameter is not valid
 #endif
 
-//ML-DSA-65 support
+// ML-DSA-65 support
 #ifndef MLDSA65_SUPPORT
-   #define MLDSA65_SUPPORT DISABLED
+#define MLDSA65_SUPPORT DISABLED
 #elif (MLDSA65_SUPPORT != ENABLED && MLDSA65_SUPPORT != DISABLED)
-   #error MLDSA65_SUPPORT parameter is not valid
+#error MLDSA65_SUPPORT parameter is not valid
 #endif
 
-//ML-DSA-87 support
+// ML-DSA-87 support
 #ifndef MLDSA87_SUPPORT
-   #define MLDSA87_SUPPORT DISABLED
+#define MLDSA87_SUPPORT DISABLED
 #elif (MLDSA87_SUPPORT != ENABLED && MLDSA87_SUPPORT != DISABLED)
-   #error MLDSA87_SUPPORT parameter is not valid
+#error MLDSA87_SUPPORT parameter is not valid
 #endif
 
-//HKDF support
+// HKDF support
 #ifndef HKDF_SUPPORT
-   #define HKDF_SUPPORT DISABLED
+#define HKDF_SUPPORT DISABLED
 #elif (HKDF_SUPPORT != ENABLED && HKDF_SUPPORT != DISABLED)
-   #error HKDF_SUPPORT parameter is not valid
+#error HKDF_SUPPORT parameter is not valid
 #endif
 
-//PBKDF support
+// PBKDF support
 #ifndef PBKDF_SUPPORT
-   #define PBKDF_SUPPORT DISABLED
+#define PBKDF_SUPPORT DISABLED
 #elif (PBKDF_SUPPORT != ENABLED && PBKDF_SUPPORT != DISABLED)
-   #error PBKDF_SUPPORT parameter is not valid
+#error PBKDF_SUPPORT parameter is not valid
 #endif
 
-//Concat KDF support
+// Concat KDF support
 #ifndef CONCAT_KDF_SUPPORT
-   #define CONCAT_KDF_SUPPORT DISABLED
+#define CONCAT_KDF_SUPPORT DISABLED
 #elif (CONCAT_KDF_SUPPORT != ENABLED && CONCAT_KDF_SUPPORT != DISABLED)
-   #error CONCAT_KDF_SUPPORT parameter is not valid
+#error CONCAT_KDF_SUPPORT parameter is not valid
 #endif
 
-//bcrypt support
+// bcrypt support
 #ifndef BCRYPT_SUPPORT
-   #define BCRYPT_SUPPORT DISABLED
+#define BCRYPT_SUPPORT DISABLED
 #elif (BCRYPT_SUPPORT != ENABLED && BCRYPT_SUPPORT != DISABLED)
-   #error BCRYPT_SUPPORT parameter is not valid
+#error BCRYPT_SUPPORT parameter is not valid
 #endif
 
-//scrypt support
+// scrypt support
 #ifndef SCRYPT_SUPPORT
-   #define SCRYPT_SUPPORT DISABLED
+#define SCRYPT_SUPPORT DISABLED
 #elif (SCRYPT_SUPPORT != ENABLED && SCRYPT_SUPPORT != DISABLED)
-   #error SCRYPT_SUPPORT parameter is not valid
+#error SCRYPT_SUPPORT parameter is not valid
 #endif
 
-//MD5-crypt support
+// MD5-crypt support
 #ifndef MD5_CRYPT_SUPPORT
-   #define MD5_CRYPT_SUPPORT DISABLED
+#define MD5_CRYPT_SUPPORT DISABLED
 #elif (MD5_CRYPT_SUPPORT != ENABLED && MD5_CRYPT_SUPPORT != DISABLED)
-   #error MD5_CRYPT_SUPPORT parameter is not valid
+#error MD5_CRYPT_SUPPORT parameter is not valid
 #endif
 
-//SHA-crypt support
+// SHA-crypt support
 #ifndef SHA_CRYPT_SUPPORT
-   #define SHA_CRYPT_SUPPORT DISABLED
+#define SHA_CRYPT_SUPPORT DISABLED
 #elif (SHA_CRYPT_SUPPORT != ENABLED && SHA_CRYPT_SUPPORT != DISABLED)
-   #error SHA_CRYPT_SUPPORT parameter is not valid
+#error SHA_CRYPT_SUPPORT parameter is not valid
 #endif
 
-//Hash_DRBG PRNG support
+// Hash_DRBG PRNG support
 #ifndef HASH_DRBG_SUPPORT
-   #define HASH_DRBG_SUPPORT DISABLED
+#define HASH_DRBG_SUPPORT DISABLED
 #elif (HASH_DRBG_SUPPORT != ENABLED && HASH_DRBG_SUPPORT != DISABLED)
-   #error HASH_DRBG_SUPPORT parameter is not valid
+#error HASH_DRBG_SUPPORT parameter is not valid
 #endif
 
-//HMAC_DRBG PRNG support
+// HMAC_DRBG PRNG support
 #ifndef HMAC_DRBG_SUPPORT
-   #define HMAC_DRBG_SUPPORT DISABLED
+#define HMAC_DRBG_SUPPORT DISABLED
 #elif (HMAC_DRBG_SUPPORT != ENABLED && HMAC_DRBG_SUPPORT != DISABLED)
-   #error HMAC_DRBG_SUPPORT parameter is not valid
+#error HMAC_DRBG_SUPPORT parameter is not valid
 #endif
 
-//CTR_DRBG PRNG support
+// CTR_DRBG PRNG support
 #ifndef CTR_DRBG_SUPPORT
-   #define CTR_DRBG_SUPPORT DISABLED
+#define CTR_DRBG_SUPPORT DISABLED
 #elif (CTR_DRBG_SUPPORT != ENABLED && CTR_DRBG_SUPPORT != DISABLED)
-   #error CTR_DRBG_SUPPORT parameter is not valid
+#error CTR_DRBG_SUPPORT parameter is not valid
 #endif
 
-//XDRBG PRNG support
+// XDRBG PRNG support
 #ifndef XDRBG_SUPPORT
-   #define XDRBG_SUPPORT DISABLED
+#define XDRBG_SUPPORT DISABLED
 #elif (XDRBG_SUPPORT != ENABLED && XDRBG_SUPPORT != DISABLED)
-   #error XDRBG_SUPPORT parameter is not valid
+#error XDRBG_SUPPORT parameter is not valid
 #endif
 
-//Object identifier support
+// Object identifier support
 #ifndef OID_SUPPORT
-   #define OID_SUPPORT ENABLED
+#define OID_SUPPORT ENABLED
 #elif (OID_SUPPORT != ENABLED && OID_SUPPORT != DISABLED)
-   #error OID_SUPPORT parameter is not valid
+#error OID_SUPPORT parameter is not valid
 #endif
 
-//ASN.1 syntax support
+// ASN.1 syntax support
 #ifndef ASN1_SUPPORT
-   #define ASN1_SUPPORT ENABLED
+#define ASN1_SUPPORT ENABLED
 #elif (ASN1_SUPPORT != ENABLED && ASN1_SUPPORT != DISABLED)
-   #error ASN1_SUPPORT parameter is not valid
+#error ASN1_SUPPORT parameter is not valid
 #endif
 
-//PEM file support
+// PEM file support
 #ifndef PEM_SUPPORT
-   #define PEM_SUPPORT ENABLED
+#define PEM_SUPPORT ENABLED
 #elif (PEM_SUPPORT != ENABLED && PEM_SUPPORT != DISABLED)
-   #error PEM_SUPPORT parameter is not valid
+#error PEM_SUPPORT parameter is not valid
 #endif
 
-//X.509 certificate support
+// X.509 certificate support
 #ifndef X509_SUPPORT
-   #define X509_SUPPORT ENABLED
+#define X509_SUPPORT ENABLED
 #elif (X509_SUPPORT != ENABLED && X509_SUPPORT != DISABLED)
-   #error X509_SUPPORT parameter is not valid
+#error X509_SUPPORT parameter is not valid
 #endif
 
-//PKCS #5 support
+// PKCS #5 support
 #ifndef PKCS5_SUPPORT
-   #define PKCS5_SUPPORT DISABLED
+#define PKCS5_SUPPORT DISABLED
 #elif (PKCS5_SUPPORT != ENABLED && PKCS5_SUPPORT != DISABLED)
-   #error PKCS5_SUPPORT parameter is not valid
+#error PKCS5_SUPPORT parameter is not valid
 #endif
 
-//PKCS #7 support
+// PKCS #7 support
 #ifndef PKCS7_SUPPORT
-   #define PKCS7_SUPPORT DISABLED
+#define PKCS7_SUPPORT DISABLED
 #elif (PKCS7_SUPPORT != ENABLED && PKCS7_SUPPORT != DISABLED)
-   #error PKCS7_SUPPORT parameter is not valid
+#error PKCS7_SUPPORT parameter is not valid
 #endif
 
-//Allocate memory block
+// Allocate memory block
 #ifndef cryptoAllocMem
-   #define cryptoAllocMem(size) osAllocMem(size)
+#define cryptoAllocMem(size) osAllocMem(size)
 #endif
 
-//Deallocate memory block
+// Deallocate memory block
 #ifndef cryptoFreeMem
-   #define cryptoFreeMem(p) osFreeMem(p)
+#define cryptoFreeMem(p) osFreeMem(p)
 #endif
 
-//Rotate left operations
+// Rotate left operations
 #ifndef ROL8
-   #define ROL8(a, n) (((a) << (n)) | ((a) >> (8 - (n))))
+#define ROL8(a, n) (((a) << (n)) | ((a) >> (8 - (n))))
 #endif
 
 #ifndef ROL16
-   #define ROL16(a, n) (((a) << (n)) | ((a) >> (16 - (n))))
+#define ROL16(a, n) (((a) << (n)) | ((a) >> (16 - (n))))
 #endif
 
 #ifndef ROL32
-   #define ROL32(a, n) (((a) << (n)) | ((a) >> (32 - (n))))
+#define ROL32(a, n) (((a) << (n)) | ((a) >> (32 - (n))))
 #endif
 
 #ifndef ROL64
-   #define ROL64(a, n) (((a) << (n)) | ((a) >> (64 - (n))))
+#define ROL64(a, n) (((a) << (n)) | ((a) >> (64 - (n))))
 #endif
 
-//Rotate right operations
+// Rotate right operations
 #ifndef ROR8
-   #define ROR8(a, n) (((a) >> (n)) | ((a) << (8 - (n))))
+#define ROR8(a, n) (((a) >> (n)) | ((a) << (8 - (n))))
 #endif
 
 #ifndef ROR16
-   #define ROR16(a, n) (((a) >> (n)) | ((a) << (16 - (n))))
+#define ROR16(a, n) (((a) >> (n)) | ((a) << (16 - (n))))
 #endif
 
 #ifndef ROR32
-   #define ROR32(a, n) (((a) >> (n)) | ((a) << (32 - (n))))
+#define ROR32(a, n) (((a) >> (n)) | ((a) << (32 - (n))))
 #endif
 
 #ifndef ROR64
-   #define ROR64(a, n) (((a) >> (n)) | ((a) << (64 - (n))))
+#define ROR64(a, n) (((a) >> (n)) | ((a) << (64 - (n))))
 #endif
 
-//Arithmetic shift right operations
+// Arithmetic shift right operations
 #ifndef ASR8
-   #define ASR8(a, n) ((a) >> (n))
+#define ASR8(a, n) ((a) >> (n))
 #endif
 
 #ifndef ASR16
-   #define ASR16(a, n) ((a) >> (n))
+#define ASR16(a, n) ((a) >> (n))
 #endif
 
 #ifndef ASR32
-   #define ASR32(a, n) ((a) >> (n))
+#define ASR32(a, n) ((a) >> (n))
 #endif
 
 #ifndef ASR64
-   #define ASR64(a, n) ((a) >> (n))
+#define ASR64(a, n) ((a) >> (n))
 #endif
 
-//Micellaneous macros
-#define _U8(x) ((uint8_t) (x))
-#define _U16(x) ((uint16_t) (x))
-#define _U32(x) ((uint32_t) (x))
-#define _U64(x) ((uint64_t) (x))
+// Micellaneous macros
+#define _U8(x) ((uint8_t)(x))
+#define _U16(x) ((uint16_t)(x))
+#define _U32(x) ((uint32_t)(x))
+#define _U64(x) ((uint64_t)(x))
 
-//Test if a 8-bit integer is zero
-#define CRYPTO_TEST_Z_8(a) \
-   _U8((_U8((_U8(a) | (~_U8(a) + 1U))) >> 7U) ^ 1U)
+// Test if a 8-bit integer is zero
+#define CRYPTO_TEST_Z_8(a) _U8((_U8((_U8(a) | (~_U8(a) + 1U))) >> 7U) ^ 1U)
 
-//Test if a 8-bit integer is nonzero
-#define CRYPTO_TEST_NZ_8(a) \
-   _U8(_U8((_U8(a) | (~_U8(a) + 1U))) >> 7U)
+// Test if a 8-bit integer is nonzero
+#define CRYPTO_TEST_NZ_8(a) _U8(_U8((_U8(a) | (~_U8(a) + 1U))) >> 7U)
 
-//Test if two 8-bit integers are equal
-#define CRYPTO_TEST_EQ_8(a, b) \
-   _U8((_U8(((_U8(a) ^ _U8(b)) | (~(_U8(a) ^ _U8(b)) + 1U))) >> 7U) ^ 1U)
+// Test if two 8-bit integers are equal
+#define CRYPTO_TEST_EQ_8(a, b)                                                 \
+  _U8((_U8(((_U8(a) ^ _U8(b)) | (~(_U8(a) ^ _U8(b)) + 1U))) >> 7U) ^ 1U)
 
-//Test if two 8-bit integers are not equal
-#define CRYPTO_TEST_NEQ_8(a, b) \
-   _U8(_U8(((_U8(a) ^ _U8(b)) | (~(_U8(a) ^ _U8(b)) + 1U))) >> 7U)
+// Test if two 8-bit integers are not equal
+#define CRYPTO_TEST_NEQ_8(a, b)                                                \
+  _U8(_U8(((_U8(a) ^ _U8(b)) | (~(_U8(a) ^ _U8(b)) + 1U))) >> 7U)
 
-//Test if a 8-bit integer is lower than another 8-bit integer
-#define CRYPTO_TEST_LT_8(a, b) \
-   _U8(_U8((((_U8(a) - _U8(b)) ^ _U8(b)) | (_U8(a) ^ _U8(b))) ^ _U8(a)) >> 7U)
+// Test if a 8-bit integer is lower than another 8-bit integer
+#define CRYPTO_TEST_LT_8(a, b)                                                 \
+  _U8(_U8((((_U8(a) - _U8(b)) ^ _U8(b)) | (_U8(a) ^ _U8(b))) ^ _U8(a)) >> 7U)
 
-//Test if a 8-bit integer is lower or equal than another 8-bit integer
-#define CRYPTO_TEST_LTE_8(a, b) \
-   _U8((_U8((((_U8(b) - _U8(a)) ^ _U8(a)) | (_U8(a) ^ _U8(b))) ^ _U8(b)) >> 7U) ^ 1U)
+// Test if a 8-bit integer is lower or equal than another 8-bit integer
+#define CRYPTO_TEST_LTE_8(a, b)                                                \
+  _U8((_U8((((_U8(b) - _U8(a)) ^ _U8(a)) | (_U8(a) ^ _U8(b))) ^ _U8(b)) >>     \
+       7U) ^                                                                   \
+      1U)
 
-//Test if a 8-bit integer is greater than another 8-bit integer
-#define CRYPTO_TEST_GT_8(a, b) \
-   _U8(_U8((((_U8(b) - _U8(a)) ^ _U8(a)) | (_U8(a) ^ _U8(b))) ^ _U8(b)) >> 7U)
+// Test if a 8-bit integer is greater than another 8-bit integer
+#define CRYPTO_TEST_GT_8(a, b)                                                 \
+  _U8(_U8((((_U8(b) - _U8(a)) ^ _U8(a)) | (_U8(a) ^ _U8(b))) ^ _U8(b)) >> 7U)
 
-//Test if a 8-bit integer is greater or equal than another 8-bit integer
-#define CRYPTO_TEST_GTE_8(a, b) \
-   _U8((_U8((((_U8(a) - _U8(b)) ^ _U8(b)) | (_U8(a) ^ _U8(b))) ^ _U8(a)) >> 7U) ^ 1U)
+// Test if a 8-bit integer is greater or equal than another 8-bit integer
+#define CRYPTO_TEST_GTE_8(a, b)                                                \
+  _U8((_U8((((_U8(a) - _U8(b)) ^ _U8(b)) | (_U8(a) ^ _U8(b))) ^ _U8(a)) >>     \
+       7U) ^                                                                   \
+      1U)
 
-//Select between two 8-bit integers
-#define CRYPTO_SELECT_8(a, b, c) \
-   _U8((_U8(a) & (_U8(c) - 1U)) | (_U8(b) & ~(_U8(c) - 1U)))
+// Select between two 8-bit integers
+#define CRYPTO_SELECT_8(a, b, c)                                               \
+  _U8((_U8(a) & (_U8(c) - 1U)) | (_U8(b) & ~(_U8(c) - 1U)))
 
-//Test if a 16-bit integer is zero
-#define CRYPTO_TEST_Z_16(a) \
-   _U16((_U16((_U16(a) | (~_U16(a) + 1U))) >> 15U) ^ 1U)
+// Test if a 16-bit integer is zero
+#define CRYPTO_TEST_Z_16(a)                                                    \
+  _U16((_U16((_U16(a) | (~_U16(a) + 1U))) >> 15U) ^ 1U)
 
-//Test if a 16-bit integer is nonzero
-#define CRYPTO_TEST_NZ_16(a) \
-   _U16(_U16((_U16(a) | (~_U16(a) + 1U))) >> 15U)
+// Test if a 16-bit integer is nonzero
+#define CRYPTO_TEST_NZ_16(a) _U16(_U16((_U16(a) | (~_U16(a) + 1U))) >> 15U)
 
-//Test if two 16-bit integers are equal
-#define CRYPTO_TEST_EQ_16(a, b) \
-   _U16((_U16(((_U16(a) ^ _U16(b)) | (~(_U16(a) ^ _U16(b)) + 1U))) >> 15U) ^ 1U)
+// Test if two 16-bit integers are equal
+#define CRYPTO_TEST_EQ_16(a, b)                                                \
+  _U16((_U16(((_U16(a) ^ _U16(b)) | (~(_U16(a) ^ _U16(b)) + 1U))) >> 15U) ^ 1U)
 
-//Test if two 16-bit integers are not equal
-#define CRYPTO_TEST_NEQ_16(a, b) \
-   _U16(_U16(((_U16(a) ^ _U16(b)) | (~(_U16(a) ^ _U16(b)) + 1U))) >> 15U)
+// Test if two 16-bit integers are not equal
+#define CRYPTO_TEST_NEQ_16(a, b)                                               \
+  _U16(_U16(((_U16(a) ^ _U16(b)) | (~(_U16(a) ^ _U16(b)) + 1U))) >> 15U)
 
-//Test if a 16-bit integer is lower than another 16-bit integer
-#define CRYPTO_TEST_LT_16(a, b) \
-   _U16(_U16((((_U16(a) - _U16(b)) ^ _U16(b)) | (_U16(a) ^ _U16(b))) ^ _U16(a)) >> 15U)
+// Test if a 16-bit integer is lower than another 16-bit integer
+#define CRYPTO_TEST_LT_16(a, b)                                                \
+  _U16(_U16((((_U16(a) - _U16(b)) ^ _U16(b)) | (_U16(a) ^ _U16(b))) ^          \
+            _U16(a)) >>                                                        \
+       15U)
 
-//Test if a 16-bit integer is lower or equal than another 16-bit integer
-#define CRYPTO_TEST_LTE_16(a, b) \
-   _U16((_U16((((_U16(b) - _U16(a)) ^ _U16(a)) | (_U16(a) ^ _U16(b))) ^ _U16(b)) >> 15U) ^ 1U)
+// Test if a 16-bit integer is lower or equal than another 16-bit integer
+#define CRYPTO_TEST_LTE_16(a, b)                                               \
+  _U16((_U16((((_U16(b) - _U16(a)) ^ _U16(a)) | (_U16(a) ^ _U16(b))) ^         \
+             _U16(b)) >>                                                       \
+        15U) ^                                                                 \
+       1U)
 
-//Test if a 16-bit integer is greater than another 16-bit integer
-#define CRYPTO_TEST_GT_16(a, b) \
-   _U16(_U16((((_U16(b) - _U16(a)) ^ _U16(a)) | (_U16(a) ^ _U16(b))) ^ _U16(b)) >> 15U)
+// Test if a 16-bit integer is greater than another 16-bit integer
+#define CRYPTO_TEST_GT_16(a, b)                                                \
+  _U16(_U16((((_U16(b) - _U16(a)) ^ _U16(a)) | (_U16(a) ^ _U16(b))) ^          \
+            _U16(b)) >>                                                        \
+       15U)
 
-//Test if a 16-bit integer is greater or equal than another 16-bit integer
-#define CRYPTO_TEST_GTE_16(a, b) \
-   _U16((_U16((((_U16(a) - _U16(b)) ^ _U16(b)) | (_U16(a) ^ _U16(b))) ^ _U16(a)) >> 15U) ^ 1U)
+// Test if a 16-bit integer is greater or equal than another 16-bit integer
+#define CRYPTO_TEST_GTE_16(a, b)                                               \
+  _U16((_U16((((_U16(a) - _U16(b)) ^ _U16(b)) | (_U16(a) ^ _U16(b))) ^         \
+             _U16(a)) >>                                                       \
+        15U) ^                                                                 \
+       1U)
 
-//Select between two 16-bit integers
-#define CRYPTO_SELECT_16(a, b, c) \
-   _U16((_U16(a) & (_U16(c) - 1U)) | (_U16(b) & ~(_U16(c) - 1U)))
+// Select between two 16-bit integers
+#define CRYPTO_SELECT_16(a, b, c)                                              \
+  _U16((_U16(a) & (_U16(c) - 1U)) | (_U16(b) & ~(_U16(c) - 1U)))
 
-//Test if a 32-bit integer is zero
-#define CRYPTO_TEST_Z_32(a) \
-   _U32((_U32((_U32(a) | (~_U32(a) + 1U))) >> 31U) ^ 1U)
+// Test if a 32-bit integer is zero
+#define CRYPTO_TEST_Z_32(a)                                                    \
+  _U32((_U32((_U32(a) | (~_U32(a) + 1U))) >> 31U) ^ 1U)
 
-//Test if a 32-bit integer is nonzero
-#define CRYPTO_TEST_NZ_32(a) \
-   _U32(_U32((_U32(a) | (~_U32(a) + 1U))) >> 31U)
+// Test if a 32-bit integer is nonzero
+#define CRYPTO_TEST_NZ_32(a) _U32(_U32((_U32(a) | (~_U32(a) + 1U))) >> 31U)
 
-//Test if two 32-bit integers are equal
-#define CRYPTO_TEST_EQ_32(a, b) \
-   _U32((_U32(((_U32(a) ^ _U32(b)) | (~(_U32(a) ^ _U32(b)) + 1U))) >> 31U) ^ 1U)
+// Test if two 32-bit integers are equal
+#define CRYPTO_TEST_EQ_32(a, b)                                                \
+  _U32((_U32(((_U32(a) ^ _U32(b)) | (~(_U32(a) ^ _U32(b)) + 1U))) >> 31U) ^ 1U)
 
-//Test if two 32-bit integers are not equal
-#define CRYPTO_TEST_NEQ_32(a, b) \
-   _U32(_U32(((_U32(a) ^ _U32(b)) | (~(_U32(a) ^ _U32(b)) + 1U))) >> 31U)
+// Test if two 32-bit integers are not equal
+#define CRYPTO_TEST_NEQ_32(a, b)                                               \
+  _U32(_U32(((_U32(a) ^ _U32(b)) | (~(_U32(a) ^ _U32(b)) + 1U))) >> 31U)
 
-//Test if a 32-bit integer is lower than another 32-bit integer
-#define CRYPTO_TEST_LT_32(a, b) \
-   _U32(_U32((((_U32(a) - _U32(b)) ^ _U32(b)) | (_U32(a) ^ _U32(b))) ^ _U32(a)) >> 31U)
+// Test if a 32-bit integer is lower than another 32-bit integer
+#define CRYPTO_TEST_LT_32(a, b)                                                \
+  _U32(_U32((((_U32(a) - _U32(b)) ^ _U32(b)) | (_U32(a) ^ _U32(b))) ^          \
+            _U32(a)) >>                                                        \
+       31U)
 
-//Test if a 32-bit integer is lower or equal than another 32-bit integer
-#define CRYPTO_TEST_LTE_32(a, b) \
-   _U32((_U32((((_U32(b) - _U32(a)) ^ _U32(a)) | (_U32(a) ^ _U32(b))) ^ _U32(b)) >> 31U) ^ 1U)
+// Test if a 32-bit integer is lower or equal than another 32-bit integer
+#define CRYPTO_TEST_LTE_32(a, b)                                               \
+  _U32((_U32((((_U32(b) - _U32(a)) ^ _U32(a)) | (_U32(a) ^ _U32(b))) ^         \
+             _U32(b)) >>                                                       \
+        31U) ^                                                                 \
+       1U)
 
-//Test if a 32-bit integer is greater than another 32-bit integer
-#define CRYPTO_TEST_GT_32(a, b) \
-   _U32(_U32((((_U32(b) - _U32(a)) ^ _U32(a)) | (_U32(a) ^ _U32(b))) ^ _U32(b)) >> 31U)
+// Test if a 32-bit integer is greater than another 32-bit integer
+#define CRYPTO_TEST_GT_32(a, b)                                                \
+  _U32(_U32((((_U32(b) - _U32(a)) ^ _U32(a)) | (_U32(a) ^ _U32(b))) ^          \
+            _U32(b)) >>                                                        \
+       31U)
 
-//Test if a 32-bit integer is greater or equal than another 32-bit integer
-#define CRYPTO_TEST_GTE_32(a, b) \
-   _U32((_U32((((_U32(a) - _U32(b)) ^ _U32(b)) | (_U32(a) ^ _U32(b))) ^ _U32(a)) >> 31U) ^ 1U)
+// Test if a 32-bit integer is greater or equal than another 32-bit integer
+#define CRYPTO_TEST_GTE_32(a, b)                                               \
+  _U32((_U32((((_U32(a) - _U32(b)) ^ _U32(b)) | (_U32(a) ^ _U32(b))) ^         \
+             _U32(a)) >>                                                       \
+        31U) ^                                                                 \
+       1U)
 
-//Select between two 32-bit integers
-#define CRYPTO_SELECT_32(a, b, c) \
-   _U32((_U32(a) & (_U32(c) - 1U)) | (_U32(b) & ~(_U32(c) - 1U)))
+// Select between two 32-bit integers
+#define CRYPTO_SELECT_32(a, b, c)                                              \
+  _U32((_U32(a) & (_U32(c) - 1U)) | (_U32(b) & ~(_U32(c) - 1U)))
 
-//Select between two 64-bit integers
-#define CRYPTO_SELECT_64(a, b, c) \
-   _U64((_U64(a) & (_U64(c) - 1U)) | (_U64(b) & ~(_U64(c) - 1U)))
+// Select between two 64-bit integers
+#define CRYPTO_SELECT_64(a, b, c)                                              \
+  _U64((_U64(a) & (_U64(c) - 1U)) | (_U64(b) & ~(_U64(c) - 1U)))
 
-//Forward declaration of PrngAlgo structure
+// Forward declaration of PrngAlgo structure
 struct _PrngAlgo;
 #define PrngAlgo struct _PrngAlgo
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief Encryption algorithm type
  **/
 
-typedef enum
-{
-   CIPHER_ALGO_TYPE_STREAM = 0,
-   CIPHER_ALGO_TYPE_BLOCK  = 1
+typedef enum {
+  CIPHER_ALGO_TYPE_STREAM = 0,
+  CIPHER_ALGO_TYPE_BLOCK = 1
 } CipherAlgoType;
-
 
 /**
  * @brief Cipher operation modes
  **/
 
-typedef enum
-{
-   CIPHER_MODE_NULL              = 0,
-   CIPHER_MODE_STREAM            = 1,
-   CIPHER_MODE_ECB               = 2,
-   CIPHER_MODE_CBC               = 3,
-   CIPHER_MODE_CFB               = 4,
-   CIPHER_MODE_OFB               = 5,
-   CIPHER_MODE_CTR               = 6,
-   CIPHER_MODE_CCM               = 7,
-   CIPHER_MODE_GCM               = 8,
-   CIPHER_MODE_ASCON_AEAD128     = 9,
-   CIPHER_MODE_CHACHA20_POLY1305 = 10
+typedef enum {
+  CIPHER_MODE_NULL = 0,
+  CIPHER_MODE_STREAM = 1,
+  CIPHER_MODE_ECB = 2,
+  CIPHER_MODE_CBC = 3,
+  CIPHER_MODE_CFB = 4,
+  CIPHER_MODE_OFB = 5,
+  CIPHER_MODE_CTR = 6,
+  CIPHER_MODE_CCM = 7,
+  CIPHER_MODE_GCM = 8,
+  CIPHER_MODE_ASCON_AEAD128 = 9,
+  CIPHER_MODE_CHACHA20_POLY1305 = 10
 } CipherMode;
-
 
 /**
  * @brief Data chunk descriptor
  **/
 
-typedef struct
-{
-   const void *buffer;
-   size_t length;
+typedef struct {
+  const void *buffer;
+  size_t length;
 } DataChunk;
 
-
-//Common API for hash algorithms
+// Common API for hash algorithms
 typedef error_t (*HashAlgoCompute)(const void *data, size_t length,
-   uint8_t *digest);
+                                   uint8_t *digest);
 
 typedef void (*HashAlgoInit)(void *context);
 typedef void (*HashAlgoUpdate)(void *context, const void *data, size_t length);
 typedef void (*HashAlgoFinal)(void *context, uint8_t *digest);
 typedef void (*HashAlgoFinalRaw)(void *context, uint8_t *digest);
 
-//Common API for XOF algorithms
+// Common API for XOF algorithms
 typedef error_t (*XofAlgoCompute)(const void *input, size_t inputLen,
-   uint8_t *output, size_t outputLen);
+                                  uint8_t *output, size_t outputLen);
 
 typedef void (*XofAlgoInit)(void *context);
 typedef void (*XofAlgoAbsorb)(void *context, const void *input, size_t length);
 typedef void (*XofAlgoFinal)(void *context);
 typedef void (*XofAlgoSqueeze)(void *context, uint8_t *output, size_t length);
 
-//Common API for encryption algorithms
+// Common API for encryption algorithms
 typedef error_t (*CipherAlgoInit)(void *context, const uint8_t *key,
-   size_t keyLen);
+                                  size_t keyLen);
 
 typedef void (*CipherAlgoEncryptStream)(void *context, const uint8_t *input,
-   uint8_t *output, size_t length);
+                                        uint8_t *output, size_t length);
 
 typedef void (*CipherAlgoDecryptStream)(void *context, const uint8_t *input,
-   uint8_t *output, size_t length);
+                                        uint8_t *output, size_t length);
 
 typedef void (*CipherAlgoEncryptBlock)(void *context, const uint8_t *input,
-   uint8_t *output);
+                                       uint8_t *output);
 
 typedef void (*CipherAlgoDecryptBlock)(void *context, const uint8_t *input,
-   uint8_t *output);
+                                       uint8_t *output);
 
 typedef void (*CipherAlgoDeinit)(void *context);
 
-//Common interface for key encapsulation mechanisms (KEM)
+// Common interface for key encapsulation mechanisms (KEM)
 typedef error_t (*KemAlgoGenerateKeyPair)(const PrngAlgo *prngAlgo,
-   void *prngContext, uint8_t *pk, uint8_t *sk);
+                                          void *prngContext, uint8_t *pk,
+                                          uint8_t *sk);
 
 typedef error_t (*KemAlgoEncapsulate)(const PrngAlgo *prngAlgo,
-   void *prngContext, uint8_t *ct, uint8_t *ss, const uint8_t *pk);
+                                      void *prngContext, uint8_t *ct,
+                                      uint8_t *ss, const uint8_t *pk);
 
 typedef error_t (*KemAlgoDecapsulate)(uint8_t *ss, const uint8_t *ct,
-   const uint8_t *sk);
+                                      const uint8_t *sk);
 
-//Common API for pseudo-random number generators (PRNG)
+// Common API for pseudo-random number generators (PRNG)
 typedef error_t (*PrngAlgoInit)(void *context);
 
 typedef error_t (*PrngAlgoSeed)(void *context, const uint8_t *seed,
-   size_t length);
+                                size_t length);
 
 typedef error_t (*PrngAlgoReseed)(void *context, const uint8_t *seed,
-   size_t length);
+                                  size_t length);
 
 typedef error_t (*PrngAlgoGenerate)(void *context, uint8_t *output,
-   size_t length);
+                                    size_t length);
 
 typedef void (*PrngAlgoDeinit)(void *context);
-
 
 /**
  * @brief Common interface for hash algorithms
  **/
 
-typedef struct
-{
-   const char_t *name;
-   const uint8_t *oid;
-   size_t oidSize;
-   size_t contextSize;
-   size_t blockSize;
-   size_t digestSize;
-   size_t minPadSize;
-   bool_t bigEndian;
-   HashAlgoCompute compute;
-   HashAlgoInit init;
-   HashAlgoUpdate update;
-   HashAlgoFinal final;
-   HashAlgoFinalRaw finalRaw;
+typedef struct {
+  const char_t *name;
+  const uint8_t *oid;
+  size_t oidSize;
+  size_t contextSize;
+  size_t blockSize;
+  size_t digestSize;
+  size_t minPadSize;
+  bool_t bigEndian;
+  HashAlgoCompute compute;
+  HashAlgoInit init;
+  HashAlgoUpdate update;
+  HashAlgoFinal final;
+  HashAlgoFinalRaw finalRaw;
 } HashAlgo;
-
 
 /**
  * @brief Common interface for XOF algorithms
  **/
 
-typedef struct
-{
-   const char_t *name;
-   const uint8_t *oid;
-   size_t oidSize;
-   size_t contextSize;
-   XofAlgoCompute compute;
-   XofAlgoInit init;
-   XofAlgoAbsorb absorb;
-   XofAlgoFinal final;
-   XofAlgoSqueeze squeeze;
+typedef struct {
+  const char_t *name;
+  const uint8_t *oid;
+  size_t oidSize;
+  size_t contextSize;
+  XofAlgoCompute compute;
+  XofAlgoInit init;
+  XofAlgoAbsorb absorb;
+  XofAlgoFinal final;
+  XofAlgoSqueeze squeeze;
 } XofAlgo;
-
 
 /**
  * @brief Common interface for encryption algorithms
  **/
 
-typedef struct
-{
-   const char_t *name;
-   size_t contextSize;
-   CipherAlgoType type;
-   size_t blockSize;
-   CipherAlgoInit init;
-   CipherAlgoEncryptStream encryptStream;
-   CipherAlgoDecryptStream decryptStream;
-   CipherAlgoEncryptBlock encryptBlock;
-   CipherAlgoDecryptBlock decryptBlock;
-   CipherAlgoDeinit deinit;
+typedef struct {
+  const char_t *name;
+  size_t contextSize;
+  CipherAlgoType type;
+  size_t blockSize;
+  CipherAlgoInit init;
+  CipherAlgoEncryptStream encryptStream;
+  CipherAlgoDecryptStream decryptStream;
+  CipherAlgoEncryptBlock encryptBlock;
+  CipherAlgoDecryptBlock decryptBlock;
+  CipherAlgoDeinit deinit;
 } CipherAlgo;
-
 
 /**
  * @brief Common interface for key encapsulation mechanisms (KEM)
  **/
 
-typedef struct
-{
-   const char_t *name;
-   size_t publicKeySize;
-   size_t secretKeySize;
-   size_t ciphertextSize;
-   size_t sharedSecretSize;
-   KemAlgoGenerateKeyPair generateKeyPair;
-   KemAlgoEncapsulate encapsulate;
-   KemAlgoDecapsulate decapsulate;
+typedef struct {
+  const char_t *name;
+  size_t publicKeySize;
+  size_t secretKeySize;
+  size_t ciphertextSize;
+  size_t sharedSecretSize;
+  KemAlgoGenerateKeyPair generateKeyPair;
+  KemAlgoEncapsulate encapsulate;
+  KemAlgoDecapsulate decapsulate;
 } KemAlgo;
-
 
 /**
  * @brief Common interface for pseudo-random number generators (PRNG)
  **/
 
-struct _PrngAlgo
-{
-   const char_t *name;
-   size_t contextSize;
-   PrngAlgoInit init;
-   PrngAlgoSeed seed;
-   PrngAlgoReseed reseed;
-   PrngAlgoGenerate generate;
-   PrngAlgoDeinit deinit;
+struct _PrngAlgo {
+  const char_t *name;
+  size_t contextSize;
+  PrngAlgoInit init;
+  PrngAlgoSeed seed;
+  PrngAlgoReseed reseed;
+  PrngAlgoGenerate generate;
+  PrngAlgoDeinit deinit;
 };
 
-
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

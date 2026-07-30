@@ -31,11 +31,11 @@
 #ifndef _EC_CURVES_H
 #define _EC_CURVES_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "ecc/ec.h"
 
-//Elliptic curves
+// Elliptic curves
 #define SECP112R1_CURVE (&secp112r1Curve)
 #define SECP112R2_CURVE (&secp112r2Curve)
 #define SECP128R1_CURVE (&secp128r1Curve)
@@ -72,12 +72,12 @@
 #define ED25519_CURVE (&ed25519Curve)
 #define ED448_CURVE (&ed448Curve)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Constants
+// Constants
 extern const uint8_t SECP112R1_OID[5];
 extern const uint8_t SECP112R2_OID[5];
 extern const uint8_t SECP128R1_OID[5];
@@ -151,7 +151,7 @@ extern const EcCurve x448Curve;
 extern const EcCurve ed25519Curve;
 extern const EcCurve ed448Curve;
 
-//Fast modular reduction
+// Fast modular reduction
 void secp112r1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
 void secp112r1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
 
@@ -213,47 +213,75 @@ void secp521r1FieldInv(const EcCurve *curve, uint32_t *r, const uint32_t *a);
 void secp521r1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
 void secp521r1ScalarInv(const EcCurve *curve, uint32_t *r, const uint32_t *a);
 
-void brainpoolP160r1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP160r1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP160r1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP160r1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP160t1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP160t1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP160t1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP160t1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP192r1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP192r1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP192r1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP192r1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP192t1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP192t1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP192t1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP192t1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP224r1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP224r1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP224r1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP224r1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP224t1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP224t1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP224t1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP224t1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP256r1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP256r1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP256r1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP256r1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP256t1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP256t1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP256t1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP256t1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP320r1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP320r1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP320r1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP320r1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP320t1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP320t1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP320t1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP320t1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP384r1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP384r1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP384r1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP384r1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP384t1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP384t1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP384t1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP384t1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP512r1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP512r1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP512r1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP512r1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
-void brainpoolP512t1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
-void brainpoolP512t1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
+void brainpoolP512t1FieldMod(const EcCurve *curve, uint32_t *r,
+                             const uint32_t *a);
+void brainpoolP512t1ScalarMod(const EcCurve *curve, uint32_t *r,
+                              const uint32_t *a);
 
 void frp256v1FieldMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
 void frp256v1ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
@@ -264,7 +292,7 @@ void sm2ScalarMod(const EcCurve *curve, uint32_t *r, const uint32_t *a);
 
 const EcCurve *ecGetCurve(const uint8_t *oid, size_t length);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

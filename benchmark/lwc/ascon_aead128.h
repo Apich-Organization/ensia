@@ -31,25 +31,27 @@
 #ifndef _ASCON_AEAD128_H
 #define _ASCON_AEAD128_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "lwc/ascon.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//Ascon-AEAD128 related functions
+// Ascon-AEAD128 related functions
 error_t asconAead128Encrypt(const uint8_t *k, size_t kLen, const uint8_t *n,
-   size_t nLen, const uint8_t *a, size_t aLen, const uint8_t *p, uint8_t *c,
-   size_t length, uint8_t *t, size_t tLen);
+                            size_t nLen, const uint8_t *a, size_t aLen,
+                            const uint8_t *p, uint8_t *c, size_t length,
+                            uint8_t *t, size_t tLen);
 
 error_t asconAead128Decrypt(const uint8_t *k, size_t kLen, const uint8_t *n,
-   size_t nLen, const uint8_t *a, size_t aLen, const uint8_t *c, uint8_t *p,
-   size_t length, const uint8_t *t, size_t tLen);
+                            size_t nLen, const uint8_t *a, size_t aLen,
+                            const uint8_t *c, uint8_t *p, size_t length,
+                            const uint8_t *t, size_t tLen);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

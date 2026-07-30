@@ -31,49 +31,46 @@
 #ifndef _MD2_H
 #define _MD2_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//MD2 block size
+// MD2 block size
 #define MD2_BLOCK_SIZE 16
-//MD2 digest size
+// MD2 digest size
 #define MD2_DIGEST_SIZE 16
-//Minimum length of the padding string
+// Minimum length of the padding string
 #define MD2_MIN_PAD_SIZE 1
-//Common interface for hash algorithms
+// Common interface for hash algorithms
 #define MD2_HASH_ALGO (&md2HashAlgo)
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief MD2 algorithm context
  **/
 
-typedef struct
-{
-   uint8_t x[48];
-   uint8_t m[16];
-   uint8_t c[16];
-   size_t size;
+typedef struct {
+  uint8_t x[48];
+  uint8_t m[16];
+  uint8_t c[16];
+  size_t size;
 } Md2Context;
 
-
-//MD2 related constants
+// MD2 related constants
 extern const uint8_t MD2_OID[8];
 extern const HashAlgo md2HashAlgo;
 
-//MD2 related functions
+// MD2 related functions
 error_t md2Compute(const void *data, size_t length, uint8_t *digest);
 void md2Init(Md2Context *context);
 void md2Update(Md2Context *context, const void *data, size_t length);
 void md2Final(Md2Context *context, uint8_t *digest);
 void md2ProcessBlock(const uint8_t *m, uint8_t *x, uint8_t *c);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

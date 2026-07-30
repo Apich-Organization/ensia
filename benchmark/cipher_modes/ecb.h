@@ -31,22 +31,22 @@
 #ifndef _ECB_H
 #define _ECB_H
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//ECB encryption and decryption routines
-error_t ecbEncrypt(const CipherAlgo *cipher, void *context,
-   const uint8_t *p, uint8_t *c, size_t length);
+// ECB encryption and decryption routines
+error_t ecbEncrypt(const CipherAlgo *cipher, void *context, const uint8_t *p,
+                   uint8_t *c, size_t length);
 
-error_t ecbDecrypt(const CipherAlgo *cipher, void *context,
-   const uint8_t *c, uint8_t *p, size_t length);
+error_t ecbDecrypt(const CipherAlgo *cipher, void *context, const uint8_t *c,
+                   uint8_t *p, size_t length);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif

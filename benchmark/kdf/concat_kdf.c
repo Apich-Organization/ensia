@@ -33,17 +33,16 @@
  * @version 2.6.4
  **/
 
-//Switch to the appropriate trace level
+// Switch to the appropriate trace level
 #define TRACE_LEVEL CRYPTO_TRACE_LEVEL
 
-//Dependencies
+// Dependencies
 #include "core/crypto.h"
 #include "kdf/pbkdf.h"
 #include "mac/hmac.h"
 
-//Check crypto library configuration
+// Check crypto library configuration
 #if (CONCAT_KDF_SUPPORT == ENABLED)
-
 
 /**
  * @brief Concat KDF key derivation function
@@ -58,71 +57,69 @@
  **/
 
 error_t concatKdf(const HashAlgo *hash, const uint8_t *z, size_t zLen,
-   const uint8_t *otherInfo, size_t otherInfoLen, uint8_t *dk, size_t dkLen)
-{
-   size_t n;
-   uint32_t i;
-   uint8_t counter[4];
-   uint8_t digest[MAX_HASH_DIGEST_SIZE];
+                  const uint8_t *otherInfo, size_t otherInfoLen, uint8_t *dk,
+                  size_t dkLen) {
+  size_t n;
+  uint32_t i;
+  uint8_t counter[4];
+  uint8_t digest[MAX_HASH_DIGEST_SIZE];
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   HashContext *hashContext;
+  HashContext *hashContext;
 #else
-   HashContext hashContext[1];
+  HashContext hashContext[1];
 #endif
 
-   //Check parameters
-   if(hash == NULL || z == NULL || dk == NULL)
-      return ERROR_INVALID_PARAMETER;
+  // Check parameters
+  if (hash == NULL || z == NULL || dk == NULL)
+    return ERROR_INVALID_PARAMETER;
 
-   //The OtherInfo parameter is optional
-   if(otherInfo == NULL && otherInfoLen != 0)
-      return ERROR_INVALID_PARAMETER;
+  // The OtherInfo parameter is optional
+  if (otherInfo == NULL && otherInfoLen != 0)
+    return ERROR_INVALID_PARAMETER;
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Allocate a memory buffer to hold the hash context
-   hashContext = cryptoAllocMem(hash->contextSize);
-   //Failed to allocate memory?
-   if(hashContext == NULL)
-      return ERROR_OUT_OF_MEMORY;
+  // Allocate a memory buffer to hold the hash context
+  hashContext = cryptoAllocMem(hash->contextSize);
+  // Failed to allocate memory?
+  if (hashContext == NULL)
+    return ERROR_OUT_OF_MEMORY;
 #endif
 
-   //Derive the keying material
-   for(i = 1; dkLen > 0; i++)
-   {
-      //Encode the counter as a 32-bit big-endian string
-      STORE32BE(i, counter);
+  // Derive the keying material
+  for (i = 1; dkLen > 0; i++) {
+    // Encode the counter as a 32-bit big-endian string
+    STORE32BE(i, counter);
 
-      //Compute H(counter || Z || OtherInfo)
-      hash->init(hashContext);
-      hash->update(hashContext, counter, sizeof(uint32_t));
-      hash->update(hashContext, z, zLen);
+    // Compute H(counter || Z || OtherInfo)
+    hash->init(hashContext);
+    hash->update(hashContext, counter, sizeof(uint32_t));
+    hash->update(hashContext, z, zLen);
 
-      //The OtherInfo parameter is optional
-      if(otherInfoLen > 0)
-      {
-         hash->update(hashContext, otherInfo, otherInfoLen);
-      }
+    // The OtherInfo parameter is optional
+    if (otherInfoLen > 0) {
+      hash->update(hashContext, otherInfo, otherInfoLen);
+    }
 
-      //Finalize hash calculation
-      hash->final(hashContext, digest);
+    // Finalize hash calculation
+    hash->final(hashContext, digest);
 
-      //Number of octets in the current block
-      n = MIN(dkLen, hash->digestSize);
-      //Save the resulting block
-      osMemcpy(dk, digest, n);
+    // Number of octets in the current block
+    n = MIN(dkLen, hash->digestSize);
+    // Save the resulting block
+    osMemcpy(dk, digest, n);
 
-      //Point to the next block
-      dk += n;
-      dkLen -= n;
-   }
+    // Point to the next block
+    dk += n;
+    dkLen -= n;
+  }
 
 #if (CRYPTO_STATIC_MEM_SUPPORT == DISABLED)
-   //Free previously allocated memory
-   cryptoFreeMem(hashContext);
+  // Free previously allocated memory
+  cryptoFreeMem(hashContext);
 #endif
 
-   //Successful processing
-   return NO_ERROR;
+  // Successful processing
+  return NO_ERROR;
 }
 
 #endif

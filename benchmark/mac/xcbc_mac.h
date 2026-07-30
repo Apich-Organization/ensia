@@ -31,45 +31,43 @@
 #ifndef _XCBC_MAC_H
 #define _XCBC_MAC_H
 
-//Dependencies
-#include "core/crypto.h"
+// Dependencies
 #include "cipher/cipher_algorithms.h"
+#include "core/crypto.h"
 
-//Application specific context
+// Application specific context
 #ifndef XCBC_MAC_PRIVATE_CONTEXT
-   #define XCBC_MAC_PRIVATE_CONTEXT
+#define XCBC_MAC_PRIVATE_CONTEXT
 #endif
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 /**
  * @brief XCBC-MAC algorithm context
  **/
 
-typedef struct
-{
-   const CipherAlgo *cipher;
-   CipherContext cipherContext;
-   uint8_t k1[MAX_CIPHER_BLOCK_SIZE];
-   uint8_t k2[MAX_CIPHER_BLOCK_SIZE];
-   uint8_t k3[MAX_CIPHER_BLOCK_SIZE];
-   uint8_t buffer[MAX_CIPHER_BLOCK_SIZE];
-   size_t bufferLength;
-   uint8_t mac[MAX_CIPHER_BLOCK_SIZE];
-   XCBC_MAC_PRIVATE_CONTEXT
+typedef struct {
+  const CipherAlgo *cipher;
+  CipherContext cipherContext;
+  uint8_t k1[MAX_CIPHER_BLOCK_SIZE];
+  uint8_t k2[MAX_CIPHER_BLOCK_SIZE];
+  uint8_t k3[MAX_CIPHER_BLOCK_SIZE];
+  uint8_t buffer[MAX_CIPHER_BLOCK_SIZE];
+  size_t bufferLength;
+  uint8_t mac[MAX_CIPHER_BLOCK_SIZE];
+  XCBC_MAC_PRIVATE_CONTEXT
 } XcbcMacContext;
 
-
-//XCBC-MAC related functions
+// XCBC-MAC related functions
 error_t xcbcMacCompute(const CipherAlgo *cipher, const void *key, size_t keyLen,
-   const void *data, size_t dataLen, uint8_t *mac, size_t macLen);
+                       const void *data, size_t dataLen, uint8_t *mac,
+                       size_t macLen);
 
 error_t xcbcMacInit(XcbcMacContext *context, const CipherAlgo *cipher,
-   const void *key, size_t keyLen);
+                    const void *key, size_t keyLen);
 
 void xcbcMacReset(XcbcMacContext *context);
 void xcbcMacUpdate(XcbcMacContext *context, const void *data, size_t dataLen);
@@ -78,7 +76,7 @@ void xcbcMacDeinit(XcbcMacContext *context);
 
 void xcbcMacXorBlock(uint8_t *x, const uint8_t *a, const uint8_t *b, size_t n);
 
-//C++ guard
+// C++ guard
 #ifdef __cplusplus
 }
 #endif
