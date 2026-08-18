@@ -313,14 +313,8 @@ static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
     extractLane = shuf.second;
   }
 
-  // Bitmask Reduction: Convert <N x i1> to scalar integer mask without naive
-  // extract ZExt <N x i1> -> <N x i32>, then BitCast / Reduce OR to eliminate
-  // plain control flow instructions
-  Type *i32Ty = Type::getInt32Ty(ici->getContext());
-  Type *vec32Ty = FixedVectorType::get(i32Ty, lanes);
-  Value *zextVec = IRB.CreateZExt(vcmp, vec32Ty);
-  Value *maskVal = IRB.CreateExtractElement(zextVec, (uint64_t)extractLane, "");
-  Value *result = IRB.CreateICmpNE(maskVal, ConstantInt::get(i32Ty, 0), "");
+  // Extract scalar i1 comparison result from the vector
+  Value *result = IRB.CreateExtractElement(vcmp, (uint64_t)extractLane, "vobf.cmp");
   ici->replaceAllUsesWith(result);
   return true;
 }
@@ -343,7 +337,7 @@ static bool liftFCmpToVector(FCmpInst *fci, unsigned totalBits,
   Value *va = buildNoiseVector(IRB, a, K, lanes, scalarTy);
   Value *vb = buildNoiseVector(IRB, b, K, lanes, scalarTy);
 
-  Value *vcmp = IRB.CreateFCmp(fci->getPredicate(), va, vb, "");
+  Value *vcmp = IRB.CreateFCmp(fci->getPredicate(), va, vb, "vobf.fcmp");
 
   unsigned extractLane = K;
   if (doShuffle) {
@@ -352,11 +346,7 @@ static bool liftFCmpToVector(FCmpInst *fci, unsigned totalBits,
     extractLane = shuf.second;
   }
 
-  Type *i32Ty = Type::getInt32Ty(fci->getContext());
-  Type *vec32Ty = FixedVectorType::get(i32Ty, lanes);
-  Value *zextVec = IRB.CreateZExt(vcmp, vec32Ty);
-  Value *maskVal = IRB.CreateExtractElement(zextVec, (uint64_t)extractLane, "");
-  Value *result = IRB.CreateICmpNE(maskVal, ConstantInt::get(i32Ty, 0), "");
+  Value *result = IRB.CreateExtractElement(vcmp, (uint64_t)extractLane, "vobf.fcmp");
   fci->replaceAllUsesWith(result);
   return true;
 }

@@ -124,7 +124,6 @@ elseif(OBFUSCATION_MODE STREQUAL "csm_only")
     endif()
     set(OBF_FLAGS
         "SHELL:-fpass-plugin=${ENSIA_PLUGIN}"
-        "SHELL:-Xclang -load" "SHELL:-Xclang ${ENSIA_PLUGIN}"
         "SHELL:-mllvm -ensia"
         "SHELL:-mllvm -ensia-preset=none"
         "SHELL:-mllvm -enable-csmobf"
@@ -138,7 +137,6 @@ elseif(OBFUSCATION_MODE STREQUAL "vec_only")
     endif()
     set(OBF_FLAGS
         "SHELL:-fpass-plugin=${ENSIA_PLUGIN}"
-        "SHELL:-Xclang -load" "SHELL:-Xclang ${ENSIA_PLUGIN}"
         "SHELL:-mllvm -ensia"
         "SHELL:-mllvm -ensia-preset=none"
         "SHELL:-mllvm -enable-vobf"
@@ -154,7 +152,6 @@ elseif(OBFUSCATION_MODE STREQUAL "csm_vec")
     endif()
     set(OBF_FLAGS
         "SHELL:-fpass-plugin=${ENSIA_PLUGIN}"
-        "SHELL:-Xclang -load" "SHELL:-Xclang ${ENSIA_PLUGIN}"
         "SHELL:-mllvm -ensia"
         "SHELL:-mllvm -ensia-preset=none"
         "SHELL:-mllvm -enable-csmobf"
@@ -167,24 +164,27 @@ elseif(OBFUSCATION_MODE STREQUAL "csm_vec")
         "SHELL:-mllvm -vec_icmp=true"
     )
 
-elseif(OBFUSCATION_MODE STREQUAL "bench_max")
+elseif(OBFUSCATION_MODE STREQUAL "bench_max" OR OBFUSCATION_MODE STREQUAL "max")
     if(NOT EXISTS "${ENSIA_PLUGIN}")
         message(FATAL_ERROR "Ensia plugin not found at: ${ENSIA_PLUGIN}")
     endif()
     set(OBF_FLAGS
         "SHELL:-fpass-plugin=${ENSIA_PLUGIN}"
-        "SHELL:-Xclang -load" "SHELL:-Xclang ${ENSIA_PLUGIN}"
         "SHELL:-mllvm -ensia"
         "SHELL:-mllvm -ensia-preset=none"
         "SHELL:-mllvm -enable-cffobf"
-        "SHELL:-mllvm -bcf_prob=20"
-        "SHELL:-mllvm -sub_prob=20"
-        "SHELL:-mllvm -mba_prob=20"
+        "SHELL:-mllvm -enable-bcfobf"
+        "SHELL:-mllvm -bcf_prob=40"
+        "SHELL:-mllvm -enable-subobf"
+        "SHELL:-mllvm -sub_prob=40"
+        "SHELL:-mllvm -enable-mbaobf"
+        "SHELL:-mllvm -mba_prob=40"
+        "SHELL:-mllvm -enable-splitobf"
         "SHELL:-mllvm -split_num=2"
         "SHELL:-mllvm -enable-csmobf"
-        "SHELL:-mllvm -csm_maxblocks=100"
+        "SHELL:-mllvm -csm_maxblocks=1000"
         "SHELL:-mllvm -enable-vobf"
-        "SHELL:-mllvm -vec_prob=20"
+        "SHELL:-mllvm -vec_prob=40"
         "SHELL:-mllvm -vec_width=128"
         "SHELL:-mllvm -enable-constenc"
         "SHELL:-mllvm -constenc_times=1"

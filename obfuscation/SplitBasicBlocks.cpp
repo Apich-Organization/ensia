@@ -55,27 +55,16 @@ static void injectStackConfusion(BasicBlock *BB, Function *F) {
   if (!insertPt)
     return;
 
-  // Choose 1 or 2 levels of push/pop depth based on PRNG for variability
-  unsigned depth = cryptoutils->get_range(1, 3); // 1 or 2
-
   if (moduleIsX86_64(F)) {
-    // Build: push r15; [push r14;] <xor/add junk on r14;> [pop r14;] pop r15
-    std::string asmStr;
-    std::string constraints = "~{dirflag},~{fpsr},~{flags}";
-    for (unsigned d = 0; d < depth; d++) {
-      // Use caller-saved scratch registers (r10, r11) so no ABI impact
-      std::string regHi = (d == 0) ? "r10" : "r11";
-      asmStr += "push %" + regHi + "\n\t";
-      constraints += ",~{" + regHi + "}";
-    }
-    // Junk: xor r10, r10; add r10, 0x13; sub r10, 0x13
-    asmStr += "xor %r10, %r10\n\t"
-              "add $$0x13371337, %r10\n\t"
-              "sub $$0x13371337, %r10\n\t";
-    for (int d = (int)depth - 1; d >= 0; d--) {
-      std::string regHi = (d == 0) ? "r10" : "r11";
-      asmStr += "pop %" + regHi + "\n\t";
-    }
+    // Safe register-only junk sequence on scratch registers r10 and r11
+    // (Never touches rsp/stack to strictly respect x86-64 System V ABI red-zone).
+    std::string asmStr = "xorq %r10, %r10\n\t"
+                         "addq $$0x13371337, %r10\n\t"
+                         "subq $$0x13371337, %r10\n\t"
+                         "xorq %r11, %r11\n\t"
+                         "addq $$0x12345678, %r11\n\t"
+                         "subq $$0x12345678, %r11\n\t";
+    std::string constraints = "~{r10},~{r11},~{dirflag},~{fpsr},~{flags}";
 
     FunctionType *AsmFTy =
         FunctionType::get(Type::getVoidTy(BB->getContext()), false);
@@ -85,12 +74,13 @@ static void injectStackConfusion(BasicBlock *BB, Function *F) {
     turnOffOptimization(F);
 
   } else if (moduleIsAArch64(F)) {
-    // AArch64: stp x9, x10, [sp, #-16]!  ; (junk) ; ldp x9, x10, [sp], #16
-    std::string asmStr = "stp x9, x10, [sp, #-16]!\n\t"
-                         "eor x9, x9, x9\n\t"
+    // Safe register-only junk sequence on scratch registers x9 and x10
+    std::string asmStr = "eor x9, x9, x9\n\t"
                          "add x9, x9, #0x42\n\t"
                          "sub x9, x9, #0x42\n\t"
-                         "ldp x9, x10, [sp], #16\n\t";
+                         "eor x10, x10, x10\n\t"
+                         "add x10, x10, #0x77\n\t"
+                         "sub x10, x10, #0x77\n\t";
     FunctionType *AsmFTy =
         FunctionType::get(Type::getVoidTy(BB->getContext()), false);
     InlineAsm *IA = InlineAsm::get(AsmFTy, asmStr,

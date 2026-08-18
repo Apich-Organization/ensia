@@ -55,6 +55,8 @@ void annotation2Metadata(Module &M);
 bool readAnnotationMetadata(Function *f, std::string annotation);
 void writeAnnotationMetadata(Function *f, std::string annotation);
 bool AreUsersInOneFunction(GlobalVariable *GV);
+void tagSynthetic(Instruction *I);
+bool isSynthetic(const Instruction *I);
 
 } // namespace llvm
 

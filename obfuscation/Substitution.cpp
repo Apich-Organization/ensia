@@ -99,11 +99,18 @@ struct Substitution : public FunctionPass {
   bool substitute(Function *f) {
     // Loop for the number of time we run the pass on the function
     uint32_t times = ObfTimesTemp;
+    DenseSet<Instruction *> existing;
+    for (Instruction &inst : instructions(f))
+      existing.insert(&inst);
+
     do {
       uint32_t eligible = 0;
-      for (Instruction &inst : instructions(f))
+      for (Instruction &inst : instructions(f)) {
+        if (isSynthetic(&inst) || !existing.count(&inst))
+          continue;
         if (inst.isBinaryOp() && inst.getType()->isIntegerTy())
           eligible++;
+      }
 
       if (eligible == 0)
         break;
@@ -117,7 +124,9 @@ struct Substitution : public FunctionPass {
       }
 
       SmallVector<Instruction *, 32> toErase;
-      for (Instruction &inst : instructions(f))
+      for (Instruction &inst : instructions(f)) {
+        if (isSynthetic(&inst) || !existing.count(&inst))
+          continue;
         if (inst.isBinaryOp() && inst.getType()->isIntegerTy() &&
             cryptoutils->get_range(100) <= currentProb) {
           switch (inst.getOpcode()) {
@@ -139,11 +148,6 @@ struct Substitution : public FunctionPass {
             break;
 
           // ── Float arithmetic: NOT substituted ───────────────────────────
-          // FAdd/FSub/FMul operate over IEEE-754 reals, not Z/2^n.  The
-          // integer MBA identities in SubstituteImpl are bitwise ring
-          // operations and do not have floating-point equivalents.
-          // Substituting FP ops would change rounding behaviour and violate
-          // IEEE semantics, so they are intentionally excluded.
           case BinaryOperator::FAdd:
           case BinaryOperator::FSub:
           case BinaryOperator::FMul:
@@ -152,10 +156,6 @@ struct Substitution : public FunctionPass {
             break;
 
           // ── Integer division/remainder: NOT substituted ─────────────────
-          // UDiv/SDiv/URem/SRem: strength-reduction and LLVM mid-end passes
-          // are very aggressive at inverting division rewrites.  SDiv also
-          // has edge cases (INT_MIN / -1 = INT_MIN in LLVM semantics) that
-          // make correctness-preserving substitution fragile.
           case BinaryOperator::UDiv:
           case BinaryOperator::SDiv:
           case BinaryOperator::URem:
@@ -163,9 +163,6 @@ struct Substitution : public FunctionPass {
             break;
 
           // ── Shift operations ────────────────────────────────────────────
-          // Only constant-shift-amount forms are substituted (verified safe).
-          // Variable shifts are passed through unchanged by the substituteXxx
-          // implementations themselves.
           case Instruction::Shl:
             SubstituteImpl::substituteShl(cast<BinaryOperator>(&inst));
             toErase.push_back(&inst);
@@ -177,15 +174,12 @@ struct Substitution : public FunctionPass {
             ++LShr;
             break;
           case Instruction::AShr:
-            // XOR distributes over AShr (sign extension is XOR-linear):
-            //   (a ^ r) >>s k ^ (r >>s k) == a >>s k   for all a, r, k.
-            // Only constant-k forms are handled; variable k falls through.
             SubstituteImpl::substituteAShr(cast<BinaryOperator>(&inst));
             toErase.push_back(&inst);
             ++AShr;
             break;
 
-          // ── Bitwise ─────────────────────────────────────────────────────
+          // ── Bitwise logical ─────────────────────────────────────────────
           case Instruction::And:
             SubstituteImpl::substituteAnd(cast<BinaryOperator>(&inst));
             toErase.push_back(&inst);
@@ -206,11 +200,18 @@ struct Substitution : public FunctionPass {
             break;
           } // End switch
         } // End isBinaryOp
+      } // End for
       for (Instruction *I : toErase) {
         if (I->getNumUses() == 0)
           I->eraseFromParent();
       }
     } while (--times); // for times
+
+    // Tag all newly created instructions so other passes do not compound on them
+    for (Instruction &inst : instructions(f)) {
+      if (!existing.count(&inst))
+        tagSynthetic(&inst);
+    }
     return true;
   }
 };

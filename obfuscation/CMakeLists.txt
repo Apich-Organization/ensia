@@ -28,7 +28,7 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" CACHE STRING "Flags used by the CXX compiler for release builds." FORCE)
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -DDEBUG -g" CACHE STRING "Flags used by the CXX compiler for debug builds." FORCE)
 
-add_library(Ensia SHARED
+set(ENSIA_SOURCES
         CryptoUtils.cpp
         Utils.cpp
         ObfConfig.cpp
@@ -51,6 +51,8 @@ add_library(Ensia SHARED
         VectorObfuscation.cpp     # Scalar-to-SIMD vector lifting
         )
 
+add_library(Ensia SHARED ${ENSIA_SOURCES})
+
 target_include_directories(Ensia PRIVATE
         ${CMAKE_SOURCE_DIR}/obfuscation
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -58,11 +60,10 @@ target_include_directories(Ensia PRIVATE
 
 add_dependencies(Ensia intrinsics_gen LLVMLinker)
 
-llvm_map_components_to_libnames(llvm_libs core support irreader linker passes)
-
 if(WIN32)
 target_link_libraries(Ensia PRIVATE ${llvm_libs})
 endif()
+
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # For LLVM-19 on Windows, linking winpthread as static is required
@@ -95,3 +96,39 @@ target_compile_options(Ensia PRIVATE
             -Wno-deprecated-declarations
         >
 )
+
+# Optional target for Rustc plugin
+execute_process(
+    COMMAND rustc --print sysroot
+    OUTPUT_VARIABLE RUSTC_SYSROOT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(RUSTC_SYSROOT AND EXISTS "${RUSTC_SYSROOT}/lib")
+    file(GLOB RUST_LLVM_LIB "${RUSTC_SYSROOT}/lib/libLLVM*rust*.so*")
+    if(RUST_LLVM_LIB)
+        add_library(EnsiaRust SHARED ${ENSIA_SOURCES})
+        set_target_properties(EnsiaRust PROPERTIES OUTPUT_NAME "Ensia_rust")
+        target_include_directories(EnsiaRust PRIVATE
+            ${CMAKE_SOURCE_DIR}/obfuscation
+            ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        add_dependencies(EnsiaRust intrinsics_gen LLVMLinker)
+        target_link_directories(EnsiaRust PRIVATE "${RUSTC_SYSROOT}/lib")
+        target_link_libraries(EnsiaRust PRIVATE -lLLVM-22-rust-1.97.1-stable)
+        set_target_properties(EnsiaRust PROPERTIES
+            BUILD_RPATH "${RUSTC_SYSROOT}/lib"
+            INSTALL_RPATH "${RUSTC_SYSROOT}/lib"
+        )
+        target_compile_definitions(EnsiaRust PRIVATE
+            "-DGIT_COMMIT_HASH=\"${ENSIA_GIT_COMMIT_HASH}\""
+            "-DOLLVM_NEXT=1"
+        )
+        target_compile_options(EnsiaRust PRIVATE
+            $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:
+                -Wno-unused-parameter
+                -Wno-deprecated-declarations
+            >
+        )
+    endif()
+endif()

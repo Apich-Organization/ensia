@@ -477,17 +477,23 @@ static void loadObfConfig() {
     GObfConfig = ObfGlobalConfig::defaults();
   }
 
-  // Step 2: if -ensia-preset is given on the command line, it overrides
+  // Step 2: if -ensia-preset or ENSIA_PRESET env is given, it overrides
   // the file's [global] preset while preserving explicit [passes.*] settings.
   // We rebuild as: preset_base merged with the file's explicit [passes.*]
   // overrides.
-  if (!ObfPreset.empty()) {
-    std::string cliPreset = (std::string)ObfPreset;
-    GObfConfig.preset = cliPreset;
+  std::string presetStr = (std::string)ObfPreset;
+  if (presetStr.empty()) {
+    if (const char *env = getenv("ENSIA_PRESET")) {
+      presetStr = env;
+      EnableIRObfusaction = true;
+    }
+  }
+  if (!presetStr.empty()) {
+    GObfConfig.preset = presetStr;
     // Extract the file's explicit [passes.*] overrides by comparing to the
     // file-preset's base (approximation: just keep GObfConfig.passes as
     // user-supplied delta and re-merge onto the CLI preset base).
-    ObfPassConfig cli_preset_base = ObfGlobalConfig::presetConfig(cliPreset);
+    ObfPassConfig cli_preset_base = ObfGlobalConfig::presetConfig(presetStr);
     ObfGlobalConfig::merge(cli_preset_base,
                            GObfConfig.passes); // file settings win
     GObfConfig.passes = cli_preset_base;
@@ -527,14 +533,16 @@ static void applyTomlPolicies(Module &M) {
 
     injectEnable(eff.bcf.enabled, "bcf", "nobcf");
     injectEnable(eff.sub.enabled, "sub", "nosub");
-    injectEnable(eff.mba.enabled, "mba", "nomb");
+    injectEnable(eff.mba.enabled, "mba", "nomba");
     injectEnable(eff.split.enabled, "split", "nosplit");
+    injectEnable(eff.str_enc.enabled, "strenc", "nostrenc");
     injectEnable(eff.str_enc.enabled, "strcry", "nostrcry");
     injectEnable(eff.const_enc.enabled, "constenc", "noconstenc");
     injectEnable(eff.vec.enabled, "vobf", "novobf");
     injectEnable(eff.csm.enabled, "csm", "nocsm");
     injectEnable(eff.flatten.enabled, "fla", "nofla");
     injectEnable(eff.indir_branch.enabled, "indibran", "noindibran");
+    injectEnable(eff.indir_branch.enabled, "indibr", "noindibr");
     injectEnable(eff.func_wrap.enabled, "fw", "nofw");
     injectEnable(eff.fco.enabled, "fco", "nofco");
     injectEnable(eff.anti_hook.enabled, "antihook", "noantihook");
@@ -1020,28 +1028,22 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
             PB.registerOptimizerLastEPCallback([](ModulePassManager &MPM,
                                                   OptimizationLevel,
                                                   ThinOrFullLTOPhase Phase) {
-              static bool s_ep_added = false;
-              if (s_ep_added || Phase == ThinOrFullLTOPhase::ThinLTOPreLink ||
+              if (Phase == ThinOrFullLTOPhase::ThinLTOPreLink ||
                   Phase == ThinOrFullLTOPhase::FullLTOPreLink)
                 return;
               LoadEnv();
               loadObfConfig();
               if (!EnableIRObfusaction)
                 return;
-              s_ep_added = true;
               MPM.addPass(ObfuscationPass());
             });
 
             PB.registerFullLinkTimeOptimizationLastEPCallback(
                 [](ModulePassManager &MPM, OptimizationLevel) {
-                  static bool s_lto_ep_added = false;
-                  if (s_lto_ep_added)
-                    return;
                   LoadEnv();
                   loadObfConfig();
                   if (!EnableIRObfusaction)
                     return;
-                  s_lto_ep_added = true;
                   MPM.addPass(ObfuscationPass());
                 });
 
@@ -1053,7 +1055,6 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
                    ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
                   if (Name != EnableIRObfusaction.ArgStr)
                     return false;
-                  static bool s_pp_added = false;
                   EnableIRObfusaction = true;
                   for (const auto &E : InnerPipeline) {
                     auto n = E.Name;
@@ -1094,10 +1095,7 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
                     else if (n == EnableMedObfuscation.ArgStr)
                       EnableMedObfuscation = true;
                   }
-                  if (!s_pp_added) {
-                    s_pp_added = true;
-                    MPM.addPass(ObfuscationPass());
-                  }
+                  MPM.addPass(ObfuscationPass());
                   return true;
                 });
           }};
