@@ -61,12 +61,16 @@ target_include_directories(Ensia PRIVATE
 add_dependencies(Ensia intrinsics_gen LLVMLinker)
 
 if(WIN32)
-target_link_libraries(Ensia PRIVATE ${llvm_libs})
+  if(COMMAND llvm_map_components_to_libnames)
+    llvm_map_components_to_libnames(llvm_libs Core Support Passes TransformUtils Analysis TargetParser Linker)
+  endif()
+  if(llvm_libs)
+    target_link_libraries(Ensia PRIVATE ${llvm_libs})
+  endif()
 endif()
 
-
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    # For LLVM-19 on Windows, linking winpthread as static is required
+    # For MinGW on Windows, linking winpthread as static is required
     if(WIN32)
     set_target_properties(Ensia PROPERTIES
         LINK_FLAGS
