@@ -189,24 +189,46 @@ struct StringEncryption : public ModulePass {
     if (!CDS || !CDS->getElementType()->isIntegerTy(8))
       return base;
     std::string content = CDS->getRawDataValues().str();
-    for (const auto &pat : cfg.skip_content) {
-      try {
-        if (std::regex_search(
-                content,
-                std::regex(pat, std::regex::ECMAScript | std::regex::optimize)))
-          return 0;
-      } catch (const std::regex_error &) {
-      }
+
+    // We use thread-local cache to avoid recompiling regexes for every string.
+    static thread_local std::vector<std::string> last_skip_content;
+    static thread_local std::vector<std::regex> skip_regexes;
+    static thread_local std::vector<std::string> last_force_content;
+    static thread_local std::vector<std::regex> force_regexes;
+
+    // Update cache if config changed
+    if (last_skip_content != cfg.skip_content) {
+        last_skip_content = cfg.skip_content;
+        skip_regexes.clear();
+        for (const auto &pat : cfg.skip_content) {
+            try {
+                skip_regexes.emplace_back(pat, std::regex::ECMAScript | std::regex::optimize);
+            } catch (const std::regex_error &) {
+            }
+        }
     }
-    for (const auto &pat : cfg.force_content) {
-      try {
-        if (std::regex_search(
-                content,
-                std::regex(pat, std::regex::ECMAScript | std::regex::optimize)))
-          return 100;
-      } catch (const std::regex_error &) {
-      }
+
+    if (last_force_content != cfg.force_content) {
+        last_force_content = cfg.force_content;
+        force_regexes.clear();
+        for (const auto &pat : cfg.force_content) {
+            try {
+                force_regexes.emplace_back(pat, std::regex::ECMAScript | std::regex::optimize);
+            } catch (const std::regex_error &) {
+            }
+        }
     }
+
+    for (const auto &re : skip_regexes) {
+        if (std::regex_search(content, re))
+            return 0;
+    }
+
+    for (const auto &re : force_regexes) {
+        if (std::regex_search(content, re))
+            return 100;
+    }
+
     return base;
   }
 
