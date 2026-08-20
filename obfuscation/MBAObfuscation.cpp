@@ -737,11 +737,18 @@ struct MBAObfuscation : public FunctionPass {
     if (ObfVerbose)
       errs() << "Running MBAObfuscation On " << F.getName() << "\n";
 
+    DenseSet<Instruction *> existing;
+    for (Instruction &I : instructions(F))
+      existing.insert(&I);
+
     for (uint32_t layer = 0; layer < MBALayersTemp; layer++) {
       uint32_t eligible = 0;
-      for (Instruction &I : instructions(F))
+      for (Instruction &I : instructions(F)) {
+        if (isSynthetic(&I) || !existing.count(&I))
+          continue;
         if (I.isBinaryOp() && I.getType()->isIntegerTy())
           eligible++;
+      }
 
       if (eligible == 0)
         break;
@@ -751,9 +758,14 @@ struct MBAObfuscation : public FunctionPass {
           (layer == 0) ? 1500 : 30; // Bound the exponential growth
 
       SmallVector<BinaryOperator *, 32> allOps;
-      for (Instruction &I : instructions(F))
-        if (BinaryOperator *BO = dyn_cast<BinaryOperator>(&I))
-          allOps.push_back(BO);
+      for (Instruction &I : instructions(F)) {
+        if (isSynthetic(&I) || !existing.count(&I))
+          continue;
+        if (BinaryOperator *BO = dyn_cast<BinaryOperator>(&I)) {
+          if (BO->getType()->isIntegerTy())
+            allOps.push_back(BO);
+        }
+      }
 
       SmallVector<BinaryOperator *, 32> targets;
       for (BinaryOperator *BO : allOps) {
@@ -766,6 +778,7 @@ struct MBAObfuscation : public FunctionPass {
       for (BinaryOperator *BO : targets) {
         if (cryptoutils->get_range(100) < 30) {
           MBAImpl::mbaBPP(BO);
+          continue;
         }
         if (BO->getOpcode() == Instruction::Add ||
             BO->getOpcode() == Instruction::Xor) {
@@ -802,6 +815,12 @@ struct MBAObfuscation : public FunctionPass {
         if (BO->getNumUses() == 0)
           BO->eraseFromParent();
       }
+    }
+
+    // Tag all newly created instructions
+    for (Instruction &I : instructions(F)) {
+      if (!existing.count(&I))
+        tagSynthetic(&I);
     }
     return true;
   }

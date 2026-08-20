@@ -447,4 +447,25 @@ bool AreUsersInOneFunction(GlobalVariable *GV) {
   return userFunctions.size() <= 1;
 }
 
+void tagSynthetic(Instruction *I) {
+  if (!I)
+    return;
+  LLVMContext &Ctx = I->getContext();
+  I->setMetadata("ensia.synthetic", MDNode::get(Ctx, {}));
+}
+
+bool isSynthetic(const Instruction *I) {
+  if (!I)
+    return false;
+  if (I->hasMetadata("ensia.synthetic"))
+    return true;
+  StringRef name = I->getName();
+  if (name.starts_with("ensia.") || name.starts_with("csm.") ||
+      name.starts_with("bcf.") || name.starts_with("vobf.") ||
+      name.starts_with("mba.") || name.starts_with("sub.") ||
+      name.starts_with("constenc.") || name.starts_with("bpp."))
+    return true;
+  return false;
+}
+
 } // namespace llvm

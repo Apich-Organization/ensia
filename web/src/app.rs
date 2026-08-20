@@ -1,6 +1,9 @@
 use crate::{
     components::{footer::Footer, nav::Nav},
-    pages::{algorithms::AlgorithmsPage, config::ConfigPage, home::HomePage, sponsor::SponsorPage},
+    pages::{
+        algorithms::AlgorithmsPage, benchmark::BenchmarkPage, config::ConfigPage, home::HomePage,
+        sponsor::SponsorPage,
+    },
     theme,
 };
 use leptos::prelude::*;
@@ -10,6 +13,7 @@ pub enum Page {
     #[default]
     Home,
     Algorithms,
+    Benchmark,
     Config,
     Sponsor,
 }
@@ -21,6 +25,7 @@ fn page_from_hash() -> Page {
             let s = h.trim_start_matches('#').trim_start_matches('/');
             match s {
                 s if s.starts_with("algorithms") => Page::Algorithms,
+                s if s.starts_with("benchmark") => Page::Benchmark,
                 s if s.starts_with("config") => Page::Config,
                 s if s.starts_with("sponsor") => Page::Sponsor,
                 _ => Page::Home,
@@ -33,6 +38,7 @@ pub fn navigate(page: Page) {
     let hash = match page {
         Page::Home => "#/",
         Page::Algorithms => "#/algorithms",
+        Page::Benchmark => "#/benchmark",
         Page::Config => "#/config",
         Page::Sponsor => "#/sponsor",
     };
@@ -71,6 +77,7 @@ pub fn App() -> impl IntoView {
             {move || match page.get() {
                 Page::Home       => view! { <HomePage       /> }.into_any(),
                 Page::Algorithms => view! { <AlgorithmsPage /> }.into_any(),
+                Page::Benchmark  => view! { <BenchmarkPage  /> }.into_any(),
                 Page::Config     => view! { <ConfigPage     /> }.into_any(),
                 Page::Sponsor    => view! { <SponsorPage    /> }.into_any(),
             }}

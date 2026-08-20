@@ -1,0 +1,75 @@
+name: Ensia CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build LLVM Plugin & Pass Validation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install LLVM 20/21 Dependencies & CMake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang llvm lld
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Ensia Plugin
+        run: |
+          cmake --build build --target Ensia --parallel $(nproc)
+
+  test-web-frontend:
+    name: Validate Web Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate Benchmark SVG Charts
+        run: |
+          python3 -m pip install --upgrade pip matplotlib numpy
+          python3 benchmark/scripts/generate_benchmark_charts.py
+
+      - name: Install Rust + wasm32
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Trunk
+        run: cargo install trunk --locked
+
+      - name: Cargo Check & Trunk Build
+        working-directory: web
+        run: |
+          cargo check
+          trunk build --release

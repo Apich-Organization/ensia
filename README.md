@@ -55,12 +55,82 @@ You can use the obfuscator by passing flags or configuration files to the LLVM c
 You can also enable or tune features via environment variables:
 
 * `ENSIA=1` (Enable master scheduler)
-* `ENSIA_PRESET=low|mid|high|max` (Set active profile)
+* `ENSIA_PRESET=low|mid|high|max|csm_vec` (Set active profile)
 * `ENSIA_CONFIG=/path/to/ensia.toml` (Set TOML configuration file)
 * `STRCRY=1` (String Encryption)
 * `CSMOBF=1` (Chaos State Machine)
 * `MBAOBF=1` (Mixed Boolean-Arithmetic Math)
 * `BCF_PROB=80`, `MBA_LAYERS=3`, `CONSTENC_FEISTEL=1`, `AH_DIRECT_SYSCALL=1` (Fine-grained pass parameters)
+
+---
+
+## **Rust Language Support (`cargo` / `rustc`)**
+
+Ensia supports seamless integration with the Rust toolchain via LLVM pass plugins (`libEnsia_rust.so` / `Ensia_rust.dll`), enabling native obfuscation for Cargo packages and binary crates without modifying Rust source code.
+
+### 1. Build the Rust Pass Plugin
+When building Ensia, CMake automatically detects your active `rustc` LLVM version and builds the target `EnsiaRust`:
+
+```bash
+mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . --target EnsiaRust --parallel $(nproc)
+```
+
+This generates `build/obfuscation/libEnsia_rust.so` (or `Ensia_rust.dll` on Windows).
+
+### 2. Compile & Test with Cargo
+Pass the plugin and active profile via `RUSTFLAGS` and environment variables:
+
+```bash
+# Build binary or library with Ensia (csm_vec profile)
+ENSIA_PRESET=csm_vec RUSTC_BOOTSTRAP=1 \
+RUSTFLAGS="-Z llvm-plugins=$(pwd)/build/obfuscation/libEnsia_rust.so -C passes=ensia" \
+cargo build --release
+
+# Run unit tests through obfuscated LLVM IR
+ENSIA_PRESET=csm_vec RUSTC_BOOTSTRAP=1 \
+RUSTFLAGS="-Z llvm-plugins=$(pwd)/build/obfuscation/libEnsia_rust.so -C passes=ensia" \
+cargo test --lib --tests
+```
+
+### 3. Automated Project Test Runner
+A test runner script is provided at [`scripts/test_rust_projects.sh`](./scripts/test_rust_projects.sh) for batch validation across projects (e.g. `bincode`, `dtact`):
+
+```bash
+./scripts/test_rust_projects.sh csm_vec
+```
+
+---
+
+## **Windows Platform Compatibility**
+
+Ensia is architecturally designed with cross-platform support for **Windows (x86_64, ARM64, and i386)** using MSVC, `clang-cl`, or MinGW:
+
+### 1. Dynamic Linking & PE/COFF Symbol Resolution
+Unlike ELF on Linux where plugins can leave host symbols unresolved until runtime, Windows PE/COFF dynamic libraries (`.dll`) require all symbols to be resolved at link time. Ensia handles this via:
+- **Automatic LLVM Component Mapping**: CMake maps and links `${llvm_libs}` (`LLVMCore`, `LLVMSupport`, `LLVMPasses`, etc.) when `WIN32` is defined.
+- **Export Table Attributes**: The plugin entry point `llvmGetPassPluginInfo` is decorated with `__declspec(dllexport)` on `_WIN32` builds.
+- **MinGW Static Runtime Support**: Automatically static-links `winpthread`, `libgcc`, and `libstdc++` to eliminate runtime DLL missing dependencies.
+
+### 2. Cross-Platform Entropy & Process APIs
+- Replaces POSIX `getpid()` with `_getpid()` from `<process.h>`.
+- Replaces POSIX timer hooks on Windows with high-resolution `QueryPerformanceCounter` (QPC) and `GetTickCount64()`.
+- Windows ARM64 hardware entropy taps into `PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE` for non-faulting random generation.
+
+### 3. Building on Windows (MSVC / clang-cl / MinGW)
+
+```cmd
+:: Using CMake with Ninja & Clang-cl / MSVC
+mkdir build && cd build
+cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR="C:/path/to/llvm/lib/cmake/llvm"
+ninja Ensia
+```
+
+To use with `clang-cl`:
+```cmd
+clang-cl /fpass-plugin=build/obfuscation/Ensia.dll -mllvm -ensia -mllvm -ensia-preset=csm_vec main.c
+```
 
 ## **Important Warnings**
 

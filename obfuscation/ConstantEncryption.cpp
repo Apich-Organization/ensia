@@ -95,6 +95,14 @@ struct ConstantEncryption : public ModulePass {
   ConstantEncryption(bool flag) : ModulePass(ID) { this->flag = flag; }
   ConstantEncryption() : ModulePass(ID) { this->flag = true; }
   bool shouldEncryptConstant(Instruction *I) {
+    if (isSynthetic(I))
+      return false;
+    if (I->getType()->isVectorTy())
+      return false;
+    for (unsigned i = 0; i < I->getNumOperands(); i++) {
+      if (I->getOperand(i)->getType()->isVectorTy())
+        return false;
+    }
     if (isa<SwitchInst>(I) || isa<IntrinsicInst>(I) ||
         isa<GetElementPtrInst>(I) || isa<PHINode>(I) || I->isAtomic())
       return false;
@@ -314,35 +322,37 @@ struct ConstantEncryption : public ModulePass {
     if (eligible == 0)
       return;
 
-    uint32_t currentProb = 100;
-    uint32_t maxTargets = 2000;
-    if (eligible * currentProb / 100 > maxTargets) {
-      currentProb = (maxTargets * 100) / eligible;
-      if (currentProb == 0)
-        currentProb = 1;
-    }
-
+    // Filter targets by valueGate
+    SmallVector<std::pair<Instruction *, unsigned>, 64> filteredTargets;
     for (auto &T : targets) {
       const ConstantInt *CI = cast<ConstantInt>(T.first->getOperand(T.second));
       int gate = valueGate(CI, skipVal, forceVal);
-      if (gate < 0)
-        continue; // skip_value matched
-      if (gate > 0 || cryptoutils->get_range(100) < currentProb)
-        HandleConstantIntOperand(T.first, T.second);
+      if (gate >= 0)
+        filteredTargets.push_back(T);
+    }
+
+    uint32_t maxTargets = ObfuscationMaxMode ? 60 : 30;
+    if (filteredTargets.size() > maxTargets) {
+      for (size_t i = 0; i < filteredTargets.size(); i++) {
+        size_t j = i + cryptoutils->get_range(filteredTargets.size() - i);
+        std::swap(filteredTargets[i], filteredTargets[j]);
+      }
+      filteredTargets.resize(maxTargets);
+    }
+
+    for (auto &T : filteredTargets) {
+      HandleConstantIntOperand(T.first, T.second);
     }
     for (GlobalVariable *G : gvTargets) {
       const ConstantInt *CI = cast<ConstantInt>(G->getInitializer());
       int gate = valueGate(CI, skipVal, forceVal);
-      if (gate < 0)
-        continue; // skip_value matched
-      if (gate > 0 || cryptoutils->get_range(100) < currentProb)
+      if (gate >= 0)
         HandleConstantIntInitializerGV(G);
     }
   }
 
   void Constant2GlobalVariable(Function &F) {
     Module &M = *F.getParent();
-    const DataLayout &DL = M.getDataLayout();
     for (Instruction &I : instructions(F)) {
       if (!shouldEncryptConstant(&I))
         continue;
@@ -360,43 +370,10 @@ struct ConstantEncryption : public ModulePass {
               *F.getParent(), CI->getType(), false,
               GlobalValue::LinkageTypes::PrivateLinkage,
               ConstantInt::get(CI->getType(), CI->getValue()), "CToGV", nullptr,
-              GlobalValue::GeneralDynamicTLSModel);
+              GlobalValue::NotThreadLocal);
           usedGlobals.push_back(GV);
           I.setOperand(i, new LoadInst(GV->getValueType(), GV, "", &I));
         }
-      }
-    }
-    for (Instruction &I : instructions(F)) {
-      if (!shouldEncryptConstant(&I))
-        continue;
-      if (BinaryOperator *BO = dyn_cast<BinaryOperator>(&I)) {
-        if (!BO->getType()->isIntegerTy())
-          continue;
-        if (!(cryptoutils->get_range(100) <= ConstToGVProbTemp))
-          continue;
-        IntegerType *IT = cast<IntegerType>(BO->getType());
-        uint64_t dummy;
-        if (IT == Type::getInt8Ty(IT->getContext()))
-          dummy = cryptoutils->get_uint8_t();
-        else if (IT == Type::getInt16Ty(IT->getContext()))
-          dummy = cryptoutils->get_uint16_t();
-        else if (IT == Type::getInt32Ty(IT->getContext()))
-          dummy = cryptoutils->get_uint32_t();
-        else if (IT == Type::getInt64Ty(IT->getContext()))
-          dummy = cryptoutils->get_uint64_t();
-        else
-          continue;
-        GlobalVariable *GV = new GlobalVariable(
-            M, BO->getType(), false, GlobalValue::LinkageTypes::PrivateLinkage,
-            ConstantInt::get(BO->getType(), dummy), "CToGV", nullptr,
-            GlobalValue::GeneralDynamicTLSModel);
-        StoreInst *SI =
-            new StoreInst(BO, GV, false, DL.getABITypeAlign(BO->getType()));
-        SI->insertAfter(BO);
-        LoadInst *LI = new LoadInst(GV->getValueType(), GV, "", false,
-                                    DL.getABITypeAlign(BO->getType()));
-        LI->insertAfter(SI);
-        BO->replaceUsesWithIf(LI, [SI](Use &U) { return U.getUser() != SI; });
       }
     }
   }
@@ -405,6 +382,10 @@ struct ConstantEncryption : public ModulePass {
     if (!(flag || AreUsersInOneFunction(GVPtr)) || isDispatchOnceToken(GVPtr) ||
         isAtomicLoaded(GVPtr))
       return;
+    for (User *U : GVPtr->users()) {
+      if (!isa<LoadInst>(U) && !isa<StoreInst>(U))
+        return;
+    }
     // Prepare Types and Keys
     std::pair<ConstantInt *, ConstantInt *> keyandnew;
     ConstantInt *Old = dyn_cast<ConstantInt>(GVPtr->getInitializer());
@@ -528,30 +509,30 @@ struct ConstantEncryption : public ModulePass {
     // Extract halves: L = upper half, R = lower half
     Value *L = BinaryOperator::Create(
         Instruction::And,
-        BinaryOperator::Create(Instruction::LShr, encVal, halfC, "", I), maskC,
-        "", I);
-    Value *R = BinaryOperator::Create(Instruction::And, encVal, maskC, "", I);
+        BinaryOperator::Create(Instruction::LShr, encVal, halfC, "constenc.feistel.lshr", I), maskC,
+        "constenc.feistel.L", I);
+    Value *R = BinaryOperator::Create(Instruction::And, encVal, maskC, "constenc.feistel.R", I);
 
     // Apply 4 inverse rounds in reverse order (r = 3, 2, 1, 0)
     for (int r = 3; r >= 0; r--) {
       ConstantInt *K0 = cast<ConstantInt>(ConstantInt::get(T, fst.K[r][0]));
       ConstantInt *K1 = cast<ConstantInt>(ConstantInt::get(T, fst.K[r][1]));
       // F_r(L) = ((L * K0) ^ K1) & mask
-      Value *mul = BinaryOperator::Create(Instruction::Mul, L, K0, "", I);
-      Value *xorK = BinaryOperator::Create(Instruction::Xor, mul, K1, "", I);
-      Value *F = BinaryOperator::Create(Instruction::And, xorK, maskC, "", I);
+      Value *mul = BinaryOperator::Create(Instruction::Mul, L, K0, "constenc.feistel.mul", I);
+      Value *xorK = BinaryOperator::Create(Instruction::Xor, mul, K1, "constenc.feistel.xor", I);
+      Value *F = BinaryOperator::Create(Instruction::And, xorK, maskC, "constenc.feistel.F", I);
       // Inverse: newL = R ^ F(L),  newR = L
       Value *newL = BinaryOperator::Create(
           Instruction::And,
-          BinaryOperator::Create(Instruction::Xor, R, F, "", I), maskC, "", I);
+          BinaryOperator::Create(Instruction::Xor, R, F, "constenc.feistel.rxor", I), maskC, "constenc.feistel.newL", I);
       Value *newR = L;
       L = newL;
       R = newR;
     }
 
     // Recombine: (L << half) | R
-    Value *Lsh = BinaryOperator::Create(Instruction::Shl, L, halfC, "", I);
-    return BinaryOperator::Create(Instruction::Or, Lsh, R, "", I);
+    Value *Lsh = BinaryOperator::Create(Instruction::Shl, L, halfC, "constenc.feistel.shl", I);
+    return BinaryOperator::Create(Instruction::Or, Lsh, R, "constenc.feistel.rec", I);
   }
 
   // ── k-share ensemble secret sharing ─────────────────────────────────────

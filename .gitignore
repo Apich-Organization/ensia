@@ -103,3 +103,9 @@ test_mbaobf
 test_obf
 test_sub
 test_vobf
+benchmark/results/angr_test.csv
+benchmark/scripts/test_angr.py
+benchmark/scripts/test_angr2.py
+benchmark/scripts/test_angr_fork.py
+benchmark/scripts/test_bcf_fork
+benchmark/scripts/test_bcf_fork.c

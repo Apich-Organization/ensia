@@ -135,10 +135,8 @@ pub fn HomePage() -> impl IntoView {
                 />
                 <FeatureCard
                     icon="\u{1F9E9}"
-                    title="Plugin Architecture"
-                    body="Loads as a Clang/opt plugin via -Xclang -load. Zero changes
-                          to your build system beyond a single flag. Compatible with
-                          LLVM 21 and 22."
+                    title="Modern Pass Plugin"
+                    body="Integrates via modern LLVM Pass Plugin (-fpass-plugin=libEnsia.so for Clang, -Z llvm-plugins=libEnsia_rust.so for Rust/Cargo). Native support for Linux & Windows (MSVC/clang-cl/MinGW) with LLVM 21/22."
                 />
                 <FeatureCard
                     icon="\u{1F310}"
@@ -181,6 +179,43 @@ pub fn HomePage() -> impl IntoView {
                         </p>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        // ── Security Benchmark Section ───────────────────────────────────────
+        <section class="section page-wrap">
+            <div class="mb-lg">
+                <span class="section-chip">"Empirical Security Evaluation"</span>
+                <h2>"Reverse Engineering Resistance Benchmark"</h2>
+                <p class="mt-sm">
+                    "Evaluated across 79 cryptographic targets (AES, SM4, SHA-3, ChaCha20, Ed25519, ML-KEM) using automated Angr 9.3 symbolic execution and Z3 SMT solver attacks."
+                </p>
+            </div>
+            <div class="grid-4 mb-lg">
+                <div class="glass card-pad text-center">
+                    <h3 class="hero-title text-primary" style="font-size: 2.2rem; margin-bottom: 0.25rem;">"13.5x"</h3>
+                    <p class="text-sm text-muted">"Code Size Expansion"</p>
+                </div>
+                <div class="glass card-pad text-center">
+                    <h3 class="hero-title text-primary" style="font-size: 2.2rem; margin-bottom: 0.25rem;">"10.1x"</h3>
+                    <p class="text-sm text-muted">"Basic Block Multiplier"</p>
+                </div>
+                <div class="glass card-pad text-center">
+                    <h3 class="hero-title text-primary" style="font-size: 2.2rem; margin-bottom: 0.25rem;">"9.3x"</h3>
+                    <p class="text-sm text-muted">"CFG State Edges"</p>
+                </div>
+                <div class="glass card-pad text-center">
+                    <h3 class="hero-title text-danger" style="font-size: 2.2rem; margin-bottom: 0.25rem;">"96.2%"</h3>
+                    <p class="text-sm text-muted">"Symbolic Solver Timeout"</p>
+                </div>
+            </div>
+            <div class="text-center mt-md">
+                <button
+                    class="btn btn-primary"
+                    on:click=move |_| page.set(Page::Benchmark)
+                >
+                    "View Full 79-Target Empirical Benchmark Report \u{2192}"
+                </button>
             </div>
         </section>
 

@@ -59,10 +59,14 @@ static Value *buildHardwareTruePredicate(Module &M, IRBuilder<> &IRB) {
     FunctionType *AsmTy = FunctionType::get(I32Ty, {}, false);
     const char *asmCode =
         targetIsX86_64(M)
-            ? "push %rbx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %rbx"
-            : "push %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %ebx";
+            ? "mov %rbx, %r11\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tmov %r11, %rbx"
+            : "xchg %esi, %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\txchg %esi, %ebx";
+    const char *asmConstraints =
+        targetIsX86_64(M)
+            ? "=r,~{eax},~{ecx},~{edx},~{r11},~{dirflag},~{fpsr},~{flags}"
+            : "=r,~{eax},~{ecx},~{edx},~{esi},~{dirflag},~{fpsr},~{flags}";
     InlineAsm *cpuidAsm = InlineAsm::get(
-        AsmTy, asmCode, "=r,~{eax},~{ecx},~{edx},~{dirflag},~{fpsr},~{flags}",
+        AsmTy, asmCode, asmConstraints,
         /*hasSideEffects=*/true, InlineAsm::AD_ATT);
     Value *edx = IRB.CreateCall(AsmTy, cpuidAsm, {}, "bcf.cpuid.edx");
     Value *sse =
@@ -119,10 +123,14 @@ static Value *buildEntropyChainPredicate(Module &M, IRBuilder<> &IRB,
     FunctionType *CpuidTy = FunctionType::get(I32Ty, {}, false);
     const char *asmCode =
         targetIsX86_64(M)
-            ? "push %rbx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %rbx"
-            : "push %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tpop %ebx";
+            ? "mov %rbx, %r11\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tmov %r11, %rbx"
+            : "xchg %esi, %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\txchg %esi, %ebx";
+    const char *asmConstraints =
+        targetIsX86_64(M)
+            ? "=r,~{eax},~{ecx},~{edx},~{r11},~{dirflag},~{fpsr},~{flags}"
+            : "=r,~{eax},~{ecx},~{edx},~{esi},~{dirflag},~{fpsr},~{flags}";
     InlineAsm *cpuidIA = InlineAsm::get(
-        CpuidTy, asmCode, "=r,~{eax},~{ecx},~{edx},~{dirflag},~{fpsr},~{flags}",
+        CpuidTy, asmCode, asmConstraints,
         true, InlineAsm::AD_ATT);
     Value *edx = IRB.CreateCall(CpuidTy, cpuidIA, {}, "bcf.ec.edx");
     Value *sse = IRB.CreateAnd(edx, ConstantInt::get(I32Ty, 1u << 25));
@@ -491,16 +499,29 @@ struct BogusControlFlow : public FunctionPass {
     BasicBlock *junkBB2 =
         BasicBlock::Create(F.getContext(), "stateExp2", &F, originalBB);
 
+    LLVMContext &Ctx = F.getContext();
+    Type *I32Ty = Type::getInt32Ty(Ctx);
+
+    // In junkBB1: perform synthetic arithmetic before jumping
     IRBuilder<> IRB1(junkBB1);
+    uint32_t r1 = cryptoutils->get_uint32_t();
+    Value *val1 = IRB1.CreateAdd(ConstantInt::get(I32Ty, r1), ConstantInt::get(I32Ty, 0x1337), "bcf.exp1.val");
+    Value *xor1 = IRB1.CreateXor(val1, ConstantInt::get(I32Ty, 0x55AA55AA), "bcf.exp1.xor");
+    (void)xor1;
     InlineAsm *IA1 = InlineAsm::get(
-        FunctionType::get(Type::getVoidTy(F.getContext()), false), "nop", "",
+        FunctionType::get(Type::getVoidTy(Ctx), false), "nop", "",
         true, false);
     IRB1.CreateCall(IA1, {});
     IRB1.CreateBr(originalBB);
 
+    // In junkBB2: perform alternative synthetic arithmetic before jumping
     IRBuilder<> IRB2(junkBB2);
+    uint32_t r2 = cryptoutils->get_uint32_t();
+    Value *val2 = IRB2.CreateSub(ConstantInt::get(I32Ty, r2), ConstantInt::get(I32Ty, 0x42), "bcf.exp2.val");
+    Value *mul2 = IRB2.CreateMul(val2, ConstantInt::get(I32Ty, 33), "bcf.exp2.mul");
+    (void)mul2;
     InlineAsm *IA2 = InlineAsm::get(
-        FunctionType::get(Type::getVoidTy(F.getContext()), false), "nop\nnop",
+        FunctionType::get(Type::getVoidTy(Ctx), false), "nop\nnop",
         "", true, false);
     IRB2.CreateCall(IA2, {});
     IRB2.CreateBr(originalBB);
@@ -512,19 +533,45 @@ struct BogusControlFlow : public FunctionPass {
       if (Arg.getType()->isIntegerTy())
         liveVars.push_back(&Arg);
     }
-    for (Instruction &I : F.getEntryBlock()) {
-      if (I.getType()->isIntegerTy() && !isa<PHINode>(&I) &&
-          !I.getName().starts_with("bcf."))
-        liveVars.push_back(&I);
-    }
 
     IRBuilder<> IRB(basicBlock);
     Value *cond = IRB.getTrue();
     if (!liveVars.empty()) {
       Value *liveVar = liveVars[cryptoutils->get_range(liveVars.size())];
-      Value *and1 =
-          IRB.CreateAnd(liveVar, ConstantInt::get(liveVar->getType(), 1));
-      cond = IRB.CreateICmpEQ(and1, ConstantInt::get(liveVar->getType(), 0));
+      Type *T = liveVar->getType();
+      switch (cryptoutils->get_range(4)) {
+      case 0: {
+        // (x * (x - 1)) & 1 == 0
+        Value *minus1 = IRB.CreateSub(liveVar, ConstantInt::get(T, 1));
+        Value *mul = IRB.CreateMul(liveVar, minus1);
+        Value *and1 = IRB.CreateAnd(mul, ConstantInt::get(T, 1));
+        cond = IRB.CreateICmpEQ(and1, ConstantInt::get(T, 0));
+        break;
+      }
+      case 1: {
+        // (x * (x + 1)) & 1 == 0
+        Value *plus1 = IRB.CreateAdd(liveVar, ConstantInt::get(T, 1));
+        Value *mul = IRB.CreateMul(liveVar, plus1);
+        Value *and1 = IRB.CreateAnd(mul, ConstantInt::get(T, 1));
+        cond = IRB.CreateICmpEQ(and1, ConstantInt::get(T, 0));
+        break;
+      }
+      case 2: {
+        // (x | ~x) + 1 == 0
+        Value *notx = IRB.CreateNot(liveVar);
+        Value *orx = IRB.CreateOr(liveVar, notx);
+        Value *add1 = IRB.CreateAdd(orx, ConstantInt::get(T, 1));
+        cond = IRB.CreateICmpEQ(add1, ConstantInt::get(T, 0));
+        break;
+      }
+      default: {
+        // (x & ~x) == 0
+        Value *notx = IRB.CreateNot(liveVar);
+        Value *andx = IRB.CreateAnd(liveVar, notx);
+        cond = IRB.CreateICmpEQ(andx, ConstantInt::get(T, 0));
+        break;
+      }
+      }
     } else {
       cond = IRB.CreateICmpEQ(
           ConstantInt::get(Type::getInt32Ty(F.getContext()),
@@ -684,6 +731,22 @@ struct BogusControlFlow : public FunctionPass {
         i->setDebugLoc(ji->getDebugLoc());
         ji++;
       } // The instructions' informations are now all correct
+
+      // Erase stores and call side-effects from alteredBB so executing the dead block
+      // cannot corrupt program state or trigger invalid call frames.
+      SmallVector<Instruction *, 16> sideEffectsToErase;
+      for (Instruction &I : *alteredBB) {
+        if (isa<StoreInst>(&I))
+          sideEffectsToErase.push_back(&I);
+        else if (CallInst *CI = dyn_cast<CallInst>(&I)) {
+          if (!CI->isLifetimeStartOrEnd() && !CI->isDebugOrPseudoInst())
+            sideEffectsToErase.push_back(&I);
+        }
+      }
+      for (Instruction *I : sideEffectsToErase) {
+        if (I->getNumUses() == 0)
+          I->eraseFromParent();
+      }
 
       // Insert junk instructions throughout the dead block to create synthetic
       // data-dependency chains that confuse decompilers and pattern matchers.
@@ -1108,7 +1171,7 @@ struct BogusControlFlow : public FunctionPass {
         writeAnnotationMetadata(opFunction, "bcfopfunc");
         IRBOp = new IRBuilder<>(opEntryBlock);
       }
-      Instruction *tmp = &*(i->getParent()->getFirstNonPHIOrDbgOrLifetime());
+      Instruction *tmp = i;
       IRBuilder<> *IRBReal = new IRBuilder<>(tmp);
       IRBuilder<> IRBEmu(emuEntryBlock);
       // First,Construct a real RHS that will be used in the actual condition
@@ -1181,11 +1244,6 @@ struct BogusControlFlow : public FunctionPass {
           for (Argument &Arg : i->getParent()->getParent()->args()) {
             if (Arg.getType()->isIntegerTy())
               liveVars.push_back(&Arg);
-          }
-          for (Instruction &I : i->getParent()->getParent()->getEntryBlock()) {
-            if (I.getType()->isIntegerTy() && !isa<PHINode>(&I) &&
-                !I.getName().starts_with("bcf."))
-              liveVars.push_back(&I);
           }
           if (!liveVars.empty()) {
             Value *liveVar = liveVars[cryptoutils->get_range(liveVars.size())];
