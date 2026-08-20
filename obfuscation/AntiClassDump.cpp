@@ -145,12 +145,14 @@ struct AntiClassDump : public ModulePass {
         SuperClassGV = readPtrauth(SuperClassGV);
         std::string supclsName = "";
         std::string clsName = CEGV->getName().str();
-        clsName.replace(clsName.find("OBJC_CLASS_$_"), strlen("OBJC_CLASS_$_"),
-                        "");
+        if (size_t pos = clsName.find("OBJC_CLASS_$_"); pos != std::string::npos) {
+          clsName.replace(pos, strlen("OBJC_CLASS_$_"), "");
+        }
         if (SuperClassGV) {
           supclsName = SuperClassGV->getName().str();
-          supclsName.replace(supclsName.find("OBJC_CLASS_$_"),
-                             strlen("OBJC_CLASS_$_"), "");
+          if (size_t pos = supclsName.find("OBJC_CLASS_$_"); pos != std::string::npos) {
+            supclsName.replace(pos, strlen("OBJC_CLASS_$_"), "");
+          }
         }
         dependency[clsName] = supclsName;
         GVMapping[clsName] = CEGV;
