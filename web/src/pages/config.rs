@@ -1,7 +1,17 @@
 use crate::models::config::*;
 use gloo_timers::future::TimeoutFuture;
 use leptos::{html, prelude::*};
+use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = window)]
+    fn copyText(text: &str) -> js_sys::Promise;
+
+    #[wasm_bindgen(js_namespace = window)]
+    fn downloadText(filename: &str, text: &str);
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -108,19 +118,19 @@ pub fn ConfigPage() -> impl IntoView {
     let do_copy = {
         move |_| {
             let text = toml_text.get();
-            let _ = js_sys::eval(&format!("window.copyText({:?})", text));
+            let _ = copyText(&text);
             copied.set(true);
-            // Reset after 2 s via a separate signal tick — no timers in stable Leptos 0.7 without gloo
-            let _ = js_sys::eval(
-                "setTimeout(function(){ window.__ensiaCopiedClear && window.__ensiaCopiedClear(); }, 2000)"
-            );
+            spawn_local(async move {
+                TimeoutFuture::new(2000).await;
+                copied.set(false);
+            });
         }
     };
 
     let do_download = {
         move |_| {
             let text = toml_text.get();
-            let _ = js_sys::eval(&format!("window.downloadText('ensia.toml', {:?})", text));
+            downloadText("ensia.toml", &text);
         }
     };
 
@@ -1360,7 +1370,7 @@ fn TagField(
     let input_val = RwSignal::new(String::new());
 
     let do_add = {
-        let get = get.clone();
+        let get = get;
         let set = set.clone();
         move || {
             let val = input_val.get();
@@ -1393,7 +1403,7 @@ fn TagField(
             <div class="tag-area">
                 {move || get.get().into_iter().enumerate().map(|(i, tag)| {
                     let set = set.clone();
-                    let get = get.clone();
+                    let get = get;
                     view! {
                         <span class="tag-pill">
                             {tag}
