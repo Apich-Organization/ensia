@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.3)
+cmake_minimum_required(VERSION 3.28)
 project(Ensia LANGUAGES C CXX)
 
 if(NOT DEFINED LLVM_FOUND)

@@ -24,6 +24,9 @@
 #include <regex>
 #include <string>
 #include <vector>
+#include <map>
+#include <mutex>
+#include <memory>
 
 namespace llvm {
 
@@ -186,6 +189,12 @@ struct ObfPolicy {
 // ──────────────────────────────────────────────────────────
 
 struct ObfGlobalConfig {
+  struct Cache {
+    std::map<std::pair<std::string, std::string>, ObfPassConfig> resolve_cache;
+    std::mutex mutex;
+  };
+  mutable std::shared_ptr<Cache> cache{std::make_shared<Cache>()};
+
   std::string preset; // "none"|"low"|"mid"|"high" (max handled separately)
   uint64_t seed = 0;
   bool verbose = false;

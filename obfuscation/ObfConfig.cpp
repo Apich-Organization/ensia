@@ -497,6 +497,17 @@ ObfPassConfig ObfGlobalConfig::presetConfig(const std::string &name) {
 
 ObfPassConfig ObfGlobalConfig::resolve(StringRef module_name,
                                        StringRef func_name) const {
+  std::string mod_str_key = module_name.str();
+  std::string func_str_key = func_name.str();
+
+  if (cache) {
+    std::lock_guard<std::mutex> lock(cache->mutex);
+    auto it = cache->resolve_cache.find({mod_str_key, func_str_key});
+    if (it != cache->resolve_cache.end()) {
+      return it->second;
+    }
+  }
+
   ObfPassConfig eff = passes; // start from global config
 
   // Pre-demangle the function name once for all policy iterations.
@@ -597,6 +608,11 @@ ObfPassConfig ObfGlobalConfig::resolve(StringRef module_name,
 
     // Apply specific pass overrides (highest priority within this policy)
     merge(eff, pol.overrides);
+  }
+
+  if (cache) {
+    std::lock_guard<std::mutex> lock(cache->mutex);
+    cache->resolve_cache[{mod_str_key, func_str_key}] = eff;
   }
 
   return eff;
