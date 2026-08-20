@@ -45,6 +45,13 @@ pub fn Nav() -> impl IntoView {
                     </button>
                     <button
                         class="nav-link"
+                        class:active=move || page.get() == Page::Benchmark
+                        on:click=go(Page::Benchmark)
+                    >
+                        "Benchmark"
+                    </button>
+                    <button
+                        class="nav-link"
                         class:active=move || page.get() == Page::Config
                         on:click=go(Page::Config)
                     >
@@ -62,7 +69,7 @@ pub fn Nav() -> impl IntoView {
                 // Right side: GitHub link + theme pill
                 <div class="nav-right">
                     <a
-                        href="https://github.com/xiaoxiaojingge/OLLVM-Next"
+                        href="https://github.com/Apich-Organization/ensia"
                         target="_blank"
                         rel="noopener noreferrer"
                         class="btn btn-ghost btn-sm"

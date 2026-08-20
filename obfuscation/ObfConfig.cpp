@@ -364,6 +364,37 @@ static ObfPassConfig makeMaxPreset() {
   return c;
 }
 
+static ObfPassConfig makeCsmOnlyPreset() {
+  ObfPassConfig c;
+  c.csm.enabled = true;
+  c.csm.warmup = 64;
+  c.csm.max_blocks = 5000;
+  return c;
+}
+
+static ObfPassConfig makeVecOnlyPreset() {
+  ObfPassConfig c;
+  c.vec.enabled = true;
+  c.vec.probability = 80;
+  c.vec.width = 256;
+  c.vec.shuffle = true;
+  c.vec.lift_comparisons = true;
+  return c;
+}
+
+static ObfPassConfig makeCsmVecPreset() {
+  ObfPassConfig c;
+  c.csm.enabled = true;
+  c.csm.warmup = 64;
+  c.csm.max_blocks = 5000;
+  c.vec.enabled = true;
+  c.vec.probability = 80;
+  c.vec.width = 256;
+  c.vec.shuffle = true;
+  c.vec.lift_comparisons = true;
+  return c;
+}
+
 // ── Merge helper
 // ────────────────────────────────────────────────────────────── Copy every
 // non-empty optional from src into dst (src overrides dst).
@@ -452,6 +483,12 @@ ObfPassConfig ObfGlobalConfig::presetConfig(const std::string &name) {
     return makeHighPreset();
   if (s == "max" || s == "maximum" || s == "extreme" || s == "4")
     return makeMaxPreset();
+  if (s == "csm_only" || s == "csm")
+    return makeCsmOnlyPreset();
+  if (s == "vec_only" || s == "vec")
+    return makeVecOnlyPreset();
+  if (s == "csm_vec" || s == "csm+vec")
+    return makeCsmVecPreset();
   return {}; // "none" or unknown → all empty optionals
 }
 

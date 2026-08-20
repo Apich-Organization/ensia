@@ -868,6 +868,82 @@ impl TomlConfig {
                     stack_confusion: true,
                 };
             }
+            "csm_only" => {
+                self.bcf.enabled = false;
+                self.str_enc.enabled = false;
+                self.const_enc.enabled = false;
+                self.flattening.enabled = false;
+                self.substitution.enabled = false;
+                self.mba.enabled = false;
+                self.vec_obf.enabled = false;
+                self.indir_branch.enabled = false;
+                self.func_wrap.enabled = false;
+                self.anti_debugging.enabled = false;
+                self.anti_hooking.enabled = false;
+                self.anti_class_dump.enabled = false;
+                self.func_call_obf.enabled = false;
+                self.split_blocks.enabled = false;
+
+                self.csm = CsmCfg {
+                    enabled: true,
+                    warmup: 64,
+                    nested_dispatch: false,
+                    max_blocks: 5000,
+                };
+            }
+            "vec_only" => {
+                self.bcf.enabled = false;
+                self.str_enc.enabled = false;
+                self.const_enc.enabled = false;
+                self.flattening.enabled = false;
+                self.substitution.enabled = false;
+                self.mba.enabled = false;
+                self.csm.enabled = false;
+                self.indir_branch.enabled = false;
+                self.func_wrap.enabled = false;
+                self.anti_debugging.enabled = false;
+                self.anti_hooking.enabled = false;
+                self.anti_class_dump.enabled = false;
+                self.func_call_obf.enabled = false;
+                self.split_blocks.enabled = false;
+
+                self.vec_obf = VecObfCfg {
+                    enabled: true,
+                    probability: 80,
+                    width: 256,
+                    shuffle: true,
+                    lift_comparisons: true,
+                };
+            }
+            "csm_vec" => {
+                self.bcf.enabled = false;
+                self.str_enc.enabled = false;
+                self.const_enc.enabled = false;
+                self.flattening.enabled = false;
+                self.substitution.enabled = false;
+                self.mba.enabled = false;
+                self.indir_branch.enabled = false;
+                self.func_wrap.enabled = false;
+                self.anti_debugging.enabled = false;
+                self.anti_hooking.enabled = false;
+                self.anti_class_dump.enabled = false;
+                self.func_call_obf.enabled = false;
+                self.split_blocks.enabled = false;
+
+                self.csm = CsmCfg {
+                    enabled: true,
+                    warmup: 64,
+                    nested_dispatch: false,
+                    max_blocks: 5000,
+                };
+                self.vec_obf = VecObfCfg {
+                    enabled: true,
+                    probability: 80,
+                    width: 256,
+                    shuffle: true,
+                    lift_comparisons: true,
+                };
+            }
             _ => {}
         }
     }

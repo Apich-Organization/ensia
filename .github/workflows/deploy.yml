@@ -6,6 +6,8 @@ on:
     paths:
       - "web/**"
       - "logo.svg"
+      - "benchmark/results/**"
+      - "benchmark/scripts/**"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
@@ -28,6 +30,16 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate Benchmark SVG Charts
+        run: |
+          python3 -m pip install --upgrade pip matplotlib numpy
+          python3 benchmark/scripts/generate_benchmark_charts.py
 
       - name: Install Rust + wasm32 target
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable

@@ -178,10 +178,16 @@ pub fn ConfigPage() -> impl IntoView {
                 </div>
                 <div class="glass-alt card-pad">
                     <p class="text-sm text-muted">
-                        "Pass this file with:"
+                        "Compile C/C++ with Clang:"
                     </p>
                     <pre class="code-block text-xs mt-sm">
-    "-mllvm -ensia-config=ensia.toml"
+    "clang -fpass-plugin=libEnsia.so -mllvm -ensia -mllvm -ensia-config=ensia.toml main.c"
+                    </pre>
+                    <p class="text-sm text-muted mt-sm">
+                        "Compile Rust with Cargo:"
+                    </p>
+                    <pre class="code-block text-xs mt-sm">
+    "ENSIA_CONFIG=ensia.toml RUSTC_BOOTSTRAP=1 RUSTFLAGS=\"-Z llvm-plugins=libEnsia_rust.so -C passes=ensia\" cargo build --release"
                     </pre>
                 </div>
             </div>
@@ -212,7 +218,10 @@ fn GlobalSection() -> impl IntoView {
                         <option value="low">"low — minimal overhead"</option>
                         <option value="mid">"mid — balanced (recommended)"</option>
                         <option value="high">"high — heavy protection"</option>
-                        <option value="max">"max — maximum anti-reversing protection"</option>
+                        <option value="max">"max — extreme anti-reversing protection"</option>
+                        <option value="csm_vec">"csm_vec — chaos state machine + SIMD vector lifting"</option>
+                        <option value="csm_only">"csm_only — chaos state machine flattening only"</option>
+                        <option value="vec_only">"vec_only — SIMD vector lifting only"</option>
                     </select>
                 </div>
                 <div class="field-group">
@@ -1040,6 +1049,10 @@ fn PolicyCard(idx: usize, policy: PolicyCfg) -> impl IntoView {
                     <option value="low">"low"</option>
                     <option value="mid">"mid"</option>
                     <option value="high">"high"</option>
+                    <option value="max">"max"</option>
+                    <option value="csm_vec">"csm_vec"</option>
+                    <option value="csm_only">"csm_only"</option>
+                    <option value="vec_only">"vec_only"</option>
                 </select>
             </div>
 
