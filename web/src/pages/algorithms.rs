@@ -1,4 +1,11 @@
 use leptos::{html, prelude::*};
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = window, js_name = "triggerKatex")]
+    fn trigger_katex_if_exists();
+}
 
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 enum Algo {
@@ -1153,7 +1160,12 @@ fn MathBlock(formula: &'static str) -> impl IntoView {
     Effect::new(move |_| {
         if let Some(el) = el.get() {
             el.set_inner_html(formula);
-            let _ = js_sys::eval("window.triggerKatex && window.triggerKatex()");
+            if js_sys::Reflect::has(
+                &web_sys::window().unwrap(),
+                &wasm_bindgen::JsValue::from_str("triggerKatex"),
+            ).unwrap_or(false) {
+                trigger_katex_if_exists();
+            }
         }
     });
     view! {
