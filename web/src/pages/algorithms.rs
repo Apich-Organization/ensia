@@ -3,8 +3,9 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_namespace = window, js_name = triggerKatex, catch)]
-    fn trigger_katex() -> Result<(), JsValue>;
+    #[wasm_bindgen(js_namespace = window)]
+    #[wasm_bindgen(catch)]
+    fn triggerKatex() -> Result<(), JsValue>;
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
@@ -1160,7 +1161,7 @@ fn MathBlock(formula: &'static str) -> impl IntoView {
     Effect::new(move |_| {
         if let Some(el) = el.get() {
             el.set_inner_html(formula);
-            let _ = trigger_katex();
+            let _ = triggerKatex();
         }
     });
     view! {

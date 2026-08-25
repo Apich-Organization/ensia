@@ -11,8 +11,9 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_namespace = window, js_name = triggerKatex, catch)]
-    fn trigger_katex() -> Result<(), JsValue>;
+    #[wasm_bindgen(js_namespace = window)]
+    #[wasm_bindgen(catch)]
+    fn triggerKatex() -> Result<(), JsValue>;
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
@@ -75,7 +76,7 @@ pub fn App() -> impl IntoView {
     // Re-render KaTeX after every navigation.
     Effect::new(move |_| {
         let _ = page.get();
-        let _ = trigger_katex();
+        let _ = triggerKatex();
     });
 
     view! {

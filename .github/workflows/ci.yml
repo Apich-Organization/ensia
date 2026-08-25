@@ -20,7 +20,7 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@v4 # v4.3.1
 
       - name: Install LLVM 20/21 Dependencies & CMake
         run: |
@@ -48,7 +48,7 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@v4 # v4.3.1
 
       - name: Set up Python
         uses: actions/setup-python@v5

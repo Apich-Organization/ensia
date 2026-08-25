@@ -6,7 +6,3 @@
 **Vulnerability:** XSS through `js_sys::eval` when generating the config string. If a malicious input contains `")`, it could break out of the string formatting and execute arbitrary JavaScript.
 **Learning:** `js_sys::eval` with formatted string inputs that contain dynamic strings is prone to XSS in Leptos/WASM environments, just like `eval()` in standard JavaScript.
 **Prevention:** Always declare the external JavaScript functions via `#[wasm_bindgen]` and call them directly, passing arguments safely across the WASM boundary instead of string-formatting them into `eval`. Use native JS promises or `TimeoutFuture` for timeouts instead of `setTimeout` strings.
-## 2026-08-25 - XSS via Unsafe eval and Content Security Policy Violation
-**Vulnerability:** The web frontend used `js_sys::eval("window.triggerKatex && window.triggerKatex()")` to trigger KaTeX re-rendering. This evaluates strings directly as JavaScript code, which poses an XSS risk and violates the Content Security Policy (CSP) `unsafe-eval` directive.
-**Learning:** Even for seemingly static scripts, `js_sys::eval` creates a security gap and violates secure CSP configurations in WASM applications. It exposes the application to unnecessary risk and forces looser CSPs.
-**Prevention:** Avoid `js_sys::eval` completely. Always use `#[wasm_bindgen]` to declare external functions securely. For optional or potentially undefined global objects, use `#[wasm_bindgen(catch)]` and return `Result<(), JsValue>` to handle cases where the function does not exist without causing WebAssembly panics.
