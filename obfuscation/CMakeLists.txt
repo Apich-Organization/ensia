@@ -119,7 +119,13 @@ if(RUSTC_SYSROOT AND EXISTS "${RUSTC_SYSROOT}/lib")
         )
         add_dependencies(EnsiaRust intrinsics_gen LLVMLinker)
         target_link_directories(EnsiaRust PRIVATE "${RUSTC_SYSROOT}/lib")
-        target_link_libraries(EnsiaRust PRIVATE -lLLVM-22-rust-1.97.1-stable)
+
+        # Extract the exact library name from the found file
+        get_filename_component(RUST_LLVM_LIB_NAME "${RUST_LLVM_LIB}" NAME_WLE)
+        # Remove the 'lib' prefix to pass it to target_link_libraries
+        string(REGEX REPLACE "^lib" "" RUST_LLVM_LIB_LINK_NAME "${RUST_LLVM_LIB_NAME}")
+
+        target_link_libraries(EnsiaRust PRIVATE ${RUST_LLVM_LIB_LINK_NAME})
         set_target_properties(EnsiaRust PROPERTIES
             BUILD_RPATH "${RUSTC_SYSROOT}/lib"
             INSTALL_RPATH "${RUSTC_SYSROOT}/lib"
