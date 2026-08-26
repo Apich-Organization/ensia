@@ -121,9 +121,9 @@ if(RUSTC_SYSROOT AND EXISTS "${RUSTC_SYSROOT}/lib")
         target_link_directories(EnsiaRust PRIVATE "${RUSTC_SYSROOT}/lib")
 
         # Extract the exact library name from the found file
-        get_filename_component(RUST_LLVM_LIB_NAME "${RUST_LLVM_LIB}" NAME_WLE)
-        # Remove the 'lib' prefix to pass it to target_link_libraries
+        get_filename_component(RUST_LLVM_LIB_NAME "${RUST_LLVM_LIB}" NAME)
         string(REGEX REPLACE "^lib" "" RUST_LLVM_LIB_LINK_NAME "${RUST_LLVM_LIB_NAME}")
+        string(REGEX REPLACE "\\.so.*$" "" RUST_LLVM_LIB_LINK_NAME "${RUST_LLVM_LIB_LINK_NAME}")
 
         target_link_libraries(EnsiaRust PRIVATE ${RUST_LLVM_LIB_LINK_NAME})
         set_target_properties(EnsiaRust PROPERTIES

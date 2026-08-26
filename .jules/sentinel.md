@@ -11,3 +11,8 @@
 **Vulnerability:** Found `js_sys::eval` being used to call external JavaScript functions (`window.triggerKatex`). This presents an XSS risk and violates Content Security Policy (CSP) `unsafe-eval` directive.
 **Learning:** `js_sys::eval` is dangerous and unnecessary for invoking JavaScript functions from Rust/WASM. It bypasses WebAssembly's security boundaries.
 **Prevention:** Always declare external JavaScript functions securely using `#[wasm_bindgen(catch)]` and handle potential `JsValue` errors instead of resorting to `eval`.
+
+## 2024-05-20 - Hardcoded library names in CMake build
+**Vulnerability:** Found `obfuscation/CMakeLists.txt` hardcoding `-lLLVM-22-rust-1.97.1-stable` for the `EnsiaRust` target linking.
+**Learning:** This is not a security vulnerability but a build fragility issue. When the LLVM version provided by rustc changes (e.g. to `1.94.0`), the build fails because it tries to link against a non-existent file.
+**Prevention:** Automatically determine the installed library name instead of hardcoding it. We can use CMake `get_filename_component` and string replacement to determine the correct library to link against (`${RUST_LLVM_LIB_LINK_NAME}`).
