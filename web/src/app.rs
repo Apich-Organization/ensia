@@ -7,6 +7,13 @@ use crate::{
     theme,
 };
 use leptos::prelude::*;
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(catch)]
+    fn triggerKatex() -> Result<(), JsValue>;
+}
 
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub enum Page {
@@ -68,7 +75,7 @@ pub fn App() -> impl IntoView {
     // Re-render KaTeX after every navigation.
     Effect::new(move |_| {
         let _ = page.get();
-        let _ = js_sys::eval("window.triggerKatex && window.triggerKatex()");
+        let _ = triggerKatex();
     });
 
     view! {

@@ -6,3 +6,10 @@
 **Vulnerability:** XSS through `js_sys::eval` when generating the config string. If a malicious input contains `")`, it could break out of the string formatting and execute arbitrary JavaScript.
 **Learning:** `js_sys::eval` with formatted string inputs that contain dynamic strings is prone to XSS in Leptos/WASM environments, just like `eval()` in standard JavaScript.
 **Prevention:** Always declare the external JavaScript functions via `#[wasm_bindgen]` and call them directly, passing arguments safely across the WASM boundary instead of string-formatting them into `eval`. Use native JS promises or `TimeoutFuture` for timeouts instead of `setTimeout` strings.
+## 2024-08-27 - [CRITICAL] Fix arbitrary code execution vulnerability (XSS)
+
+**Vulnerability:** Found `js_sys::eval` being used in the Leptos frontend application to trigger KaTeX mathematical rendering. This is dangerous as it allows string execution, can bypass Content Security Policy (CSP) `unsafe-eval`, and may lead to DOM-based Cross-Site Scripting (XSS).
+
+**Learning:** The previous implementation relied on a direct JavaScript evaluation wrapper `js_sys::eval("window.triggerKatex && window.triggerKatex()")` to run dynamic JavaScript upon Leptos Effect hooks triggering.
+
+**Prevention:** Replace direct string execution mechanisms (like `eval` in JS or `js_sys::eval` in WASM) with proper external declarations via `wasm_bindgen` (e.g., `#[wasm_bindgen(catch)] extern "C" { fn triggerKatex() -> Result<(), JsValue>; }`).
