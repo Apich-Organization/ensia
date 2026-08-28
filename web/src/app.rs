@@ -6,6 +6,7 @@ use crate::{
     },
     theme,
 };
+use wasm_bindgen::prelude::*;
 use leptos::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
@@ -16,6 +17,12 @@ pub enum Page {
     Benchmark,
     Config,
     Sponsor,
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = triggerKatex, catch)]
+    fn trigger_katex() -> Result<(), wasm_bindgen::JsValue>;
 }
 
 fn page_from_hash() -> Page {
@@ -68,7 +75,7 @@ pub fn App() -> impl IntoView {
     // Re-render KaTeX after every navigation.
     Effect::new(move |_| {
         let _ = page.get();
-        let _ = js_sys::eval("window.triggerKatex && window.triggerKatex()");
+        let _ = trigger_katex();
     });
 
     view! {
