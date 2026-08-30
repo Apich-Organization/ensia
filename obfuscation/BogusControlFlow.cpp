@@ -186,65 +186,65 @@ static cl::opt<uint32_t>
                          "obfuscated by the -bcf pass"),
                 cl::value_desc("probability rate"), cl::init(defaultObfRate),
                 cl::Optional);
-static uint32_t ObfProbRateTemp = defaultObfRate;
+static thread_local uint32_t ObfProbRateTemp = defaultObfRate;
 
 static cl::opt<uint32_t>
     ObfTimes("bcf_loop",
              cl::desc("Choose how many time the -bcf pass loop on a function"),
              cl::value_desc("number of times"), cl::init(defaultObfTime),
              cl::Optional);
-static uint32_t ObfTimesTemp = defaultObfTime;
+static thread_local uint32_t ObfTimesTemp = defaultObfTime;
 
 static cl::opt<uint32_t> ConditionExpressionComplexity(
     "bcf_cond_compl",
     cl::desc("The complexity of the expression used to generate branching "
              "condition"),
     cl::value_desc("Complexity"), cl::init(3), cl::Optional);
-static uint32_t ConditionExpressionComplexityTemp = 3;
+static thread_local uint32_t ConditionExpressionComplexityTemp = 3;
 
 static cl::opt<bool>
     OnlyJunkAssembly("bcf_onlyjunkasm",
                      cl::desc("only add junk assembly to altered basic block"),
                      cl::value_desc("only add junk assembly"), cl::init(false),
                      cl::Optional);
-static bool OnlyJunkAssemblyTemp = false;
+static thread_local bool OnlyJunkAssemblyTemp = false;
 
 static cl::opt<bool> JunkAssembly(
     "bcf_junkasm",
     cl::desc("Whether to add junk assembly to altered basic block"),
     cl::value_desc("add junk assembly"), cl::init(false), cl::Optional);
-static bool JunkAssemblyTemp = false;
+static thread_local bool JunkAssemblyTemp = false;
 
 static cl::opt<uint32_t> MaxNumberOfJunkAssembly(
     "bcf_junkasm_maxnum",
     cl::desc("The maximum number of junk assembliy per altered basic block"),
     cl::value_desc("max number of junk assembly"), cl::init(4), cl::Optional);
-static uint32_t MaxNumberOfJunkAssemblyTemp = 4;
+static thread_local uint32_t MaxNumberOfJunkAssemblyTemp = 4;
 
 static cl::opt<uint32_t> MinNumberOfJunkAssembly(
     "bcf_junkasm_minnum",
     cl::desc("The minimum number of junk assembliy per altered basic block"),
     cl::value_desc("min number of junk assembly"), cl::init(2), cl::Optional);
-static uint32_t MinNumberOfJunkAssemblyTemp = 2;
+static thread_local uint32_t MinNumberOfJunkAssemblyTemp = 2;
 
 static cl::opt<bool> CreateFunctionForOpaquePredicate(
     "bcf_createfunc", cl::desc("Create function for each opaque predicate"),
     cl::value_desc("create function"), cl::init(false), cl::Optional);
-static bool CreateFunctionForOpaquePredicateTemp = false;
+static thread_local bool CreateFunctionForOpaquePredicateTemp = false;
 
 static cl::opt<bool>
     BCFNested("bcf_nested",
               cl::desc("[BCF] Apply BCF recursively to generated bogus blocks "
                        "(fractal-style CFG obfuscation; higher compile time)"),
               cl::init(false), cl::Optional);
-static bool BCFNestedTemp = false;
+static thread_local bool BCFNestedTemp = false;
 
 static cl::opt<bool> BCFEntropyChain(
     "bcf_entropy_chain",
     cl::desc("[BCF] Use 3-way AND entropy-chain hardware predicate "
              "(CPUID & RDTSC & global load) — defeats 3 independent analyzers"),
     cl::init(false), cl::Optional);
-static bool BCFEntropyChainTemp = false;
+static thread_local bool BCFEntropyChainTemp = false;
 
 static const Instruction::BinaryOps ops[] = {
     Instruction::Add, Instruction::Sub, Instruction::And, Instruction::Or,

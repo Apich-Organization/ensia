@@ -34,14 +34,14 @@ static cl::opt<uint32_t>
     ObfTimes("sub_loop",
              cl::desc("Choose how many time the -sub pass loops on a function"),
              cl::value_desc("number of times"), cl::init(1), cl::Optional);
-static uint32_t ObfTimesTemp = 1;
+static thread_local uint32_t ObfTimesTemp = 1;
 
 static cl::opt<uint32_t>
     ObfProbRate("sub_prob",
                 cl::desc("Choose the probability [%] each instructions will be "
                          "obfuscated by the InstructionSubstitution pass"),
                 cl::value_desc("probability rate"), cl::init(50), cl::Optional);
-static uint32_t ObfProbRateTemp = 50;
+static thread_local uint32_t ObfProbRateTemp = 50;
 
 // Stats
 STATISTIC(Add, "Add substituted");
