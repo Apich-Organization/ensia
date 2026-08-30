@@ -36,27 +36,27 @@ static cl::opt<uint32_t>
                 cl::desc("[VecObf] Probability [%] each eligible instruction "
                          "is vectorized"),
                 cl::value_desc("probability"), cl::init(50), cl::Optional);
-static uint32_t VecProbRateTemp = 50;
+static thread_local uint32_t VecProbRateTemp = 50;
 
 static cl::opt<uint32_t>
     VecWidth("vec_width",
              cl::desc("[VecObf] SIMD width in bits (128, 256, or 512)"),
              cl::value_desc("bits"), cl::init(256), cl::Optional);
-static uint32_t VecWidthTemp = 256;
+static thread_local uint32_t VecWidthTemp = 256;
 
 static cl::opt<bool>
     VecShuffle("vec_shuffle",
                cl::desc("[VecObf] Insert a random shufflevector after the "
                         "vector op to defeat lane-extraction pattern matching"),
                cl::init(false), cl::Optional);
-static bool VecShuffleTemp = false;
+static thread_local bool VecShuffleTemp = false;
 
 static cl::opt<bool> VecICmp(
     "vec_icmp",
     cl::desc("[VecObf] Also lift integer comparison (icmp) instructions "
              "to vector comparisons"),
     cl::init(true), cl::Optional);
-static bool VecICmpTemp = true;
+static thread_local bool VecICmpTemp = true;
 
 // ─── Width → lane count
 // ───────────────────────────────────────────────────────

@@ -79,28 +79,28 @@ static cl::opt<std::string>
 
 static cl::opt<bool> CheckInlineHook("ah_inline", cl::init(true), cl::NotHidden,
                                      cl::desc("Check Inline Hook for AArch64"));
-static bool CheckInlineHookTemp = true;
+static thread_local bool CheckInlineHookTemp = true;
 
 static cl::opt<bool>
     CheckObjectiveCRuntimeHook("ah_objcruntime", cl::init(true), cl::NotHidden,
                                cl::desc("Check Objective-C Runtime Hook"));
-static bool CheckObjectiveCRuntimeHookTemp = true;
+static thread_local bool CheckObjectiveCRuntimeHookTemp = true;
 
 static cl::opt<bool> AntiRebindSymbol("ah_antirebind", cl::init(false),
                                       cl::NotHidden,
                                       cl::desc("Make fishhook unavailable"));
-static bool AntiRebindSymbolTemp = false;
+static thread_local bool AntiRebindSymbolTemp = false;
 
 static cl::opt<bool>
     CheckInlineHookX86("ah_inline_x86", cl::init(true), cl::NotHidden,
                        cl::desc("[AntiHook]Check Inline Hook for x86_64"));
-static bool CheckInlineHookX86Temp = true;
+static thread_local bool CheckInlineHookX86Temp = true;
 
 static cl::opt<bool> DirectSyscallExit(
     "ah_direct_syscall", cl::init(true), cl::NotHidden,
     cl::desc("[AntiHook]Use direct syscall (not libc abort) "
              "as hook-detected handler — bypasses libc hooks"));
-static bool DirectSyscallExitTemp = true;
+static thread_local bool DirectSyscallExitTemp = true;
 
 // ── Windows-specific options
 // ──────────────────────────────────────────────────
@@ -108,7 +108,7 @@ static cl::opt<bool> CheckInlineHookWin(
     "ah_inline_win", cl::init(true), cl::NotHidden,
     cl::desc("[AntiHook]Check Windows-specific prologue hook "
              "patterns (Detours INT3, MOV EDI EDI, etc.)"));
-static bool CheckInlineHookWinTemp = true;
+static thread_local bool CheckInlineHookWinTemp = true;
 
 namespace llvm {
 struct AntiHook : public ModulePass {
