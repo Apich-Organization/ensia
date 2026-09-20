@@ -40,21 +40,21 @@ static cl::opt<bool>
                   cl::desc("Substitute xor operator of ConstantEncryption"),
                   cl::value_desc("Substitute xor operator"), cl::init(false),
                   cl::Optional);
-static bool SubstituteXorTemp = false;
+static thread_local bool SubstituteXorTemp = false;
 
 static cl::opt<uint32_t> SubstituteXorProb(
     "constenc_subxor_prob",
     cl::desc(
         "Choose the probability [%] each xor operator will be Substituted"),
     cl::value_desc("probability rate"), cl::init(40), cl::Optional);
-static uint32_t SubstituteXorProbTemp = 40;
+static thread_local uint32_t SubstituteXorProbTemp = 40;
 
 static cl::opt<bool>
     ConstToGV("constenc_togv",
               cl::desc("Replace ConstantInt with GlobalVariable"),
               cl::value_desc("ConstantInt to GlobalVariable"), cl::init(false),
               cl::Optional);
-static bool ConstToGVTemp = false;
+static thread_local bool ConstToGVTemp = false;
 
 static cl::opt<uint32_t>
     ConstToGVProb("constenc_togv_prob",
@@ -62,28 +62,28 @@ static cl::opt<uint32_t>
                            "replaced with GlobalVariable"),
                   cl::value_desc("probability rate"), cl::init(50),
                   cl::Optional);
-static uint32_t ConstToGVProbTemp = 50;
+static thread_local uint32_t ConstToGVProbTemp = 50;
 
 static cl::opt<uint32_t> ObfTimes(
     "constenc_times",
     cl::desc(
         "Choose how many time the ConstantEncryption pass loop on a function"),
     cl::value_desc("Number of Times"), cl::init(1), cl::Optional);
-static uint32_t ObfTimesTemp = 1;
+static thread_local uint32_t ObfTimesTemp = 1;
 
 static cl::opt<uint32_t> KShareCount(
     "constenc_kshare",
     cl::desc("[ConstantEncryption] Number of XOR shares for ensemble "
              "secret-sharing (2=classic XOR, 3-5 recommended, max 8)"),
     cl::value_desc("k"), cl::init(2), cl::Optional);
-static uint32_t KShareCountTemp = 2;
+static thread_local uint32_t KShareCountTemp = 2;
 
 static cl::opt<bool> FeistelTier(
     "constenc_feistel",
     cl::desc("[ConstantEncryption] Apply 4-round Feistel cipher before "
              "share-splitting (adds nonlinear layer defeating XOR analysis)"),
     cl::init(false), cl::Optional);
-static bool FeistelTierTemp = false;
+static thread_local bool FeistelTierTemp = false;
 
 namespace llvm {
 struct ConstantEncryption : public ModulePass {

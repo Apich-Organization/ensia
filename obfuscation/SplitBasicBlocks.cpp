@@ -28,14 +28,14 @@ using namespace llvm;
 
 static cl::opt<uint32_t> SplitNum("split_num", cl::init(2),
                                   cl::desc("Split <split_num> time each BB"));
-static uint32_t SplitNumTemp = 2;
+static thread_local uint32_t SplitNumTemp = 2;
 
 static cl::opt<bool> StackConfusion(
     "split_stackconf",
     cl::desc("[SplitBB] Inject balanced push/pop sequences to confuse LLIL "
              "stack-offset analysis in Binary Ninja"),
     cl::init(true), cl::Optional);
-static bool StackConfusionTemp = true;
+static thread_local bool StackConfusionTemp = true;
 
 static bool moduleIsX86_64(Function *F) {
   StringRef triple = F->getParent()->getTargetTriple().getTriple();

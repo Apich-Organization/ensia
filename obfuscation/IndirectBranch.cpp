@@ -41,13 +41,13 @@ static inline Type *getOpaquePtrTy(LLVMContext &Ctx) {
 static cl::opt<bool>
     UseStack("indibran-use-stack", cl::init(true), cl::NotHidden,
              cl::desc("[IndirectBranch]Stack-based indirect jumps"));
-static bool UseStackTemp = true;
+static thread_local bool UseStackTemp = true;
 
 static cl::opt<bool>
     EncryptJumpTarget("indibran-enc-jump-target", cl::init(false),
                       cl::NotHidden,
                       cl::desc("[IndirectBranch]Encrypt jump target"));
-static bool EncryptJumpTargetTemp = false;
+static thread_local bool EncryptJumpTargetTemp = false;
 
 // Per-function Knuth-hash encryption parameters
 struct KnuthEncKey {

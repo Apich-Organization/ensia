@@ -39,7 +39,7 @@ static cl::opt<uint32_t>
                        cl::desc("Choose the probability [%] each element of "
                                 "ConstantDataSequential will be "
                                 "obfuscated by the -strcry pass"));
-static uint32_t ElementEncryptProbTemp = 100;
+static thread_local uint32_t ElementEncryptProbTemp = 100;
 
 namespace llvm {
 struct StringEncryption : public ModulePass {

@@ -33,7 +33,7 @@ static cl::opt<bool> ChaosNestedDispatch(
     "csm_nested",
     cl::desc("[ChaosStateMachine] Enable two-level nested switch dispatch"),
     cl::init(false), cl::Optional);
-static bool ChaosNestedDispatchTemp = false;
+static thread_local bool ChaosNestedDispatchTemp = false;
 
 static cl::opt<uint32_t>
     ChaosWarmup("csm_warmup",

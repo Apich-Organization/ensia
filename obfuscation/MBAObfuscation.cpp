@@ -33,17 +33,17 @@ static cl::opt<uint32_t>
     MBAProbRate("mba_prob",
                 cl::desc("Probability [%] each binary op is MBA-substituted"),
                 cl::value_desc("probability"), cl::init(60), cl::Optional);
-static uint32_t MBAProbRateTemp = 60;
+static thread_local uint32_t MBAProbRateTemp = 60;
 
 static cl::opt<uint32_t>
     MBALayers("mba_layers", cl::desc("Number of MBA substitution layers (1-3)"),
               cl::value_desc("layers"), cl::init(2), cl::Optional);
-static uint32_t MBALayersTemp = 2;
+static thread_local uint32_t MBALayersTemp = 2;
 
 static cl::opt<bool>
     MBAHeuristic("mba_heuristic", cl::init(true), cl::NotHidden,
                  cl::desc("[MBA] Enable heuristic zero-term noise injection"));
-static bool MBAHeuristicTemp = true;
+static thread_local bool MBAHeuristicTemp = true;
 
 // ─── zero-term generator ─────────────────────────────────────────────────────
 //

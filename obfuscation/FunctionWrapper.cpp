@@ -37,7 +37,7 @@ static cl::opt<uint32_t>
              cl::desc("Choose the probability [%] For Each CallSite To Be "
                       "Obfuscated By FunctionWrapper"),
              cl::value_desc("Probability Rate"), cl::init(30), cl::Optional);
-static uint32_t ProbRateTemp = 30;
+static thread_local uint32_t ProbRateTemp = 30;
 
 static cl::opt<uint32_t> ObfTimes(
     "fw_times",
