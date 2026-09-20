@@ -6,11 +6,11 @@ use wasm_bindgen_futures::spawn_local;
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_namespace = window)]
-    fn copyText(text: &str) -> js_sys::Promise;
+    #[wasm_bindgen(js_namespace = window, catch)]
+    fn copyText(text: &str) -> Result<js_sys::Promise, JsValue>;
 
-    #[wasm_bindgen(js_namespace = window)]
-    fn downloadText(filename: &str, text: &str);
+    #[wasm_bindgen(js_namespace = window, catch)]
+    fn downloadText(filename: &str, text: &str) -> Result<(), JsValue>;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ pub fn ConfigPage() -> impl IntoView {
     let do_download = {
         move |_| {
             let text = toml_text.get();
-            downloadText("ensia.toml", &text);
+            let _ = downloadText("ensia.toml", &text);
         }
     };
 
