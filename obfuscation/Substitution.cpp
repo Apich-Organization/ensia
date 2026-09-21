@@ -207,7 +207,8 @@ struct Substitution : public FunctionPass {
       }
     } while (--times); // for times
 
-    // Tag all newly created instructions so other passes do not compound on them
+    // Tag all newly created instructions so other passes do not compound on
+    // them
     for (Instruction &inst : instructions(f)) {
       if (!existing.count(&inst))
         tagSynthetic(&inst);

@@ -23,6 +23,7 @@
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Support/CommandLine.h"
+#include <set>
 
 using namespace llvm;
 
@@ -57,7 +58,8 @@ static void injectStackConfusion(BasicBlock *BB, Function *F) {
 
   if (moduleIsX86_64(F)) {
     // Safe register-only junk sequence on scratch registers r10 and r11
-    // (Never touches rsp/stack to strictly respect x86-64 System V ABI red-zone).
+    // (Never touches rsp/stack to strictly respect x86-64 System V ABI
+    // red-zone).
     std::string asmStr = "xorq %r10, %r10\n\t"
                          "addq $$0x13371337, %r10\n\t"
                          "subq $$0x13371337, %r10\n\t"
@@ -128,31 +130,35 @@ struct SplitBasicBlock : public FunctionPass {
   }
   void split(Function *F) {
     SmallVector<BasicBlock *, 16> origBB;
-    size_t split_ctr = 0;
 
     // Save all basic blocks
     for (BasicBlock &BB : *F)
       origBB.emplace_back(&BB);
 
     for (BasicBlock *currBB : origBB) {
-      if (currBB->size() < 2 || containsPHI(currBB) ||
-          containsSwiftError(currBB))
+      size_t bb_size = currBB->size();
+      if (bb_size < 2 || containsPHI(currBB) || containsSwiftError(currBB))
         continue;
 
-      if ((size_t)SplitNumTemp > currBB->size() - 1)
-        split_ctr = currBB->size() - 1;
-      else
-        split_ctr = (size_t)SplitNumTemp;
+      size_t split_ctr = std::min((size_t)SplitNumTemp, bb_size - 1);
 
-      // Generate splits point (count number of the LLVM instructions in the
-      // current BB)
+      // Generate splits point
       SmallVector<size_t, 32> llvm_inst_ord;
-      for (size_t i = 1; i < currBB->size(); ++i)
-        llvm_inst_ord.emplace_back(i);
-
-      // Shuffle
-      split_point_shuffle(llvm_inst_ord);
-      std::sort(llvm_inst_ord.begin(), llvm_inst_ord.begin() + split_ctr);
+      if (bb_size <= 64) {
+        for (size_t i = 1; i < bb_size; ++i)
+          llvm_inst_ord.emplace_back(i);
+        split_point_shuffle(llvm_inst_ord);
+        std::sort(llvm_inst_ord.begin(), llvm_inst_ord.begin() + split_ctr);
+      } else {
+        // Direct random sampling for large basic blocks (O(split_ctr log
+        // split_ctr) instead of O(N))
+        std::set<size_t> chosen;
+        while (chosen.size() < split_ctr) {
+          chosen.insert(1 + (size_t)cryptoutils->get_range(bb_size - 1));
+        }
+        for (size_t pt : chosen)
+          llvm_inst_ord.push_back(pt);
+      }
 
       // Split
       size_t llvm_inst_prev_offset = 0;
@@ -160,10 +166,15 @@ struct SplitBasicBlock : public FunctionPass {
       BasicBlock *curr_bb_offset = currBB;
 
       for (size_t i = 0; i < split_ctr; ++i) {
-        for (size_t j = 0; j < llvm_inst_ord[i] - llvm_inst_prev_offset; ++j)
+        for (size_t j = 0; j < llvm_inst_ord[i] - llvm_inst_prev_offset &&
+                           curr_bb_it != curr_bb_offset->end();
+             ++j)
           ++curr_bb_it;
 
         llvm_inst_prev_offset = llvm_inst_ord[i];
+
+        if (curr_bb_it == curr_bb_offset->end())
+          break;
 
         // Skip splitting inside the alloca run of a probe-stack entry block.
         // The probe thunk expects all allocas to stay in the entry block;
@@ -176,7 +187,7 @@ struct SplitBasicBlock : public FunctionPass {
                  isa<AllocaInst>(curr_bb_it))
             ++curr_bb_it;
           if (curr_bb_it == curr_bb_offset->end())
-            continue;
+            break;
         }
 
         BasicBlock *newBB = curr_bb_offset->splitBasicBlock(

@@ -94,14 +94,16 @@
 #include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "include/VectorObfuscation.h"
+#include "include/llvm_compat.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Plugins/PassPlugin.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
+#include <chrono>
 #include <cstdlib>
+#include <mutex>
 
 using namespace llvm;
 
@@ -500,6 +502,14 @@ static void loadObfConfig() {
   }
 }
 
+static std::once_flag s_init_obf_config_flag;
+static void ensureObfConfigLoaded() {
+  std::call_once(s_init_obf_config_flag, []() {
+    loadObfConfig();
+    LoadEnv();
+  });
+}
+
 // ── Apply TOML policy metadata injection
 // ────────────────────────────────────── For each function, resolve its
 // effective config (global + matching policies) and inject enable/disable
@@ -601,7 +611,8 @@ static void runFeatureElimination(Module &M) {
     // Don't rename our own sentinel/marker functions
     StringRef nm = F.getName();
     if (nm.starts_with("ensia_") || nm.starts_with("EnsiaBCF") ||
-        nm.starts_with("ADB") || nm.starts_with("InitADB"))
+        nm.starts_with("ADB") || nm.starts_with("InitADB") ||
+        nm.starts_with("EnsiaFW_"))
       continue;
     std::string newName;
     raw_string_ostream OS(newName);
@@ -734,9 +745,7 @@ struct Obfuscation : public ModulePass {
         errs() << "[OLLVM-Next] Preset '" << GObfConfig.preset << "' active\n";
     }
 
-    TimerGroup *tg = new TimerGroup("Obfuscation", "Obfuscation");
-    Timer *timer = new Timer("Total", "Total", *tg);
-    timer->startTimer();
+    auto startTime = std::chrono::steady_clock::now();
 
     errs() << "Running OLLVM-Next on " << M.getSourceFileName() << "  [LLVM "
            << LLVM_VERSION_MAJOR << "." << LLVM_VERSION_MINOR << ", commit "
@@ -962,17 +971,16 @@ struct Obfuscation : public ModulePass {
       F.addFnAttr(Attribute::NoInline);
     }
 
-    timer->stopTimer();
-    errs() << "OLLVM-Next done.  Wall time: "
-           << format("%.5f", timer->getTotalTime().getWallTime()) << "s\n";
-    tg->clearAll();
+    auto endTime = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = endTime - startTime;
+    errs() << "OLLVM-Next done.  Wall time: " << format("%.5f", elapsed.count())
+           << "s\n";
     return true;
   }
 }; // struct Obfuscation
 
 ModulePass *createObfuscationLegacyPass() {
-  LoadEnv();
-  loadObfConfig();
+  ensureObfConfigLoaded();
   if (!EnableIRObfusaction)
     return new Obfuscation(); // gate off — runOnModule will return false
                               // immediately
@@ -1017,7 +1025,7 @@ INITIALIZE_PASS_END(Obfuscation, "obfus", "Enable OLLVM-Next Obfuscation",
 namespace llvm {
 
 PassPluginLibraryInfo getEnsiaPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, "OLLVM-Next", LLVM_VERSION_STRING,
+  return {ENSIA_PLUGIN_API_VERSION, "OLLVM-Next", LLVM_VERSION_STRING,
           [](PassBuilder &PB) {
             // ── Auto-inject via optimizer-last EP
             // ───────────────────────────────── Fires during pipeline
@@ -1031,8 +1039,7 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
               if (Phase == ThinOrFullLTOPhase::ThinLTOPreLink ||
                   Phase == ThinOrFullLTOPhase::FullLTOPreLink)
                 return;
-              LoadEnv();
-              loadObfConfig();
+              ensureObfConfigLoaded();
               if (!EnableIRObfusaction)
                 return;
               MPM.addPass(ObfuscationPass());
@@ -1040,8 +1047,7 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
 
             PB.registerFullLinkTimeOptimizationLastEPCallback(
                 [](ModulePassManager &MPM, OptimizationLevel) {
-                  LoadEnv();
-                  loadObfConfig();
+                  ensureObfConfigLoaded();
                   if (!EnableIRObfusaction)
                     return;
                   MPM.addPass(ObfuscationPass());

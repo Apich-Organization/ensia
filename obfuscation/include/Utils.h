@@ -19,7 +19,10 @@
 #ifndef _UTILS_H_
 #define _UTILS_H_
 
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/NoFolder.h"
+#include "llvm/TargetParser/Triple.h"
 #include <string>
 
 namespace llvm {
@@ -57,6 +60,23 @@ void writeAnnotationMetadata(Function *f, std::string annotation);
 bool AreUsersInOneFunction(GlobalVariable *GV);
 void tagSynthetic(Instruction *I);
 bool isSynthetic(const Instruction *I);
+Value *insertOpaqueBarrier(IRBuilder<NoFolder> &IRB, Value *V);
+Value *insertOpaqueBarrier(IRBuilder<> &IRB, Value *V);
+
+GlobalVariable *getOrCreateOpaqueSink(Module *M);
+std::string getViolentExitAsm(const Triple &triple);
+void insertViolentExit(IRBuilder<> &IRB, const Triple &triple);
+
+// ── Anti-Taint & Data-Flow Entanglement Primitives ──────────────────────────
+GlobalVariable *getOrCreateLaunderLUT(Module *M);
+Value *insertTaintLaunder(IRBuilder<> &IRB, Value *Val);
+Value *insertVectorTaintDiffusion(IRBuilder<> &IRB, Value *Val,
+                                  Value *EntropyToken);
+Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
+                                    const Triple &triple);
+void entangleFunctionIO(Function *F, Value *DbgToken, Value *HookToken,
+                        Value *HookBase, Instruction *InsertPt,
+                        const Triple &triple);
 
 } // namespace llvm
 

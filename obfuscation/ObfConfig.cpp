@@ -137,7 +137,7 @@ static ObfPassConfig makeMidPreset() {
   c.const_enc.enabled = true;
   c.const_enc.iterations = 1;
   c.const_enc.share_count = 3;
-  c.const_enc.feistel = false;
+  c.const_enc.feistel = true;
   c.const_enc.substitute_xor = true;
   c.const_enc.substitute_xor_prob = 40;
   c.const_enc.globalize = false;
@@ -497,6 +497,9 @@ ObfPassConfig ObfGlobalConfig::presetConfig(const std::string &name) {
 
 ObfPassConfig ObfGlobalConfig::resolve(StringRef module_name,
                                        StringRef func_name) const {
+  if (policies.empty())
+    return passes;
+
   std::string mod_str_key = module_name.str();
   std::string func_str_key = func_name.str();
 
@@ -579,9 +582,11 @@ ObfPassConfig ObfGlobalConfig::resolve(StringRef module_name,
     // Try both the raw mangled name and the demangled form so users can write
     // human-readable patterns for Rust / C++ without knowing the mangling.
     if (pol.compiled_func_regex.has_value()) {
-      bool matched = std::regex_search(func_str, pol.compiled_func_regex.value());
+      bool matched =
+          std::regex_search(func_str, pol.compiled_func_regex.value());
       if (!matched && !demangled_str.empty())
-        matched = std::regex_search(demangled_str, pol.compiled_func_regex.value());
+        matched =
+            std::regex_search(demangled_str, pol.compiled_func_regex.value());
       if (!matched)
         continue;
     } else if (!pol.func_regex.empty()) {
@@ -853,7 +858,8 @@ static ObfPolicy parsePolicy(const toml::table &pt) {
   if (auto v = pt["module"].value<std::string>()) {
     pol.module_regex = *v;
     try {
-      pol.compiled_module_regex.emplace(*v, std::regex::ECMAScript | std::regex::optimize);
+      pol.compiled_module_regex.emplace(*v, std::regex::ECMAScript |
+                                                std::regex::optimize);
     } catch (const std::regex_error &) {
       errs() << "[Ensia] invalid module regex in policy: " << *v << "\n";
     }
@@ -861,7 +867,8 @@ static ObfPolicy parsePolicy(const toml::table &pt) {
   if (auto v = pt["function"].value<std::string>()) {
     pol.func_regex = *v;
     try {
-      pol.compiled_func_regex.emplace(*v, std::regex::ECMAScript | std::regex::optimize);
+      pol.compiled_func_regex.emplace(*v, std::regex::ECMAScript |
+                                              std::regex::optimize);
     } catch (const std::regex_error &) {
       errs() << "[Ensia] invalid function regex in policy: " << *v << "\n";
     }

@@ -145,12 +145,14 @@ struct AntiClassDump : public ModulePass {
         SuperClassGV = readPtrauth(SuperClassGV);
         std::string supclsName = "";
         std::string clsName = CEGV->getName().str();
-        if (size_t pos = clsName.find("OBJC_CLASS_$_"); pos != std::string::npos) {
+        if (size_t pos = clsName.find("OBJC_CLASS_$_");
+            pos != std::string::npos) {
           clsName.replace(pos, strlen("OBJC_CLASS_$_"), "");
         }
         if (SuperClassGV) {
           supclsName = SuperClassGV->getName().str();
-          if (size_t pos = supclsName.find("OBJC_CLASS_$_"); pos != std::string::npos) {
+          if (size_t pos = supclsName.find("OBJC_CLASS_$_");
+              pos != std::string::npos) {
             supclsName.replace(pos, strlen("OBJC_CLASS_$_"), "");
           }
         }
@@ -295,7 +297,7 @@ struct AntiClassDump : public ModulePass {
     }
     IRBuilder<> *IRB = new IRBuilder<>(EntryBB, EntryBB->getFirstInsertionPt());
     Function *objc_getClass = M->getFunction("objc_getClass");
-    Value *ClassNameGV = IRB->CreateGlobalStringPtr(ClassName);
+    Value *ClassNameGV = IRB->CreateGlobalString(ClassName);
     CallInst *Class = IRB->CreateCall(objc_getClass, {ClassNameGV});
 
     if (InjectDummySelectors) {
@@ -305,7 +307,7 @@ struct AntiClassDump : public ModulePass {
         // Build a random-looking selector name that resembles a real method
         std::ostringstream ghostSel;
         ghostSel << "ghost_" << std::hex << cryptoutils->get_uint64_t();
-        Value *GhostSelGV = IRB->CreateGlobalStringPtr(ghostSel.str());
+        Value *GhostSelGV = IRB->CreateGlobalString(ghostSel.str());
         IRB->CreateCall(sel_reg, {GhostSelGV});
       }
     }
@@ -379,18 +381,18 @@ struct AntiClassDump : public ModulePass {
     ArrayType *AT = ArrayType::get(objc_method_type, 1);
     Constant *MethName = nullptr;
     if (UseInitialize)
-      MethName = cast<Constant>(IRB->CreateGlobalStringPtr("initialize"));
+      MethName = cast<Constant>(IRB->CreateGlobalString("initialize"));
     else
-      MethName = cast<Constant>(IRB->CreateGlobalStringPtr("load"));
+      MethName = cast<Constant>(IRB->CreateGlobalString("load"));
     Constant *MethType = nullptr;
     if (triple.isOSDarwin() && triple.isArch64Bit()) {
-      MethType = IRB->CreateGlobalStringPtr("v16@0:8");
+      MethType = IRB->CreateGlobalString("v16@0:8");
     } else if (triple.isOSDarwin() && triple.isArch32Bit()) {
-      MethType = IRB->CreateGlobalStringPtr("v8@0:4");
+      MethType = IRB->CreateGlobalString("v8@0:4");
     } else {
       errs() << "Unknown Platform.Blindly applying method signature for "
                 "macOS 64Bit\n";
-      MethType = IRB->CreateGlobalStringPtr("v16@0:8");
+      MethType = IRB->CreateGlobalString("v16@0:8");
     }
     Constant *BitCastedIMP = cast<Constant>(
         IRB->CreateBitCast(IRB->GetInsertBlock()->getParent(),
@@ -465,7 +467,7 @@ struct AntiClassDump : public ModulePass {
                "MethodListGV doesn't have initializer");
         ConstantStruct *methodListStruct =
             cast<ConstantStruct>(methodListGV->getInitializer());
-        if (methodListStruct->getOperand(2)->isZeroValue())
+        if (methodListStruct->getOperand(2)->isNullValue())
           return;
         ConstantArray *methodList =
             cast<ConstantArray>(methodListStruct->getOperand(2));
@@ -476,7 +478,7 @@ struct AntiClassDump : public ModulePass {
         for (unsigned int mi = 0; mi < methodList->getNumOperands(); mi++) {
           ConstantStruct *methodStruct =
               cast<ConstantStruct>(methodList->getOperand(mi));
-          Constant *SELName = IRB->CreateGlobalStringPtr(
+          Constant *SELName = IRB->CreateGlobalString(
               cast<ConstantDataSequential>(
                   cast<GlobalVariable>(
                       opaquepointers
@@ -512,7 +514,7 @@ struct AntiClassDump : public ModulePass {
           }
           replaceMethodArgs.emplace_back(SEL);
           replaceMethodArgs.emplace_back(BitCastedIMP);
-          replaceMethodArgs.emplace_back(IRB->CreateGlobalStringPtr(
+          replaceMethodArgs.emplace_back(IRB->CreateGlobalString(
               cast<ConstantDataSequential>(
                   cast<GlobalVariable>(
                       opaquepointers

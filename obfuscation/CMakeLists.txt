@@ -49,6 +49,7 @@ set(ENSIA_SOURCES
         MBAObfuscation.cpp        # Mixed Boolean-Arithmetic substitution
         ChaosStateMachine.cpp     # Logistic-map-driven control-flow flattening
         VectorObfuscation.cpp     # Scalar-to-SIMD vector lifting
+        RustCompat.cpp            # LLVM 21/22 ABI bridge for rustc plugin
         )
 
 add_library(Ensia SHARED ${ENSIA_SOURCES})
@@ -101,7 +102,7 @@ target_compile_options(Ensia PRIVATE
         >
 )
 
-# Optional target for Rustc plugin
+# Optional target for Rustc plugin with dynamic LLVM version probing
 execute_process(
     COMMAND rustc --print sysroot
     OUTPUT_VARIABLE RUSTC_SYSROOT
@@ -109,17 +110,59 @@ execute_process(
     ERROR_QUIET
 )
 if(RUSTC_SYSROOT AND EXISTS "${RUSTC_SYSROOT}/lib")
+    # Dynamically probe rustc's bundled LLVM major version
+    execute_process(
+        COMMAND rustc -vV
+        OUTPUT_VARIABLE RUSTC_VINFO
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    set(RUST_LLVM_MAJOR "22")
+    if(RUSTC_VINFO MATCHES "LLVM version:[ \t]*([0-9]+)")
+        set(RUST_LLVM_MAJOR "${CMAKE_MATCH_1}")
+    endif()
+
+    # Allow user override: -DENSIA_RUST_LLVM_VERSION=22 or 23
+    if(DEFINED ENSIA_RUST_LLVM_VERSION)
+        set(RUST_LLVM_MAJOR "${ENSIA_RUST_LLVM_VERSION}")
+    endif()
+
+    message(STATUS "[Ensia] Probed Rust bundled LLVM major version: ${RUST_LLVM_MAJOR}")
+
+    # Determine compatibility include path based on detected LLVM version
+    set(RUST_COMPAT_DIR "")
+    if(RUST_LLVM_MAJOR EQUAL 23)
+        if(EXISTS "${CMAKE_SOURCE_DIR}/compat/llvm23")
+            set(RUST_COMPAT_DIR "${CMAKE_SOURCE_DIR}/compat/llvm23")
+        endif()
+    elseif(RUST_LLVM_MAJOR EQUAL 22)
+        if(EXISTS "${CMAKE_SOURCE_DIR}/compat/llvm22")
+            set(RUST_COMPAT_DIR "${CMAKE_SOURCE_DIR}/compat/llvm22")
+        endif()
+    endif()
+
     file(GLOB RUST_LLVM_LIB "${RUSTC_SYSROOT}/lib/libLLVM*rust*.so*")
+    # If no rust-specific LLVM lib found and version is 23, check workspace LLVM 23
+    if(NOT RUST_LLVM_LIB AND RUST_LLVM_MAJOR EQUAL 23)
+        file(GLOB RUST_LLVM_LIB "${CMAKE_SOURCE_DIR}/LLVM-23*/lib/libLLVM.so*")
+    endif()
+
     if(RUST_LLVM_LIB)
         add_library(EnsiaRust SHARED ${ENSIA_SOURCES})
         set_target_properties(EnsiaRust PROPERTIES OUTPUT_NAME "Ensia_rust")
+        if(RUST_COMPAT_DIR)
+            message(STATUS "[Ensia] Using LLVM ${RUST_LLVM_MAJOR} compat dir: ${RUST_COMPAT_DIR}")
+            target_include_directories(EnsiaRust BEFORE PRIVATE ${RUST_COMPAT_DIR})
+        else()
+            message(STATUS "[Ensia] Using base LLVM headers directly for Rust plugin")
+        endif()
         target_include_directories(EnsiaRust PRIVATE
             ${CMAKE_SOURCE_DIR}/obfuscation
             ${CMAKE_CURRENT_SOURCE_DIR}
         )
         add_dependencies(EnsiaRust intrinsics_gen LLVMLinker)
         target_link_directories(EnsiaRust PRIVATE "${RUSTC_SYSROOT}/lib")
-        target_link_libraries(EnsiaRust PRIVATE -lLLVM-22-rust-1.97.1-stable)
+        target_link_libraries(EnsiaRust PRIVATE ${RUST_LLVM_LIB})
         set_target_properties(EnsiaRust PROPERTIES
             BUILD_RPATH "${RUSTC_SYSROOT}/lib"
             INSTALL_RPATH "${RUSTC_SYSROOT}/lib"
@@ -127,6 +170,8 @@ if(RUSTC_SYSROOT AND EXISTS "${RUSTC_SYSROOT}/lib")
         target_compile_definitions(EnsiaRust PRIVATE
             "-DGIT_COMMIT_HASH=\"${ENSIA_GIT_COMMIT_HASH}\""
             "-DOLLVM_NEXT=1"
+            "-DENSIA_RUST_PLUGIN=1"
+            "-DENSIA_TARGET_LLVM_VERSION=${RUST_LLVM_MAJOR}"
         )
         target_compile_options(EnsiaRust PRIVATE
             $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:

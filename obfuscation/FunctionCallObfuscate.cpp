@@ -154,7 +154,7 @@ struct FunctionCallObfuscate : public FunctionPass {
           Function *objc_getClass_Func =
               cast<Function>(M->getFunction("objc_getClass"));
           Value *newClassName =
-              builder.CreateGlobalStringPtr(StringRef(className));
+              builder.CreateGlobalString(StringRef(className));
           CallInst *CI = builder.CreateCall(objc_getClass_Func, {newClassName});
           Value *BCI = (CI->getType() == I->getType())
                            ? cast<Value>(CI)
@@ -178,7 +178,7 @@ struct FunctionCallObfuscate : public FunctionPass {
           IRBuilder<> builder(I);
           Function *sel_registerName_Func =
               cast<Function>(M->getFunction("sel_registerName"));
-          Value *newGlobalSELName = builder.CreateGlobalStringPtr(SELName);
+          Value *newGlobalSELName = builder.CreateGlobalString(SELName);
           CallInst *CI =
               builder.CreateCall(sel_registerName_Func, {newGlobalSELName});
           Value *BCI = (CI->getType() == I->getType())
@@ -267,7 +267,8 @@ struct FunctionCallObfuscate : public FunctionPass {
     // GetProcAddress.  Every other OS that is neither Darwin, Android, nor
     // Windows is still unsupported and we bail out early.
     bool isWindows = triple.isOSWindows();
-    if (!triple.isAndroid() && !triple.isOSDarwin() && !isWindows) {
+    if (!triple.isAndroid() && !triple.isOSDarwin() && !triple.isOSLinux() &&
+        !isWindows) {
       errs() << "Unsupported Target Triple: "
              << M->getTargetTriple().getTriple() << "\n";
       return false;
@@ -363,7 +364,7 @@ struct FunctionCallObfuscate : public FunctionPass {
                                     {Constant::getNullValue(Int8PtrTy)});
             fp = IRB.CreateCall(
                 resolve_sym_decl,
-                {Handle, IRB.CreateGlobalStringPtr(calledFunctionName)});
+                {Handle, IRB.CreateGlobalString(calledFunctionName)});
           } else {
             if (triple.isOSDarwin()) {
               dlopen_flag = DARWIN_FLAG;
@@ -372,13 +373,15 @@ struct FunctionCallObfuscate : public FunctionPass {
                 dlopen_flag = ANDROID64_FLAG;
               else
                 dlopen_flag = ANDROID32_FLAG;
+            } else if (triple.isOSLinux()) {
+              dlopen_flag = 2; // RTLD_NOW
             }
             Handle = IRB.CreateCall(resolve_lib_decl,
                                     {Constant::getNullValue(Int8PtrTy),
                                      ConstantInt::get(Int32Ty, dlopen_flag)});
             fp = IRB.CreateCall(
                 resolve_sym_decl,
-                {Handle, IRB.CreateGlobalStringPtr(calledFunctionName)});
+                {Handle, IRB.CreateGlobalString(calledFunctionName)});
           }
 
           Value *bitCastedFunction =

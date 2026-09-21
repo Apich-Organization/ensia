@@ -110,6 +110,13 @@ static cl::opt<bool> CheckInlineHookWin(
              "patterns (Detours INT3, MOV EDI EDI, etc.)"));
 static thread_local bool CheckInlineHookWinTemp = true;
 
+// ── Embedded Integrity Self-Check with Anti-Patching Data-Flow Entanglement
+static cl::opt<bool>
+    CheckIntegrity("ah_integrity", cl::init(true), cl::NotHidden,
+                   cl::desc("[AntiHook] Embedded Code Integrity Self-Check "
+                            "with Data-Flow Entanglement"));
+static thread_local bool CheckIntegrityTemp = true;
+
 namespace llvm {
 struct AntiHook : public ModulePass {
   static char ID;
@@ -149,10 +156,13 @@ struct AntiHook : public ModulePass {
           parseIRFile(StringRef(PreCompiledIRPath), SMD, M.getContext()));
       Linker::linkModules(M, std::move(ADBM), Linker::Flags::OverrideFromSrc);
     } else {
-      errs() << "Failed To Link PreCompiled AntiHooking IR From:"
-             << PreCompiledIRPath << "\n";
+      if (ObfVerbose)
+        errs() << "Notice: PreCompiled AntiHooking IR not found at:"
+               << PreCompiledIRPath
+               << " (using embedded self-check & direct syscalls)\n";
     }
     opaquepointers = true;
+    this->initialized = true;
 
     if (triple.getVendor() == Triple::VendorType::Apple &&
         StructType::getTypeByName(M.getContext(), "struct._objc_method")) {
@@ -188,6 +198,7 @@ struct AntiHook : public ModulePass {
   }
 
   bool runOnModule(Module &M) override {
+    SmallVector<Function *, 16> protectedFuncs;
     for (Function &F : M) {
       if (toObfuscate(flag, &F, "antihook")) {
         if (ObfVerbose)
@@ -228,6 +239,14 @@ struct AntiHook : public ModulePass {
             HandleInlineHookWindows(&F);
           else if (triple.isAArch64())
             HandleInlineHookWindowsAArch64(&F);
+        }
+
+        // Embedded Code Integrity Self-Check with Data-Flow Entanglement
+        if (!toObfuscateBoolOption(&F, "ah_integrity", &CheckIntegrityTemp))
+          CheckIntegrityTemp = CheckIntegrity;
+        if (CheckIntegrityTemp && !F.isDeclaration() && !F.empty()) {
+          HandleIntegritySelfCheck(&F);
+          protectedFuncs.push_back(&F);
         }
 
         if (!toObfuscateBoolOption(&F, "ah_antirebind", &AntiRebindSymbolTemp))
@@ -309,6 +328,9 @@ struct AntiHook : public ModulePass {
         }
       }
     }
+    if (!protectedFuncs.empty()) {
+      BuildIntegrityConstructor(M, protectedFuncs);
+    }
     return true;
   }
 
@@ -343,7 +365,14 @@ struct AntiHook : public ModulePass {
     Value *ICmpEQ3 = IRBDetect.CreateICmpEQ(
         LS3, ConstantInt::get(Int32Ty, AARCH64_SIGNATURE_BRK));
     Value *Or = IRBDetect.CreateOr(ICmpEQ2, ICmpEQ3);
-    IRBDetect.CreateCondBr(Or, B, Detect2);
+    // Also check for LDR x16/x17, [PC, #8] (Frida/Detours 16-byte trampoline)
+    Value *IsLDR16 =
+        IRBDetect.CreateICmpEQ(Load, ConstantInt::get(Int32Ty, 0x58000050u));
+    Value *IsLDR17 =
+        IRBDetect.CreateICmpEQ(Load, ConstantInt::get(Int32Ty, 0x58000051u));
+    Value *OrLDR = IRBDetect.CreateOr(IsLDR16, IsLDR17);
+    Value *Stage1A64 = IRBDetect.CreateOr(Or, OrLDR);
+    IRBDetect.CreateCondBr(Stage1A64, B, Detect2);
 
     // Check instruction at +4 and +8 for BR pattern
     Value *PTI = IRBDetect2.CreatePtrToInt(F, Int64Ty);
@@ -383,15 +412,28 @@ struct AntiHook : public ModulePass {
     Type *Int64Ty = Type::getInt64Ty(Ctx);
     Type *PtrTy = getOpaquePtrTy(Ctx);
 
-    // ── Stage 1: byte[0] == 0xE9 (jmp rel32) ──────────────────────────────
+    // ── Stage 1: byte[0] in {0xE9 (jmp rel32), 0xEB (jmp rel8), 0xCC (INT3),
+    // 0x68 (PUSH imm32), 0xF1 (ICEBP)}
     IRBuilder<> IRBDet1(Detect);
     Value *FPtr1 = IRBDet1.CreateBitCast(F, PtrTy);
     Value *Byte0 = IRBDet1.CreateLoad(Int8Ty, FPtr1, "ah.b0");
     Value *IsE9 = IRBDet1.CreateICmpEQ(
         Byte0, ConstantInt::get(Int8Ty, X86_64_JMP_REL32), "ah.e9");
-    IRBDet1.CreateCondBr(IsE9, B, Detect2);
+    Value *IsEB = IRBDet1.CreateICmpEQ(
+        Byte0, ConstantInt::get(Int8Ty, X86_64_JMP_SHORT), "ah.eb");
+    Value *IsCC = IRBDet1.CreateICmpEQ(
+        Byte0, ConstantInt::get(Int8Ty, X86_64_INT3), "ah.cc");
+    Value *Is68 =
+        IRBDet1.CreateICmpEQ(Byte0, ConstantInt::get(Int8Ty, 0x68u), "ah.push");
+    Value *IsF1 = IRBDet1.CreateICmpEQ(Byte0, ConstantInt::get(Int8Ty, 0xF1u),
+                                       "ah.icebp");
+    Value *Or1 = IRBDet1.CreateOr(IsE9, IsEB);
+    Value *Or2 = IRBDet1.CreateOr(IsCC, Is68);
+    Value *Or3 = IRBDet1.CreateOr(Or1, Or2);
+    Value *Stage1Match = IRBDet1.CreateOr(Or3, IsF1, "ah.stage1");
+    IRBDet1.CreateCondBr(Stage1Match, B, Detect2);
 
-    // ── Stage 2: byte[0]==0x48 AND byte[1]==0xB8 (movabs rax, imm64) ──────
+    // ── Stage 2: 2-byte opcode sequences ───────────────────────────────────
     IRBuilder<> IRBDet2(Detect2);
     Value *FPtrI2 = IRBDet2.CreatePtrToInt(F, Int64Ty);
     Value *B0D2 = IRBDet2.CreateLoad(
@@ -401,12 +443,34 @@ struct AntiHook : public ModulePass {
         IRBDet2.CreateIntToPtr(
             IRBDet2.CreateAdd(FPtrI2, ConstantInt::get(Int64Ty, 1)), PtrTy),
         "ah.b1d2");
+    // 0x48 0xB8 (movabs rax, imm64)
     Value *IsREXW = IRBDet2.CreateICmpEQ(
         B0D2, ConstantInt::get(Int8Ty, X86_64_MOVABS_RAX), "ah.rex");
     Value *IsB8 =
         IRBDet2.CreateICmpEQ(B1D2, ConstantInt::get(Int8Ty, 0xB8u), "ah.b8");
     Value *IsMovAbs = IRBDet2.CreateAnd(IsREXW, IsB8, "ah.movabs");
-    IRBDet2.CreateCondBr(IsMovAbs, B, Detect3);
+    // 0x8B 0xFF (mov edi, edi)
+    Value *Is8B = IRBDet2.CreateICmpEQ(B0D2, ConstantInt::get(Int8Ty, 0x8Bu));
+    Value *IsFF2 = IRBDet2.CreateICmpEQ(B1D2, ConstantInt::get(Int8Ty, 0xFFu));
+    Value *IsMovEdi = IRBDet2.CreateAnd(Is8B, IsFF2, "ah.movidi");
+    // 0x90 0x90 (NOP sled patch)
+    Value *Is90_0 = IRBDet2.CreateICmpEQ(B0D2, ConstantInt::get(Int8Ty, 0x90u));
+    Value *Is90_1 = IRBDet2.CreateICmpEQ(B1D2, ConstantInt::get(Int8Ty, 0x90u));
+    Value *IsNopSled = IRBDet2.CreateAnd(Is90_0, Is90_1, "ah.nopsled");
+    // 0x0F 0x0B (UD2)
+    Value *Is0F = IRBDet2.CreateICmpEQ(B0D2, ConstantInt::get(Int8Ty, 0x0Fu));
+    Value *Is0B = IRBDet2.CreateICmpEQ(B1D2, ConstantInt::get(Int8Ty, 0x0Bu));
+    Value *IsUD2 = IRBDet2.CreateAnd(Is0F, Is0B, "ah.ud2");
+    // 0xCD 0x03 (INT 3)
+    Value *IsCD = IRBDet2.CreateICmpEQ(B0D2, ConstantInt::get(Int8Ty, 0xCDu));
+    Value *Is03 = IRBDet2.CreateICmpEQ(B1D2, ConstantInt::get(Int8Ty, 0x03u));
+    Value *IsINT3 = IRBDet2.CreateAnd(IsCD, Is03, "ah.int3");
+
+    Value *M2A = IRBDet2.CreateOr(IsMovAbs, IsMovEdi);
+    Value *M2B = IRBDet2.CreateOr(IsNopSled, IsUD2);
+    Value *M2C = IRBDet2.CreateOr(M2A, M2B);
+    Value *Stage2Match = IRBDet2.CreateOr(M2C, IsINT3, "ah.stage2");
+    IRBDet2.CreateCondBr(Stage2Match, B, Detect3);
 
     // ── Stage 3: byte[0]==0xFF AND byte[1]==0x25 (jmp [RIP+disp32]) ────────
     IRBuilder<> IRBDet3(Detect3);
@@ -607,9 +671,9 @@ struct AntiHook : public ModulePass {
     Type *PtrTy = getOpaquePtrTy(M->getContext());
 
     Value *GetClass = IRBA.CreateCall(M->getFunction("objc_getClass"),
-                                      {IRBA.CreateGlobalStringPtr(classname)});
+                                      {IRBA.CreateGlobalString(classname)});
     Value *GetSelector = IRBA.CreateCall(M->getFunction("sel_registerName"),
-                                         {IRBA.CreateGlobalStringPtr(selname)});
+                                         {IRBA.CreateGlobalString(selname)});
     Value *GetMethod =
         IRBA.CreateCall(M->getFunction(classmethod ? "class_getClassMethod"
                                                    : "class_getInstanceMethod"),
@@ -629,361 +693,165 @@ struct AntiHook : public ModulePass {
     Function *AHCallBack = M->getFunction("AHCallBack");
     if (AHCallBack) {
       IRBB->CreateCall(AHCallBack);
-    } else if (DirectSyscallExitTemp && triple.isOSDarwin() &&
-               triple.isAArch64()) {
-      // ── AArch64 Darwin: direct BSD exit syscall bypass ───────────────────
-      // x16=1 → SYS_exit; svc #0x80 is the XNU BSD syscall gate on iOS/macOS.
-      // We randomise the svc immediate for pattern uniqueness (any non-reserved
-      // immediate triggers SIGILL on macOS if the kernel rejects it, achieving
-      // abort semantics via a different exception path).
-      //
-      // Noise: eor x9, x9, x9 + add/sub round-trip (net zero, confuses LLIL).
-      uint32_t noiseImm = cryptoutils->get_range(1, 0x1000);
-      uint32_t exitCode = cryptoutils->get_range(256);
-      uint64_t nc =
-          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
-          0x8000000000000000ull;
-      std::string asmStr;
-      asmStr += "eor x9, x9, x9\n\t";
-      asmStr += "add x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      asmStr += "sub x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      // ── LAYER 1: SYS_exit via BSD syscall gate (x16=1, svc #0x80) ─────────
-      asmStr += "mov x0, #" + std::to_string(exitCode) + "\n\t";
-      asmStr += "mov x16, #1\n\t";
-      asmStr += "svc #0x80\n\t";
-      // ── LAYER 2: br to non-canonical address → MMU translation fault ───────
-      asmStr += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-      asmStr +=
-          "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-      asmStr +=
-          "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-      asmStr +=
-          "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
-      asmStr += "br x15\n\t";
-      // Final barrier: randomized undefined opcode
-      uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
-      asmStr += ".inst 0x" + utohexstr(rndInst) + "\n\t";
-      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
-      uint32_t aa64seed = cryptoutils->get_range(1, 0xBEFF);
-      asmStr += "mov x14, #" + std::to_string(aa64seed) + "\n\t";
-      asmStr += "91:\n\t";
-      asmStr += "mov x0, #65536\n\t";
-      asmStr += "sub x0, x0, x14\n\t";
-      asmStr += "mul x0, x14, x0\n\t";
-      asmStr += "lsl x0, x0, #2\n\t";
-      asmStr += "lsr x0, x0, #16\n\t";
-      asmStr += "mov x14, x0\n\t";
-      asmStr += "b 91b\n\t";
-      InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false), asmStr,
-          "~{x0},~{x9},~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}",
-          /*hasSideEffects=*/true, false);
-      IRBB->CreateCall(IA);
-    } else if (DirectSyscallExitTemp && triple.isOSDarwin() &&
-               (triple.getArch() == Triple::x86_64 ||
-                triple.getArch() == Triple::x86_64)) {
-      uint64_t exitCode = cryptoutils->get_range(256);
-      uint64_t noiseConst = cryptoutils->get_uint32_t() & 0xFFFF;
-      uint64_t nc2 =
-          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
-          0x8000000000000000ull;
-      std::ostringstream nc2oss;
-      nc2oss << std::hex << nc2;
-      std::string asmStr;
-      asmStr += "rdtsc\n\t";
-      asmStr += "andl $$0xFFFF, %eax\n\t";
-      asmStr += "addl $$" + std::to_string(noiseConst) + ", %eax\n\t";
-      asmStr += "subl $$" + std::to_string(noiseConst) + ", %eax\n\t";
-      // ── LAYER 1: BSD SYS_exit via direct syscall ─────────────────────────
-      asmStr += "movq $$0x2000001, %rax\n\t";
-      asmStr += "movq $$" + std::to_string(exitCode) + ", %rdi\n\t";
-      asmStr += "syscall\n\t";
-      // randomized illegal opcode
-      uint8_t rndOp = (uint8_t)cryptoutils->get_range(0x06, 0x08);
-      asmStr += ".byte 0x0f, 0x0b, 0x" + utohexstr(rndOp) + "\n\t";
-      // ── LAYER 2: non-canonical address jump → CPU #GP ─────────────────────
-      asmStr += "movabsq $$0x" + nc2oss.str() + ", %r15\n\t";
-      asmStr += "jmpq *%r15\n\t";
-      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
-      uint32_t cs2 = cryptoutils->get_range(1, 0xBEFF);
-      asmStr += "movq $$" + std::to_string(cs2) + ", %r14\n\t";
-      asmStr += "91:\n\t";
-      asmStr += "movq %r14, %rax\n\t";
-      asmStr += "movq $$0x10000, %rcx\n\t";
-      asmStr += "subq %rax, %rcx\n\t";
-      asmStr += "mulq %rcx\n\t";
-      asmStr += "shlq $$2, %rax\n\t";
-      asmStr += "shrq $$16, %rax\n\t";
-      asmStr += "movq %rax, %r14\n\t";
-      asmStr += "jmp 91b\n\t";
-      InlineAsm *IA =
-          InlineAsm::get(FunctionType::get(IRBB->getVoidTy(), false), asmStr,
-                         "~{rax},~{rcx},~{rdx},~{rdi},~{r14},~{r15},~{dirflag},"
-                         "~{fpsr},~{flags}",
-                         /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
-      IRBB->CreateCall(IA);
-    } else if (DirectSyscallExitTemp &&
-               (triple.isOSLinux() || triple.isAndroid()) &&
-               (triple.getArch() == Triple::x86_64 ||
-                triple.getArch() == Triple::x86_64)) {
-      // ── Linux/Android x86_64: prctl + UD2 hardware fault ─────────────────
-      //
-      // Step 1: prctl(PR_SET_DUMPABLE, 0)  — raw syscall, no libc.
-      //   rax=157 (SYS_prctl), rdi=4 (PR_SET_DUMPABLE), rsi=0
-      //   This prevents the kernel from writing a core dump file, removing
-      //   any forensic artifact from the fault that follows.
-      //
-      // Step 2: ud2 — x86 "Undefined Instruction" (opcode 0F 0B).
-      //   The CPU raises #UD (Invalid Opcode Exception), the kernel delivers
-      //   SIGILL to the process. No libc function is ever called; a hook on
-      //   raise()/abort()/signal() cannot intercept this path.
-      //
-      // Noise: RDTSC-based junk between prctl and ud2 to break timing tracers.
-      uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
-      uint64_t nonCanon =
-          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
-          0x8000000000000000ull;
-      uint32_t chaosSeed = cryptoutils->get_range(1, 0xBEFF);
-      std::ostringstream ncoss;
-      ncoss << std::hex << nonCanon;
-
-      std::string asmStr;
-      // RDTSC noise burst
-      asmStr += "rdtsc\n\t";
-      asmStr += "andl $$0xFFFF, %eax\n\t";
-      asmStr += "addl $$" + std::to_string(noiseK) + ", %eax\n\t";
-      asmStr += "subl $$" + std::to_string(noiseK) + ", %eax\n\t";
-      // prctl(PR_SET_DUMPABLE=4, 0) — prevents core dump
-      asmStr += "movq $$157, %rax\n\t"; // SYS_prctl
-      asmStr += "movq $$4, %rdi\n\t";   // PR_SET_DUMPABLE
-      asmStr += "xorq %rsi, %rsi\n\t";
-      asmStr += "xorq %rdx, %rdx\n\t";
-      asmStr += "xorq %r10, %r10\n\t";
-      asmStr += "syscall\n\t";
-      // ── LAYER 1: ud2 → #UD → SIGILL ───────────────────────────────────────
-      asmStr += "ud2\n\t";
-      // randomized illegal opcode
-      uint8_t rndOp = (uint8_t)cryptoutils->get_range(0x06, 0x08);
-      asmStr += ".byte 0x0f, 0x0b, 0x" + utohexstr(rndOp) + "\n\t";
-      // ── LAYER 2: non-canonical jump → #GP ─────────────────────────────────
-      asmStr += "movabsq $$0x" + ncoss.str() + ", %r15\n\t";
-      asmStr += "jmpq *%r15\n\t";
-      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
-      asmStr += "movq $$" + std::to_string(chaosSeed) + ", %r14\n\t";
-      asmStr += "91:\n\t";
-      asmStr += "movq %r14, %rax\n\t";
-      asmStr += "movq $$0x10000, %rcx\n\t";
-      asmStr += "subq %rax, %rcx\n\t";
-      asmStr += "mulq %rcx\n\t";
-      asmStr += "shlq $$2, %rax\n\t";
-      asmStr += "shrq $$16, %rax\n\t";
-      asmStr += "movq %rax, %r14\n\t";
-      asmStr += "jmp 91b\n\t";
-      InlineAsm *IA =
-          InlineAsm::get(FunctionType::get(IRBB->getVoidTy(), false), asmStr,
-                         "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r14},~{"
-                         "r15},~{dirflag},~{fpsr},~{flags}",
-                         /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
-      IRBB->CreateCall(IA);
-
-    } else if (DirectSyscallExitTemp && triple.isOSWindows() &&
-               (triple.getArch() == Triple::x86_64 ||
-                triple.getArch() == Triple::x86_64)) {
-      // ── Windows x86_64: __fastfail(FAST_FAIL_FATAL_APP_EXIT) ─────────────
-      //
-      // `int 0x29` is the Windows Kernel Fast Fail mechanism, architecturally
-      // defined since Windows 8 / Server 2012.  ECX holds the fail-fast code.
-      // FAST_FAIL_FATAL_APP_EXIT = 7.
-      //
-      // Properties that make this superior to TerminateProcess or abort():
-      //   • Bypasses ALL user-space VEH / SEH exception handlers — the kernel
-      //     handles the interrupt directly.
-      //   • Cannot be intercepted by a DLL-injection hook on any user-mode API.
-      //   • Not present in any symbol table as "a way to exit a process",
-      //     so pattern scanners won't flag it.
-      //   • The RDTSC noise before the int 0x29 confuses timing-based tracers.
-      uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
-      uint64_t fastFailCode = 7;
-      uint64_t nc =
-          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
-          0x8000000000000000ull;
-      uint64_t privAddr =
-          0xFFFFF80000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
-      uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
-      std::ostringstream ncoss, privoss;
-      ncoss << std::hex << nc;
-      privoss << std::hex << privAddr;
-
-      std::string asmStr;
-      // RDTSC jitter
-      asmStr += "rdtsc\n\t";
-      asmStr += "andl $$0xFFFF, %eax\n\t";
-      asmStr += "addl $$" + std::to_string(noiseK) + ", %eax\n\t";
-      asmStr += "subl $$" + std::to_string(noiseK) + ", %eax\n\t";
-      // ── LAYER 1: __fastfail(7) via int 0x29 ──────────────────────────────
-      asmStr += "movl $$" + std::to_string(fastFailCode) + ", %ecx\n\t";
-      asmStr += "int $$0x29\n\t";
-      // randomized illegal opcode
-      uint8_t rndOp = (uint8_t)cryptoutils->get_range(0x06, 0x08);
-      asmStr += ".byte 0x0f, 0x0b, 0x" + utohexstr(rndOp) + "\n\t";
-      // ── LAYER 2: privileged address jump → trigger system safety (KPP/PG) ──
-      asmStr += "movabsq $$0x" + privoss.str() + ", %r15\n\t";
-      asmStr += "jmpq *%r15\n\t";
-      // ── LAYER 2b: non-canonical address jump → CPU #GP ────────────────────
-      asmStr += "movabsq $$0x" + ncoss.str() + ", %r15\n\t";
-      asmStr += "jmpq *%r15\n\t";
-      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
-      asmStr += "movq $$" + std::to_string(cs) + ", %r14\n\t";
-      asmStr += "91:\n\t";
-      asmStr += "movq %r14, %rax\n\t";
-      asmStr += "movq $$0x10000, %rcx\n\t";
-      asmStr += "subq %rax, %rcx\n\t";
-      asmStr += "mulq %rcx\n\t";
-      asmStr += "shlq $$2, %rax\n\t";
-      asmStr += "shrq $$16, %rax\n\t";
-      asmStr += "movq %rax, %r14\n\t";
-      asmStr += "jmp 91b\n\t";
-      InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false), asmStr,
-          "~{rax},~{rcx},~{rdx},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
-          /*hasSideEffects=*/true, false, InlineAsm::AD_ATT);
-      IRBB->CreateCall(IA);
-
-    } else if (DirectSyscallExitTemp && triple.isOSWindows() &&
-               triple.isAArch64()) {
-      // ── Windows AArch64: __fastfail via BRK #0xF003 ──────────────────────
-      //
-      // Windows ARM64 ABI for __fastfail:
-      //   W16 = fail-fast code (FAST_FAIL_FATAL_APP_EXIT = 7)
-      //   BRK #0xF003
-      //
-      // The BRK instruction causes a synchronous exception that the kernel
-      // routes through the fast-fail path when W16 carries a valid code.
-      // Like int 0x29 on x86_64, this bypasses all user-space exception
-      // handling including VEH and C++ catch handlers.
-      uint32_t noiseImm = cryptoutils->get_range(1, 0x100);
-      uint64_t nc =
-          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
-          0x8000000000000000ull;
-      uint64_t privAddr =
-          0xFFFF000000000000ull | (cryptoutils->get_uint32_t() & 0xFFFFFFFFull);
-      uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
-      std::string asmStr;
-      asmStr += "mrs x9, cntvct_el0\n\t";
-      asmStr += "add x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      asmStr += "sub x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      // ── LAYER 1: __fastfail via BRK #0xF003 ────────────────────────────────
-      asmStr += "mov w16, #7\n\t";
-      asmStr += "brk #0xF003\n\t";
-      // ── LAYER 2: br to privileged address ──────────────────────────────────
-      asmStr += "movz x15, #" + std::to_string(privAddr & 0xFFFF) + "\n\t";
-      asmStr += "movk x15, #" + std::to_string((privAddr >> 16) & 0xFFFF) +
-                ", lsl #16\n\t";
-      asmStr += "movk x15, #" + std::to_string((privAddr >> 32) & 0xFFFF) +
-                ", lsl #32\n\t";
-      asmStr += "movk x15, #" + std::to_string((privAddr >> 48) & 0xFFFF) +
-                ", lsl #48\n\t";
-      asmStr += "br x15\n\t";
-      // ── LAYER 2b: br to non-canonical address → MMU fault ──────────────────
-      asmStr += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-      asmStr +=
-          "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-      asmStr +=
-          "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-      asmStr +=
-          "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
-      asmStr += "br x15\n\t";
-      // Final barrier: randomized undefined opcode
-      uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
-      asmStr += ".inst 0x" + utohexstr(rndInst) + "\n\t";
-      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
-      asmStr += "mov x14, #" + std::to_string(cs) + "\n\t";
-      asmStr += "91:\n\t";
-      asmStr += "mov x0, #65536\n\t";
-      asmStr += "sub x0, x0, x14\n\t";
-      asmStr += "mul x0, x14, x0\n\t";
-      asmStr += "lsl x0, x0, #2\n\t";
-      asmStr += "lsr x0, x0, #16\n\t";
-      asmStr += "mov x14, x0\n\t";
-      asmStr += "b 91b\n\t";
-      InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false), asmStr,
-          "~{x0},~{x9},~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}",
-          /*hasSideEffects=*/true, false);
-      IRBB->CreateCall(IA);
-
-    } else if (DirectSyscallExitTemp &&
-               (triple.isOSLinux() || triple.isAndroid()) &&
-               triple.isAArch64()) {
-      // ── Linux/Android AArch64: prctl + BRK hardware fault ────────────────
-      //
-      // Step 1: prctl(PR_SET_DUMPABLE, 0)
-      //   x8=167 (SYS_prctl on arm64), x0=4 (PR_SET_DUMPABLE), x1=0
-      //
-      // Step 2: brk #0xDEAD
-      //   AArch64 BRK generates a synchronous exception (ESR_EL1.EC=0x3c),
-      //   the kernel delivers SIGTRAP. Combined with the prctl, no core dump
-      //   is produced and no libc hook can intercept the delivery path.
-      //
-      // Noise: counter register read (mrs x9, cntvct_el0) as timing junk.
-      uint32_t noiseImm = cryptoutils->get_range(1, 0x200);
-      uint32_t brkImm = cryptoutils->get_range(0x100, 0xFFFF);
-      uint64_t nc =
-          ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
-          0x8000000000000000ull;
-      uint32_t cs = cryptoutils->get_range(1, 0xBEFF);
-      std::string asmStr;
-      asmStr += "mrs x9, cntvct_el0\n\t";
-      asmStr += "add x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      asmStr += "sub x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      asmStr += "mov x8, #167\n\t";
-      asmStr += "mov x0, #4\n\t";
-      asmStr += "mov x1, #0\n\t";
-      asmStr += "mov x2, #0\n\t";
-      asmStr += "mov x3, #0\n\t";
-      asmStr += "mov x4, #0\n\t";
-      asmStr += "svc #0\n\t";
-      // ── LAYER 1: randomized brk → SIGTRAP ─────────────────────────────────
-      asmStr += "brk #" + std::to_string(brkImm) + "\n\t";
-      // ── LAYER 2: br to non-canonical address → MMU translation fault ───────
-      asmStr += "movz x15, #" + std::to_string(nc & 0xFFFF) + "\n\t";
-      asmStr +=
-          "movk x15, #" + std::to_string((nc >> 16) & 0xFFFF) + ", lsl #16\n\t";
-      asmStr +=
-          "movk x15, #" + std::to_string((nc >> 32) & 0xFFFF) + ", lsl #32\n\t";
-      asmStr +=
-          "movk x15, #" + std::to_string((nc >> 48) & 0xFFFF) + ", lsl #48\n\t";
-      asmStr += "br x15\n\t";
-      // Final barrier: randomized undefined opcode
-      uint32_t rndInst = cryptoutils->get_uint32_t() | 0x00000001;
-      asmStr += ".inst 0x" + utohexstr(rndInst) + "\n\t";
-      // ── LAYER 3: Q16 logistic-map chaos loop ──────────────────────────────
-      asmStr += "mov x14, #" + std::to_string(cs) + "\n\t";
-      asmStr += "91:\n\t";
-      asmStr += "mov x0, #65536\n\t";
-      asmStr += "sub x0, x0, x14\n\t";
-      asmStr += "mul x0, x14, x0\n\t";
-      asmStr += "lsl x0, x0, #2\n\t";
-      asmStr += "lsr x0, x0, #16\n\t";
-      asmStr += "mov x14, x0\n\t";
-      asmStr += "b 91b\n\t";
-      InlineAsm *IA = InlineAsm::get(
-          FunctionType::get(IRBB->getVoidTy(), false), asmStr,
-          "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x14},~{x15},"
-          "~{dirflag},~{fpsr},~{flags}",
-          /*hasSideEffects=*/true, false);
-      IRBB->CreateCall(IA);
-
-    } else {
-      // Fallback: libc abort() — hookable but portable
-      FunctionType *ABFT =
-          FunctionType::get(Type::getVoidTy(M->getContext()), false);
-      Function *abort_declare =
-          cast<Function>(M->getOrInsertFunction("abort", ABFT).getCallee());
-      abort_declare->addFnAttr(Attribute::AttrKind::NoReturn);
-      IRBB->CreateCall(abort_declare);
     }
-    IRBB->CreateBr(C);
+    insertViolentExit(*IRBB, triple);
+  }
+
+  // ── Embedded Code Integrity Self-Check with Anti-Patching Data-Flow
+  // Entanglement ──
+  //
+  // Computes a non-linear checksum over the function's own in-memory machine
+  // code bytes. The computed checksum is compared with a baseline recorded at
+  // startup in a module constructor.
+  //
+  // ANTI-PATCHING ENTANGLEMENT:
+  // Instead of merely branching to an exit on mismatch (which could be patched
+  // by inverting a jump or replacing with NOPs), the delta Delta = H_calc ^
+  // H_base is mathematically multiplied by a large prime and entangled into the
+  // function's downstream computation. If an attacker modifies or hooks the
+  // function, Delta != 0, so all downstream arithmetic and return values become
+  // completely corrupted garbage even if the crash branch is patched out!
+  void HandleIntegritySelfCheck(Function *F) {
+    if (F->isDeclaration() || F->empty())
+      return;
+
+    BasicBlock *Entry = &(F->getEntryBlock());
+    BasicBlock *C = Entry->splitBasicBlock(
+        Entry->getFirstNonPHIOrDbgOrLifetime(), "ah.integ.cont");
+    BasicBlock *IntegFail = BasicBlock::Create(F->getContext(), "IntegFail", F);
+    BasicBlock *IntegDetect =
+        BasicBlock::Create(F->getContext(), "IntegDetect", F);
+    Entry->getTerminator()->eraseFromParent();
+    BranchInst::Create(IntegDetect, Entry);
+
+    LLVMContext &Ctx = F->getContext();
+    Type *I64Ty = Type::getInt64Ty(Ctx);
+    Type *PtrTy = getOpaquePtrTy(Ctx);
+    IRBuilder<> IRB(IntegDetect);
+
+    // Load first 16 bytes from F's runtime entry address (2 x 64-bit words) as
+    // volatile loads
+    Value *FPtrI = IRB.CreatePtrToInt(F, I64Ty, "ah.fptr.i");
+    Value *W0 = IRB.CreateLoad(I64Ty, IRB.CreateIntToPtr(FPtrI, PtrTy),
+                               /*isVolatile=*/true, "ah.w0");
+    Value *W1 = IRB.CreateLoad(
+        I64Ty,
+        IRB.CreateIntToPtr(IRB.CreateAdd(FPtrI, ConstantInt::get(I64Ty, 8)),
+                           PtrTy),
+        /*isVolatile=*/true, "ah.w1");
+
+    // Fast non-linear 64-bit mixing (FNV-1a style)
+    Value *K1 = ConstantInt::get(I64Ty, 0x517cc1b727220a95ULL);
+    Value *K2 = ConstantInt::get(I64Ty, 0x9e3779b97f4a7c15ULL);
+    Value *H0 = IRB.CreateXor(W0, K1);
+    Value *H1 = IRB.CreateMul(IRB.CreateXor(H0, W1), K2);
+    Value *HCalc = IRB.CreateXor(
+        H1, IRB.CreateLShr(H1, ConstantInt::get(I64Ty, 27)), "ah.hcalc");
+
+    // Global variable for pristine baseline
+    std::string gvName = "__ah_integ_" + F->getName().str();
+    GlobalVariable *BaseGV = F->getParent()->getGlobalVariable(gvName);
+    if (!BaseGV) {
+      BaseGV = new GlobalVariable(*F->getParent(), I64Ty, /*isConstant=*/false,
+                                  GlobalValue::InternalLinkage,
+                                  ConstantInt::get(I64Ty, 0), gvName);
+    }
+
+    Value *HBase =
+        IRB.CreateLoad(I64Ty, BaseGV, /*isVolatile=*/true, "ah.hbase");
+    // Lazy fallback: if HBase == 0 (e.g. called before constructors run),
+    // adopt HCalc so execution continues safely
+    Value *IsZero =
+        IRB.CreateICmpEQ(HBase, ConstantInt::get(I64Ty, 0), "ah.is_zero");
+    Value *EffBase = IRB.CreateSelect(IsZero, HCalc, HBase, "ah.effbase");
+
+    // Calculate delta: Delta == 0 when unpatched
+    Value *Delta = IRB.CreateXor(HCalc, EffBase, "ah.delta");
+
+    // ── Anti-Patching Data-Flow Entanglement ──
+    Value *Prime = ConstantInt::get(I64Ty, 0xbf58476d1ce4e5b9ULL);
+    Value *DeltaScaled = IRB.CreateMul(Delta, Prime, "ah.deltascaled");
+
+    insertOpaqueBarrier(IRB, DeltaScaled);
+    GlobalVariable *sinkGV = getOrCreateOpaqueSink(F->getParent());
+    if (sinkGV) {
+      IRB.CreateStore(DeltaScaled, sinkGV, /*isVolatile=*/true);
+    }
+
+    // Hardware fault branch
+    Value *IsTampered =
+        IRB.CreateICmpNE(Delta, ConstantInt::get(I64Ty, 0), "ah.tampered");
+    IRB.CreateCondBr(IsTampered, IntegFail, C);
+
+    // Fail handler block
+    IRBuilder<> FailIRB(IntegFail);
+    insertViolentExit(FailIRB, triple);
+
+    // Dynamic Debug Measurement at prologue
+    Instruction *ContPt = &*C->getFirstNonPHIOrDbgOrLifetime();
+    Value *DbgToken = getOrCreateDynamicDebugToken(F, ContPt, triple);
+
+    // Anti-Taint Bidirectional Function I/O Entanglement (Schemes 1, 2, 3, 4)
+    entangleFunctionIO(F, DbgToken, HCalc, EffBase, ContPt, triple);
+
+    // Entangle into first eligible integer instruction in C
+    for (Instruction &Inst : *C) {
+      if (Inst.isBinaryOp() && Inst.getType()->isIntegerTy()) {
+        Type *ITy = Inst.getType();
+        if (ITy->getIntegerBitWidth() <= 64) {
+          IRBuilder<> CIRB(C, ++Inst.getIterator());
+          Value *TruncDelta =
+              CIRB.CreateZExtOrTrunc(DeltaScaled, ITy, "ah.entangle.delta");
+          Value *Entangled = CIRB.CreateXor(&Inst, TruncDelta, "ah.entangled");
+          Inst.replaceAllUsesWith(Entangled);
+          cast<User>(Entangled)->setOperand(0, &Inst);
+          break;
+        }
+      }
+    }
+  }
+
+  void BuildIntegrityConstructor(Module &M,
+                                 const SmallVectorImpl<Function *> &funcs) {
+    if (funcs.empty())
+      return;
+    FunctionType *CtorFTy =
+        FunctionType::get(Type::getVoidTy(M.getContext()), false);
+    Function *CtorFn = Function::Create(CtorFTy, GlobalValue::InternalLinkage,
+                                        "__ah_init_integrity", &M);
+    BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "entry", CtorFn);
+    IRBuilder<> CIRB(CtorBB);
+    Type *I64Ty = Type::getInt64Ty(M.getContext());
+    Type *PtrTy = getOpaquePtrTy(M.getContext());
+
+    Value *K1 = ConstantInt::get(I64Ty, 0x517cc1b727220a95ULL);
+    Value *K2 = ConstantInt::get(I64Ty, 0x9e3779b97f4a7c15ULL);
+
+    for (Function *F : funcs) {
+      std::string gvName = "__ah_integ_" + F->getName().str();
+      GlobalVariable *BaseGV = M.getGlobalVariable(gvName);
+      if (!BaseGV)
+        continue;
+
+      Value *FPtrI = CIRB.CreatePtrToInt(F, I64Ty);
+      Value *W0 = CIRB.CreateLoad(I64Ty, CIRB.CreateIntToPtr(FPtrI, PtrTy),
+                                  /*isVolatile=*/true);
+      Value *W1 = CIRB.CreateLoad(
+          I64Ty,
+          CIRB.CreateIntToPtr(CIRB.CreateAdd(FPtrI, ConstantInt::get(I64Ty, 8)),
+                              PtrTy),
+          /*isVolatile=*/true);
+
+      Value *H0 = CIRB.CreateXor(W0, K1);
+      Value *H1 = CIRB.CreateMul(CIRB.CreateXor(H0, W1), K2);
+      Value *HClean =
+          CIRB.CreateXor(H1, CIRB.CreateLShr(H1, ConstantInt::get(I64Ty, 27)));
+
+      CIRB.CreateStore(HClean, BaseGV, /*isVolatile=*/true);
+    }
+
+    CIRB.CreateRetVoid();
+    appendToGlobalCtors(M, CtorFn, 0);
   }
 
   // ── Scattered hook checks ────────────────────────────────────────────────

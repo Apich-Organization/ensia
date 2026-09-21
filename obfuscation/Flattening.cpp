@@ -142,15 +142,15 @@ void Flattening::flatten(Function *f) {
 
   new StoreInst(ConstantInt::get(Type::getInt32Ty(f->getContext()),
                                  cryptoutils->scramble32(0, scrambling_key)),
-                switchVar, insert);
-  new StoreInst(switchVar, switchVarAddr, insert);
+                switchVar, /*isVolatile=*/true, insert);
+  new StoreInst(switchVar, switchVarAddr, /*isVolatile=*/true, insert);
 
   // Create main loop
   loopEntry = BasicBlock::Create(f->getContext(), "loopEntry", f, insert);
   loopEnd = BasicBlock::Create(f->getContext(), "loopEnd", f, insert);
 
   load = new LoadInst(switchVar->getAllocatedType(), switchVar, "switchVar",
-                      loopEntry);
+                      /*isVolatile=*/true, loopEntry);
 
   // Move first BB on top
   insert->moveBefore(loopEntry);
@@ -182,9 +182,10 @@ void Flattening::flatten(Function *f) {
       BasicBlock::Create(f->getContext(), "switchDefault", f, loopEnd);
   BranchInst::Create(loopEnd, swDefault);
 
-  // Create switch instruction itself and set condition
-  switchI = SwitchInst::Create(&*f->begin(), swDefault, 0, loopEntry);
-  switchI->setCondition(load);
+  // Create switch instruction itself with opaque condition
+  IRBuilder<> IRBSw(loopEntry);
+  Value *opaqueCond = insertOpaqueBarrier(IRBSw, load);
+  switchI = SwitchInst::Create(opaqueCond, swDefault, 0, loopEntry);
 
   // Remove branch jump from 1st BB and make a jump to the while
   f->begin()->getTerminator()->eraseFromParent();
@@ -192,17 +193,18 @@ void Flattening::flatten(Function *f) {
   BranchInst::Create(loopEntry, &*f->begin());
 
   // Put BB in the switch
+  DenseMap<BasicBlock *, ConstantInt *> bbCaseMap;
+  unsigned caseIdx = 0;
   for (BasicBlock *i : origBB) {
-    ConstantInt *numCase = nullptr;
-
     // Move the BB inside the switch (only visual, no code logic)
     i->moveBefore(loopEnd);
 
     // Add case to switch
-    numCase = cast<ConstantInt>(ConstantInt::get(
-        switchI->getCondition()->getType(),
-        cryptoutils->scramble32(switchI->getNumCases(), scrambling_key)));
+    ConstantInt *numCase = cast<ConstantInt>(
+        ConstantInt::get(switchI->getCondition()->getType(),
+                         cryptoutils->scramble32(caseIdx++, scrambling_key)));
     switchI->addCase(numCase, i);
+    bbCaseMap[i] = numCase;
   }
 
   // Recalculate switchVar
@@ -212,7 +214,7 @@ void Flattening::flatten(Function *f) {
     // If it's a non-conditional jump
     if (i->getTerminator()->getNumSuccessors() == 1) {
       BasicBlock *succ = i->getTerminator()->getSuccessor(0);
-      numCase = switchI->findCaseDest(succ);
+      numCase = bbCaseMap.lookup(succ);
 
       if (!numCase) {
         if (succ == insert) {
@@ -226,8 +228,8 @@ void Flattening::flatten(Function *f) {
         i->getTerminator()->eraseFromParent();
         new StoreInst(numCase,
                       new LoadInst(switchVarAddr->getAllocatedType(),
-                                   switchVarAddr, "", i),
-                      i);
+                                   switchVarAddr, "", /*isVolatile=*/true, i),
+                      /*isVolatile=*/true, i);
         BranchInst::Create(loopEnd, i);
       } else {
         // Successor is outside switch — jump directly
@@ -241,8 +243,8 @@ void Flattening::flatten(Function *f) {
     if (i->getTerminator()->getNumSuccessors() == 2) {
       BasicBlock *succTrue = i->getTerminator()->getSuccessor(0);
       BasicBlock *succFalse = i->getTerminator()->getSuccessor(1);
-      ConstantInt *numCaseTrue = switchI->findCaseDest(succTrue);
-      ConstantInt *numCaseFalse = switchI->findCaseDest(succFalse);
+      ConstantInt *numCaseTrue = bbCaseMap.lookup(succTrue);
+      ConstantInt *numCaseFalse = bbCaseMap.lookup(succFalse);
 
       if (!numCaseTrue && succTrue == insert) {
         numCaseTrue = cast<ConstantInt>(
@@ -264,22 +266,22 @@ void Flattening::flatten(Function *f) {
         i->getTerminator()->eraseFromParent();
         new StoreInst(sel,
                       new LoadInst(switchVarAddr->getAllocatedType(),
-                                   switchVarAddr, "", i),
-                      i);
+                                   switchVarAddr, "", /*isVolatile=*/true, i),
+                      /*isVolatile=*/true, i);
         BranchInst::Create(loopEnd, i);
       } else if (numCaseTrue && !numCaseFalse) {
         i->getTerminator()->eraseFromParent();
         new StoreInst(numCaseTrue,
                       new LoadInst(switchVarAddr->getAllocatedType(),
-                                   switchVarAddr, "", i),
-                      i);
+                                   switchVarAddr, "", /*isVolatile=*/true, i),
+                      /*isVolatile=*/true, i);
         BranchInst::Create(loopEnd, succFalse, cond, i);
       } else if (!numCaseTrue && numCaseFalse) {
         i->getTerminator()->eraseFromParent();
         new StoreInst(numCaseFalse,
                       new LoadInst(switchVarAddr->getAllocatedType(),
-                                   switchVarAddr, "", i),
-                      i);
+                                   switchVarAddr, "", /*isVolatile=*/true, i),
+                      /*isVolatile=*/true, i);
         BranchInst::Create(succTrue, loopEnd, cond, i);
       } else {
         i->getTerminator()->eraseFromParent();

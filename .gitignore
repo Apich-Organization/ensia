@@ -109,3 +109,9 @@ benchmark/scripts/test_angr2.py
 benchmark/scripts/test_angr_fork.py
 benchmark/scripts/test_bcf_fork
 benchmark/scripts/test_bcf_fork.c
+
+# Large LLVM releases & python caches
+LLVM-*
+__pycache__/
+*.pyc
+

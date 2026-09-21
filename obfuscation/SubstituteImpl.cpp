@@ -18,7 +18,9 @@
 
 #include "include/SubstituteImpl.h"
 #include "include/CryptoUtils.h"
+#include "include/Utils.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/NoFolder.h"
 
 using namespace llvm;
 
@@ -172,8 +174,10 @@ static void shlSubstituteChain(BinaryOperator *bo) {
   // (a + r) << k
   BinaryOperator *aPr =
       BinaryOperator::Create(Instruction::Add, bo->getOperand(0), r, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barAPr = insertOpaqueBarrier(IRB, aPr);
   BinaryOperator *shl1 =
-      BinaryOperator::Create(Instruction::Shl, aPr, kC, "", bo);
+      BinaryOperator::Create(Instruction::Shl, barAPr, kC, "", bo);
   // r << k
   APInt rShiftedVal = rVal.shl(k);
   ConstantInt *rShifted = cast<ConstantInt>(ConstantInt::get(T, rShiftedVal));
@@ -197,8 +201,10 @@ static void lshrSubstituteMask(BinaryOperator *bo) {
   ConstantInt *maskC = cast<ConstantInt>(ConstantInt::get(T, maskVal));
   BinaryOperator *andOp = BinaryOperator::Create(
       Instruction::And, bo->getOperand(0), maskC, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barAnd = insertOpaqueBarrier(IRB, andOp);
   bo->replaceAllUsesWith(
-      BinaryOperator::Create(Instruction::LShr, andOp, kC, "", bo));
+      BinaryOperator::Create(Instruction::LShr, barAnd, kC, "", bo));
 }
 
 static void lshrSubstituteXorRound(BinaryOperator *bo) {
@@ -218,31 +224,16 @@ static void lshrSubstituteXorRound(BinaryOperator *bo) {
   // (a ^ r) >>u k
   BinaryOperator *xorOp =
       BinaryOperator::Create(Instruction::Xor, bo->getOperand(0), r, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barXor = insertOpaqueBarrier(IRB, xorOp);
   BinaryOperator *shrOp =
-      BinaryOperator::Create(Instruction::LShr, xorOp, kC, "", bo);
+      BinaryOperator::Create(Instruction::LShr, barXor, kC, "", bo);
   // r >>u k (constant)
   APInt rShrVal = rVal.lshr(k);
   ConstantInt *rShr = cast<ConstantInt>(ConstantInt::get(T, rShrVal));
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Xor, shrOp, rShr, "", bo));
 }
-
-// ── AShr substitutions
-// ────────────────────────────────────────────────────────
-//
-// Validity proof for the core identity:
-//   (a ^ r) >>s k ^ (r >>s k) == a >>s k
-//
-// For any bit position i < (width - k):
-//   ((a^r) >>s k)[i] = (a^r)[i+k] = a[i+k] ^ r[i+k]
-//   ((a >>s k) ^ (r >>s k))[i] = a[i+k] ^ r[i+k]  ✓
-//
-// For sign-extension bits (i >= width - k), the AShr result fills with the
-// sign bit of the input.  The sign bit of (a^r) is a[msb]^r[msb], and the
-// sign bits of (a >>s k) ^ (r >>s k) are a[msb] ^ r[msb].  ✓
-//
-// Therefore XOR distributes over arithmetic right-shift:
-//   (a ^ b) >>s k == (a >>s k) ^ (b >>s k)   for all a, b, k.
 
 static void ashrSubstituteXorRound(BinaryOperator *bo) {
   // a >>s k == (a ^ r) >>s k ^ (r >>s k)
@@ -262,8 +253,10 @@ static void ashrSubstituteXorRound(BinaryOperator *bo) {
   // (a ^ r) >>s k
   BinaryOperator *xorOp =
       BinaryOperator::Create(Instruction::Xor, bo->getOperand(0), r, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barXor = insertOpaqueBarrier(IRB, xorOp);
   BinaryOperator *ashrOp =
-      BinaryOperator::Create(Instruction::AShr, xorOp, kC, "", bo);
+      BinaryOperator::Create(Instruction::AShr, barXor, kC, "", bo);
 
   // r >>s k  (compile-time arithmetic right-shift via APInt)
   APInt rShrVal = rVal.ashr(k);
@@ -298,8 +291,10 @@ static void ashrSubstituteDoubleRound(BinaryOperator *bo) {
   // (a ^ r1 ^ r2)
   BinaryOperator *xr1 =
       BinaryOperator::Create(Instruction::Xor, bo->getOperand(0), r1, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barXr1 = insertOpaqueBarrier(IRB, xr1);
   BinaryOperator *xr12 =
-      BinaryOperator::Create(Instruction::Xor, xr1, r2, "", bo);
+      BinaryOperator::Create(Instruction::Xor, barXr1, r2, "", bo);
   // >>s k
   BinaryOperator *ashrOp =
       BinaryOperator::Create(Instruction::AShr, xr12, kC, "", bo);
@@ -362,20 +357,22 @@ void SubstituteImpl::substituteMul(BinaryOperator *bo) {
 
 // Implementation of ~(a | b) and ~a & ~b
 static BinaryOperator *buildNor(Value *a, Value *b, Instruction *insertBefore) {
+  IRBuilder<NoFolder> IRB(insertBefore);
   switch (cryptoutils->get_range(2)) {
   case 0: {
     // ~(a | b)
     BinaryOperator *op =
         BinaryOperator::Create(Instruction::Or, a, b, "", insertBefore);
-    op = BinaryOperator::CreateNot(op, "", insertBefore);
-    return op;
+    Value *barOp = insertOpaqueBarrier(IRB, op);
+    return BinaryOperator::CreateNot(barOp, "", insertBefore);
   }
   case 1: {
     // ~a & ~b
     BinaryOperator *nota = BinaryOperator::CreateNot(a, "", insertBefore);
+    Value *barNota = insertOpaqueBarrier(IRB, nota);
     BinaryOperator *notb = BinaryOperator::CreateNot(b, "", insertBefore);
-    BinaryOperator *op =
-        BinaryOperator::Create(Instruction::And, nota, notb, "", insertBefore);
+    BinaryOperator *op = BinaryOperator::Create(Instruction::And, barNota, notb,
+                                                "", insertBefore);
     return op;
   }
   default:
@@ -386,20 +383,22 @@ static BinaryOperator *buildNor(Value *a, Value *b, Instruction *insertBefore) {
 // Implementation of ~(a & b) and ~a | ~b
 static BinaryOperator *buildNand(Value *a, Value *b,
                                  Instruction *insertBefore) {
+  IRBuilder<NoFolder> IRB(insertBefore);
   switch (cryptoutils->get_range(2)) {
   case 0: {
     // ~(a & b)
     BinaryOperator *op =
         BinaryOperator::Create(Instruction::And, a, b, "", insertBefore);
-    op = BinaryOperator::CreateNot(op, "", insertBefore);
-    return op;
+    Value *barOp = insertOpaqueBarrier(IRB, op);
+    return BinaryOperator::CreateNot(barOp, "", insertBefore);
   }
   case 1: {
     // ~a | ~b
     BinaryOperator *nota = BinaryOperator::CreateNot(a, "", insertBefore);
+    Value *barNota = insertOpaqueBarrier(IRB, nota);
     BinaryOperator *notb = BinaryOperator::CreateNot(b, "", insertBefore);
-    BinaryOperator *op =
-        BinaryOperator::Create(Instruction::Or, nota, notb, "", insertBefore);
+    BinaryOperator *op = BinaryOperator::Create(Instruction::Or, barNota, notb,
+                                                "", insertBefore);
     return op;
   }
   default:
@@ -410,17 +409,23 @@ static BinaryOperator *buildNand(Value *a, Value *b,
 // Implementation of a = b - (-c)
 static void addNeg(BinaryOperator *bo) {
   BinaryOperator *op = BinaryOperator::CreateNeg(bo->getOperand(1), "", bo);
-  op = BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), op, "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
+  BinaryOperator *res = BinaryOperator::Create(
+      Instruction::Sub, bo->getOperand(0), barOp, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = -(-b + (-c))
 static void addDoubleNeg(BinaryOperator *bo) {
   BinaryOperator *op = BinaryOperator::CreateNeg(bo->getOperand(0), "", bo);
   BinaryOperator *op2 = BinaryOperator::CreateNeg(bo->getOperand(1), "", bo);
-  op = BinaryOperator::Create(Instruction::Add, op, op2, "", bo);
-  op = BinaryOperator::CreateNeg(op, "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
+  BinaryOperator *add =
+      BinaryOperator::Create(Instruction::Add, barOp, op2, "", bo);
+  BinaryOperator *res = BinaryOperator::CreateNeg(add, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of  r = rand (); a = b + r; a = a + c; a = a - r
@@ -428,8 +433,10 @@ static void addRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
       bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
                            cryptoutils->get_uint64_t(), false, true));
-  BinaryOperator *op =
-      BinaryOperator::Create(Instruction::Add, bo->getOperand(0), co, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barCO = insertOpaqueBarrier(IRB, co);
+  BinaryOperator *op = BinaryOperator::Create(Instruction::Add,
+                                              bo->getOperand(0), barCO, "", bo);
   op = BinaryOperator::Create(Instruction::Add, op, bo->getOperand(1), "", bo);
   op = BinaryOperator::Create(Instruction::Sub, op, co, "", bo);
   bo->replaceAllUsesWith(op);
@@ -440,8 +447,10 @@ static void addRand2(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
       bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
                            cryptoutils->get_uint64_t(), false, true));
-  BinaryOperator *op =
-      BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), co, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barCO = insertOpaqueBarrier(IRB, co);
+  BinaryOperator *op = BinaryOperator::Create(Instruction::Sub,
+                                              bo->getOperand(0), barCO, "", bo);
   op = BinaryOperator::Create(Instruction::Add, op, bo->getOperand(1), "", bo);
   op = BinaryOperator::Create(Instruction::Add, op, co, "", bo);
   bo->replaceAllUsesWith(op);
@@ -452,9 +461,13 @@ static void addSubstitution(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(bo->getType(), 1);
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
   BinaryOperator *op1 = BinaryOperator::CreateNeg(co, "", bo);
-  op = BinaryOperator::Create(Instruction::Sub, op, op1, "", bo);
-  op = BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), op, "", bo);
-  bo->replaceAllUsesWith(op);
+  BinaryOperator *sub =
+      BinaryOperator::Create(Instruction::Sub, op, op1, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barSub = insertOpaqueBarrier(IRB, sub);
+  BinaryOperator *res = BinaryOperator::Create(
+      Instruction::Sub, bo->getOperand(0), barSub, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = b + c => a = (b | c) + (b & c)
@@ -463,8 +476,11 @@ static void addSubstitution2(BinaryOperator *bo) {
       Instruction::And, bo->getOperand(0), bo->getOperand(1), "", bo);
   BinaryOperator *op1 = BinaryOperator::Create(
       Instruction::Or, bo->getOperand(0), bo->getOperand(1), "", bo);
-  op = BinaryOperator::Create(Instruction::Add, op, op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Add, barOp, op1, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = b + c => a = (b ^ c) + (b & c) * 2
@@ -473,17 +489,23 @@ static void addSubstitution3(BinaryOperator *bo) {
   BinaryOperator *op = BinaryOperator::Create(
       Instruction::And, bo->getOperand(0), bo->getOperand(1), "", bo);
   op = BinaryOperator::Create(Instruction::Mul, op, co, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
   BinaryOperator *op1 = BinaryOperator::Create(
       Instruction::Xor, bo->getOperand(0), bo->getOperand(1), "", bo);
-  op = BinaryOperator::Create(Instruction::Add, op1, op, "", bo);
-  bo->replaceAllUsesWith(op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Add, op1, barOp, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = b + (-c)
 static void subNeg(BinaryOperator *bo) {
   BinaryOperator *op = BinaryOperator::CreateNeg(bo->getOperand(1), "", bo);
-  op = BinaryOperator::Create(Instruction::Add, bo->getOperand(0), op, "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
+  BinaryOperator *res = BinaryOperator::Create(
+      Instruction::Add, bo->getOperand(0), barOp, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of  r = rand (); a = b + r; a = a - c; a = a - r
@@ -491,8 +513,10 @@ static void subRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
       bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
                            cryptoutils->get_uint64_t(), false, true));
-  BinaryOperator *op =
-      BinaryOperator::Create(Instruction::Add, bo->getOperand(0), co, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barCO = insertOpaqueBarrier(IRB, co);
+  BinaryOperator *op = BinaryOperator::Create(Instruction::Add,
+                                              bo->getOperand(0), barCO, "", bo);
   op = BinaryOperator::Create(Instruction::Sub, op, bo->getOperand(1), "", bo);
   op = BinaryOperator::Create(Instruction::Sub, op, co, "", bo);
   bo->replaceAllUsesWith(op);
@@ -503,8 +527,10 @@ static void subRand2(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
       bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
                            cryptoutils->get_uint64_t(), false, true));
-  BinaryOperator *op =
-      BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), co, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barCO = insertOpaqueBarrier(IRB, co);
+  BinaryOperator *op = BinaryOperator::Create(Instruction::Sub,
+                                              bo->getOperand(0), barCO, "", bo);
   op = BinaryOperator::Create(Instruction::Sub, op, bo->getOperand(1), "", bo);
   op = BinaryOperator::Create(Instruction::Add, op, co, "", bo);
   bo->replaceAllUsesWith(op);
@@ -515,11 +541,14 @@ static void subSubstitution(BinaryOperator *bo) {
   BinaryOperator *op1 = BinaryOperator::CreateNot(bo->getOperand(0), "", bo);
   BinaryOperator *op =
       BinaryOperator::Create(Instruction::And, op1, bo->getOperand(1), "", bo);
-  op1 = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
-  BinaryOperator *op2 =
-      BinaryOperator::Create(Instruction::And, bo->getOperand(0), op1, "", bo);
-  op = BinaryOperator::Create(Instruction::Sub, op2, op, "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
+  BinaryOperator *op2Not = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
+  BinaryOperator *op2 = BinaryOperator::Create(
+      Instruction::And, bo->getOperand(0), op2Not, "", bo);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Sub, op2, barOp, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = b - c => a = (2 * (b & ~c)) - (b ^ c)
@@ -530,27 +559,36 @@ static void subSubstitution2(BinaryOperator *bo) {
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
   op = BinaryOperator::Create(Instruction::And, bo->getOperand(0), op, "", bo);
   op = BinaryOperator::Create(Instruction::Mul, co, op, "", bo);
-  op = BinaryOperator::Create(Instruction::Sub, op, op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Sub, barOp, op1, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = b - c => a = b + ~c + 1
 static void subSubstitution3(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(bo->getType(), 1);
   BinaryOperator *op1 = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
-  BinaryOperator *op =
-      BinaryOperator::Create(Instruction::Add, bo->getOperand(0), op1, "", bo);
-  op = BinaryOperator::Create(Instruction::Add, op, co, "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp1 = insertOpaqueBarrier(IRB, op1);
+  BinaryOperator *op = BinaryOperator::Create(
+      Instruction::Add, bo->getOperand(0), barOp1, "", bo);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Add, op, co, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = b & c => a = (b ^ ~c) & b
 static void andSubstitution(BinaryOperator *bo) {
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
-  BinaryOperator *op1 =
-      BinaryOperator::Create(Instruction::Xor, bo->getOperand(0), op, "", bo);
-  op = BinaryOperator::Create(Instruction::And, op1, bo->getOperand(0), "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
+  BinaryOperator *op1 = BinaryOperator::Create(
+      Instruction::Xor, bo->getOperand(0), barOp, "", bo);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::And, op1, bo->getOperand(0), "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = b & c => a = (b | c) & ~(b ^ c)
@@ -558,10 +596,13 @@ static void andSubstitution2(BinaryOperator *bo) {
   BinaryOperator *op1 = BinaryOperator::Create(
       Instruction::Xor, bo->getOperand(0), bo->getOperand(1), "", bo);
   op1 = BinaryOperator::CreateNot(op1, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp1 = insertOpaqueBarrier(IRB, op1);
   BinaryOperator *op = BinaryOperator::Create(
       Instruction::Or, bo->getOperand(0), bo->getOperand(1), "", bo);
-  op = BinaryOperator::Create(Instruction::And, op, op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::And, op, barOp1, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = b & c => a = (~b | c) + (b + 1)
@@ -571,8 +612,11 @@ static void andSubstitution3(BinaryOperator *bo) {
       BinaryOperator::Create(Instruction::Add, bo->getOperand(0), co, "", bo);
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(0), "", bo);
   op = BinaryOperator::Create(Instruction::Or, op, bo->getOperand(1), "", bo);
-  op = BinaryOperator::Create(Instruction::Add, op, op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Add, barOp, op1, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = a & b <=> ~(~a | ~b) & (r | ~r)
@@ -580,12 +624,14 @@ static void andSubstitutionRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
       bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
                            cryptoutils->get_uint64_t(), false, true));
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barCO = insertOpaqueBarrier(IRB, co);
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(0), "", bo);
   BinaryOperator *op1 = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
-  BinaryOperator *opr = BinaryOperator::CreateNot(co, "", bo);
+  BinaryOperator *opr = BinaryOperator::CreateNot(barCO, "", bo);
   BinaryOperator *opa =
       BinaryOperator::Create(Instruction::Or, op, op1, "", bo);
-  opr = BinaryOperator::Create(Instruction::Or, co, opr, "", bo);
+  opr = BinaryOperator::Create(Instruction::Or, barCO, opr, "", bo);
   op = BinaryOperator::CreateNot(opa, "", bo);
   op = BinaryOperator::Create(Instruction::And, op, opr, "", bo);
   bo->replaceAllUsesWith(op);
@@ -609,10 +655,13 @@ static void andNand(BinaryOperator *bo) {
 static void orSubstitution(BinaryOperator *bo) {
   BinaryOperator *op = BinaryOperator::Create(
       Instruction::And, bo->getOperand(0), bo->getOperand(1), "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
   BinaryOperator *op1 = BinaryOperator::Create(
       Instruction::Xor, bo->getOperand(0), bo->getOperand(1), "", bo);
-  op = BinaryOperator::Create(Instruction::Or, op, op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Or, barOp, op1, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = a | b => a = (b + (b ^ c)) - (b & ~c)
@@ -620,11 +669,14 @@ static void orSubstitution2(BinaryOperator *bo) {
   BinaryOperator *op1 = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
   op1 =
       BinaryOperator::Create(Instruction::And, bo->getOperand(0), op1, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp1 = insertOpaqueBarrier(IRB, op1);
   BinaryOperator *op = BinaryOperator::Create(
       Instruction::Xor, bo->getOperand(0), bo->getOperand(1), "", bo);
   op = BinaryOperator::Create(Instruction::Add, bo->getOperand(0), op, "", bo);
-  op = BinaryOperator::Create(Instruction::Sub, op, op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Sub, op, barOp1, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = a | b => a = (b + c + 1) + ~(c & b)
@@ -633,11 +685,14 @@ static void orSubstitution3(BinaryOperator *bo) {
   BinaryOperator *op1 = BinaryOperator::Create(
       Instruction::And, bo->getOperand(1), bo->getOperand(0), "", bo);
   op1 = BinaryOperator::CreateNot(op1, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp1 = insertOpaqueBarrier(IRB, op1);
   BinaryOperator *op = BinaryOperator::Create(
       Instruction::Add, bo->getOperand(0), bo->getOperand(1), "", bo);
   op = BinaryOperator::Create(Instruction::Add, op, co, "", bo);
-  op = BinaryOperator::Create(Instruction::Add, op, op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Add, op, barOp1, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = b | c => a = (((~a & r) | (a & ~r)) ^ ((~b & r) | (b &
@@ -646,15 +701,17 @@ static void orSubstitutionRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
       bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
                            cryptoutils->get_uint64_t(), false, true));
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barCO = insertOpaqueBarrier(IRB, co);
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(0), "", bo);
   BinaryOperator *op1 = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
-  BinaryOperator *op2 = BinaryOperator::CreateNot(co, "", bo);
+  BinaryOperator *op2 = BinaryOperator::CreateNot(barCO, "", bo);
   BinaryOperator *op3 =
-      BinaryOperator::Create(Instruction::And, op, co, "", bo);
+      BinaryOperator::Create(Instruction::And, op, barCO, "", bo);
   BinaryOperator *op4 =
       BinaryOperator::Create(Instruction::And, bo->getOperand(0), op2, "", bo);
   BinaryOperator *op5 =
-      BinaryOperator::Create(Instruction::And, op1, co, "", bo);
+      BinaryOperator::Create(Instruction::And, op1, barCO, "", bo);
   BinaryOperator *op6 =
       BinaryOperator::Create(Instruction::And, bo->getOperand(1), op2, "", bo);
   op3 = BinaryOperator::Create(Instruction::Or, op3, op4, "", bo);
@@ -662,7 +719,7 @@ static void orSubstitutionRand(BinaryOperator *bo) {
   op5 = BinaryOperator::Create(Instruction::Xor, op3, op4, "", bo);
   op3 = BinaryOperator::Create(Instruction::Or, op, op1, "", bo);
   op3 = BinaryOperator::CreateNot(op3, "", bo);
-  op4 = BinaryOperator::Create(Instruction::Or, co, op2, "", bo);
+  op4 = BinaryOperator::Create(Instruction::Or, barCO, op2, "", bo);
   op4 = BinaryOperator::Create(Instruction::And, op3, op4, "", bo);
   op = BinaryOperator::Create(Instruction::Or, op5, op4, "", bo);
   bo->replaceAllUsesWith(op);
@@ -688,11 +745,14 @@ static void orNand(BinaryOperator *bo) {
 static void xorSubstitution(BinaryOperator *bo) {
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(0), "", bo);
   op = BinaryOperator::Create(Instruction::And, bo->getOperand(1), op, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
   BinaryOperator *op1 = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
   op1 =
       BinaryOperator::Create(Instruction::And, bo->getOperand(0), op1, "", bo);
-  op = BinaryOperator::Create(Instruction::Or, op, op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Or, barOp, op1, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = a ^ b => a = (b + c) - 2 * (b & c)
@@ -701,10 +761,13 @@ static void xorSubstitution2(BinaryOperator *bo) {
   BinaryOperator *op1 = BinaryOperator::Create(
       Instruction::And, bo->getOperand(0), bo->getOperand(1), "", bo);
   op1 = BinaryOperator::Create(Instruction::Mul, co, op1, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp1 = insertOpaqueBarrier(IRB, op1);
   BinaryOperator *op = BinaryOperator::Create(
       Instruction::Add, bo->getOperand(0), bo->getOperand(1), "", bo);
-  op = BinaryOperator::Create(Instruction::Sub, op, op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Sub, op, barOp1, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = a ^ b => a = b - (2 * (c & ~(b ^ c)) - c)
@@ -716,11 +779,13 @@ static void xorSubstitution3(BinaryOperator *bo) {
   op1 =
       BinaryOperator::Create(Instruction::And, bo->getOperand(1), op1, "", bo);
   op1 = BinaryOperator::Create(Instruction::Mul, co, op1, "", bo);
-  op1 =
-      BinaryOperator::Create(Instruction::Sub, op1, bo->getOperand(1), "", bo);
-  BinaryOperator *op =
-      BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), op1, "", bo);
-  bo->replaceAllUsesWith(op);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp1 = insertOpaqueBarrier(IRB, op1);
+  BinaryOperator *sub = BinaryOperator::Create(Instruction::Sub, barOp1,
+                                               bo->getOperand(1), "", bo);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Sub, bo->getOperand(0), sub, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation of a = a ^ b <=> (a ^ r) ^ (b ^ r) <=> (~a & r | a & ~r) ^ (~b
@@ -729,13 +794,15 @@ static void xorSubstitutionRand(BinaryOperator *bo) {
   ConstantInt *co = (ConstantInt *)ConstantInt::get(
       bo->getType(), APInt(bo->getType()->getIntegerBitWidth(),
                            cryptoutils->get_uint64_t(), false, true));
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barCO = insertOpaqueBarrier(IRB, co);
   BinaryOperator *op = BinaryOperator::CreateNot(bo->getOperand(0), "", bo);
-  op = BinaryOperator::Create(Instruction::And, co, op, "", bo);
-  BinaryOperator *opr = BinaryOperator::CreateNot(co, "", bo);
+  op = BinaryOperator::Create(Instruction::And, barCO, op, "", bo);
+  BinaryOperator *opr = BinaryOperator::CreateNot(barCO, "", bo);
   BinaryOperator *op1 =
       BinaryOperator::Create(Instruction::And, bo->getOperand(0), opr, "", bo);
   BinaryOperator *op2 = BinaryOperator::CreateNot(bo->getOperand(1), "", bo);
-  op2 = BinaryOperator::Create(Instruction::And, op2, co, "", bo);
+  op2 = BinaryOperator::Create(Instruction::And, op2, barCO, "", bo);
   BinaryOperator *op3 =
       BinaryOperator::Create(Instruction::And, bo->getOperand(1), opr, "", bo);
   op = BinaryOperator::Create(Instruction::Or, op, op1, "", bo);
@@ -776,14 +843,17 @@ static void mulSubstitution(BinaryOperator *bo) {
       BinaryOperator::Create(Instruction::And, bo->getOperand(0), op2, "", bo);
   BinaryOperator *op =
       BinaryOperator::Create(Instruction::Mul, op2, op1, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp = insertOpaqueBarrier(IRB, op);
   op1 = BinaryOperator::Create(Instruction::And, bo->getOperand(0),
                                bo->getOperand(1), "", bo);
   op2 = BinaryOperator::Create(Instruction::Or, bo->getOperand(0),
                                bo->getOperand(1), "", bo);
   BinaryOperator *op3 =
       BinaryOperator::Create(Instruction::Mul, op2, op1, "", bo);
-  op = BinaryOperator::Create(Instruction::Add, op3, op, "", bo);
-  bo->replaceAllUsesWith(op);
+  BinaryOperator *res =
+      BinaryOperator::Create(Instruction::Add, op3, barOp, "", bo);
+  bo->replaceAllUsesWith(res);
 }
 
 // Implementation: a * b via Karatsuba-style decomposition into shifts+adds.
@@ -814,9 +884,12 @@ static void mulSubstitution3(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *bH =
       BinaryOperator::Create(Instruction::LShr, b, kConst, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barBH = insertOpaqueBarrier(IRB, bH);
   BinaryOperator *bL =
       BinaryOperator::Create(Instruction::And, b, maskConst, "", bo);
-  BinaryOperator *aH = BinaryOperator::Create(Instruction::Mul, a, bH, "", bo);
+  BinaryOperator *aH =
+      BinaryOperator::Create(Instruction::Mul, a, barBH, "", bo);
   BinaryOperator *aL = BinaryOperator::Create(Instruction::Mul, a, bL, "", bo);
   BinaryOperator *aHsh =
       BinaryOperator::Create(Instruction::Shl, aH, kConst, "", bo);
@@ -841,10 +914,12 @@ static void mulSubstitution4(BinaryOperator *bo) {
   BinaryOperator *bPr = BinaryOperator::Create(Instruction::Add, b, r, "", bo);
   BinaryOperator *m1 =
       BinaryOperator::Create(Instruction::Mul, aPr, bPr, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barM1 = insertOpaqueBarrier(IRB, m1);
   BinaryOperator *m2 = BinaryOperator::Create(Instruction::Mul, aPr, r, "", bo);
   BinaryOperator *m3 = BinaryOperator::Create(Instruction::Mul, b, r, "", bo);
   BinaryOperator *sub1 =
-      BinaryOperator::Create(Instruction::Sub, m1, m2, "", bo);
+      BinaryOperator::Create(Instruction::Sub, barM1, m2, "", bo);
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Sub, sub1, m3, "", bo));
 }
@@ -859,13 +934,15 @@ static void mulSubstitution2(BinaryOperator *bo) {
       BinaryOperator::Create(Instruction::Or, bo->getOperand(0), op1, "", bo);
   op3 = BinaryOperator::CreateNot(op3, "", bo);
   op3 = BinaryOperator::Create(Instruction::Mul, op3, op2, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barOp3 = insertOpaqueBarrier(IRB, op3);
   BinaryOperator *op4 = BinaryOperator::Create(
       Instruction::And, bo->getOperand(0), bo->getOperand(1), "", bo);
   BinaryOperator *op5 = BinaryOperator::Create(
       Instruction::Or, bo->getOperand(0), bo->getOperand(1), "", bo);
   op5 = BinaryOperator::Create(Instruction::Mul, op5, op4, "", bo);
   BinaryOperator *op =
-      BinaryOperator::Create(Instruction::Add, op5, op3, "", bo);
+      BinaryOperator::Create(Instruction::Add, op5, barOp3, "", bo);
   bo->replaceAllUsesWith(op);
 }
 
@@ -882,11 +959,15 @@ static void addChainedMBA(BinaryOperator *bo) {
 
   // Layer 1
   BinaryOperator *p = BinaryOperator::Create(Instruction::Or, a, b, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barP = insertOpaqueBarrier(IRB, p);
   BinaryOperator *q = BinaryOperator::Create(Instruction::And, a, b, "", bo);
 
   // Layer 2
-  BinaryOperator *pxq = BinaryOperator::Create(Instruction::Xor, p, q, "", bo);
-  BinaryOperator *panq = BinaryOperator::Create(Instruction::And, p, q, "", bo);
+  BinaryOperator *pxq =
+      BinaryOperator::Create(Instruction::Xor, barP, q, "", bo);
+  BinaryOperator *panq =
+      BinaryOperator::Create(Instruction::And, barP, q, "", bo);
   BinaryOperator *shl1 =
       BinaryOperator::Create(Instruction::Shl, panq, c1, "", bo);
   BinaryOperator *s = pxq;  // s = p^q
@@ -928,8 +1009,10 @@ static void addRotateDecompose(BinaryOperator *bo) {
       BinaryOperator::Create(Instruction::Mul, r, c2, "", bo);
   BinaryOperator *sum1 =
       BinaryOperator::Create(Instruction::Add, ar, br, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barSum1 = insertOpaqueBarrier(IRB, sum1);
   BinaryOperator *sum2 =
-      BinaryOperator::Create(Instruction::Add, sum1, twoa, "", bo);
+      BinaryOperator::Create(Instruction::Add, barSum1, twoa, "", bo);
   BinaryOperator *sum3 =
       BinaryOperator::Create(Instruction::Add, sum2, twob, "", bo);
   bo->replaceAllUsesWith(
@@ -956,8 +1039,10 @@ static void xorSplitRotate(BinaryOperator *bo) {
   // Random noise: add r then subtract r (nets to zero, confuses analysis)
   BinaryOperator *nr =
       BinaryOperator::Create(Instruction::Add, diff, r, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barNr = insertOpaqueBarrier(IRB, nr);
   BinaryOperator *back =
-      BinaryOperator::Create(Instruction::Sub, nr, r, "", bo);
+      BinaryOperator::Create(Instruction::Sub, barNr, r, "", bo);
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Add, back, dbl, "", bo));
 }
@@ -970,6 +1055,8 @@ static void xorArithDecompose(BinaryOperator *bo) {
   Type *T = bo->getType();
   ConstantInt *c2 = (ConstantInt *)ConstantInt::get(T, 2);
   BinaryOperator *sum = BinaryOperator::Create(Instruction::Add, a, b, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barSum = insertOpaqueBarrier(IRB, sum);
   BinaryOperator *notA = BinaryOperator::CreateNot(a, "", bo);
   BinaryOperator *notB = BinaryOperator::CreateNot(b, "", bo);
   BinaryOperator *orN =
@@ -979,7 +1066,7 @@ static void xorArithDecompose(BinaryOperator *bo) {
   BinaryOperator *dbl =
       BinaryOperator::Create(Instruction::Mul, andAB, c2, "", bo);
   bo->replaceAllUsesWith(
-      BinaryOperator::Create(Instruction::Sub, sum, dbl, "", bo));
+      BinaryOperator::Create(Instruction::Sub, barSum, dbl, "", bo));
 }
 
 // ADD: a+b = ~(~a - b)
@@ -987,8 +1074,10 @@ static void xorArithDecompose(BinaryOperator *bo) {
 static void addNegComplement(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *notA = BinaryOperator::CreateNot(a, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barNotA = insertOpaqueBarrier(IRB, notA);
   BinaryOperator *sub =
-      BinaryOperator::Create(Instruction::Sub, notA, b, "", bo);
+      BinaryOperator::Create(Instruction::Sub, barNotA, b, "", bo);
   bo->replaceAllUsesWith(BinaryOperator::CreateNot(sub, "", bo));
 }
 
@@ -1004,10 +1093,12 @@ static void addRandPair(BinaryOperator *bo) {
                                 cryptoutils->get_uint64_t(), false, true)));
   BinaryOperator *aPr1 =
       BinaryOperator::Create(Instruction::Add, a, r1, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barAPr1 = insertOpaqueBarrier(IRB, aPr1);
   BinaryOperator *bPr2 =
       BinaryOperator::Create(Instruction::Add, b, r2, "", bo);
   BinaryOperator *sum =
-      BinaryOperator::Create(Instruction::Add, aPr1, bPr2, "", bo);
+      BinaryOperator::Create(Instruction::Add, barAPr1, bPr2, "", bo);
   BinaryOperator *s2 =
       BinaryOperator::Create(Instruction::Sub, sum, r1, "", bo);
   bo->replaceAllUsesWith(
@@ -1023,10 +1114,14 @@ static void addFourLayerChain(BinaryOperator *bo) {
   ConstantInt *c2 = cast<ConstantInt>(ConstantInt::get(T, 2));
   // Layer 1: p=(a|b), q=(a&b)
   BinaryOperator *p = BinaryOperator::Create(Instruction::Or, a, b, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barP = insertOpaqueBarrier(IRB, p);
   BinaryOperator *q = BinaryOperator::Create(Instruction::And, a, b, "", bo);
   // Layer 2: s=(p^q), t=((p&q)<<1)
-  BinaryOperator *pxq = BinaryOperator::Create(Instruction::Xor, p, q, "", bo);
-  BinaryOperator *panq = BinaryOperator::Create(Instruction::And, p, q, "", bo);
+  BinaryOperator *pxq =
+      BinaryOperator::Create(Instruction::Xor, barP, q, "", bo);
+  BinaryOperator *panq =
+      BinaryOperator::Create(Instruction::And, barP, q, "", bo);
   BinaryOperator *t =
       BinaryOperator::Create(Instruction::Shl, panq, c1, "", bo);
   // Layer 3: u=(s|t), v=(s^t)
@@ -1042,9 +1137,11 @@ static void addFourLayerChain(BinaryOperator *bo) {
 static void addNegateNegate(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *negA = BinaryOperator::CreateNeg(a, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barNegA = insertOpaqueBarrier(IRB, negA);
   BinaryOperator *negB = BinaryOperator::CreateNeg(b, "", bo);
   BinaryOperator *sum =
-      BinaryOperator::Create(Instruction::Add, negA, negB, "", bo);
+      BinaryOperator::Create(Instruction::Add, barNegA, negB, "", bo);
   bo->replaceAllUsesWith(BinaryOperator::CreateNeg(sum, "", bo));
 }
 
@@ -1053,8 +1150,10 @@ static void addNegateNegate(BinaryOperator *bo) {
 static void subViaComplement(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *notA = BinaryOperator::CreateNot(a, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barNotA = insertOpaqueBarrier(IRB, notA);
   BinaryOperator *sum =
-      BinaryOperator::Create(Instruction::Add, notA, b, "", bo);
+      BinaryOperator::Create(Instruction::Add, barNotA, b, "", bo);
   bo->replaceAllUsesWith(BinaryOperator::CreateNot(sum, "", bo));
 }
 
@@ -1067,8 +1166,10 @@ static void subFourTerm(BinaryOperator *bo) {
   BinaryOperator *notB = BinaryOperator::CreateNot(b, "", bo);
   BinaryOperator *andAB =
       BinaryOperator::Create(Instruction::And, a, notB, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barAndAB = insertOpaqueBarrier(IRB, andAB);
   BinaryOperator *dbl =
-      BinaryOperator::Create(Instruction::Mul, andAB, c2, "", bo);
+      BinaryOperator::Create(Instruction::Mul, barAndAB, c2, "", bo);
   BinaryOperator *xorAB =
       BinaryOperator::Create(Instruction::Xor, a, b, "", bo);
   bo->replaceAllUsesWith(
@@ -1079,8 +1180,10 @@ static void subFourTerm(BinaryOperator *bo) {
 static void subDoubleNeg(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *negA = BinaryOperator::CreateNeg(a, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barNegA = insertOpaqueBarrier(IRB, negA);
   BinaryOperator *sum =
-      BinaryOperator::Create(Instruction::Add, negA, b, "", bo);
+      BinaryOperator::Create(Instruction::Add, barNegA, b, "", bo);
   bo->replaceAllUsesWith(BinaryOperator::CreateNeg(sum, "", bo));
 }
 
@@ -1092,9 +1195,11 @@ static void subRandPair(BinaryOperator *bo) {
       ConstantInt::get(T, APInt(T->getIntegerBitWidth(),
                                 cryptoutils->get_uint64_t(), false, true)));
   BinaryOperator *aPr = BinaryOperator::Create(Instruction::Add, a, r, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barAPr = insertOpaqueBarrier(IRB, aPr);
   BinaryOperator *bPr = BinaryOperator::Create(Instruction::Add, b, r, "", bo);
   bo->replaceAllUsesWith(
-      BinaryOperator::Create(Instruction::Sub, aPr, bPr, "", bo));
+      BinaryOperator::Create(Instruction::Sub, barAPr, bPr, "", bo));
 }
 
 // AND: a&b = (a XOR b) XOR (a OR b)
@@ -1103,9 +1208,11 @@ static void andViaXorOr(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *xorAB =
       BinaryOperator::Create(Instruction::Xor, a, b, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barXorAB = insertOpaqueBarrier(IRB, xorAB);
   BinaryOperator *orAB = BinaryOperator::Create(Instruction::Or, a, b, "", bo);
   bo->replaceAllUsesWith(
-      BinaryOperator::Create(Instruction::Xor, xorAB, orAB, "", bo));
+      BinaryOperator::Create(Instruction::Xor, barXorAB, orAB, "", bo));
 }
 
 // AND: a&b via ~a and ~b chain: ~(~a | ~b) expressed with random XOR-NOT
@@ -1120,8 +1227,10 @@ static void andNotNot(BinaryOperator *bo) {
   BinaryOperator *notR = BinaryOperator::CreateNot(r, "", bo);
   // ~a = (a ^ r) ^ ~r
   BinaryOperator *axr = BinaryOperator::Create(Instruction::Xor, a, r, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barAxr = insertOpaqueBarrier(IRB, axr);
   BinaryOperator *notA =
-      BinaryOperator::Create(Instruction::Xor, axr, notR, "", bo);
+      BinaryOperator::Create(Instruction::Xor, barAxr, notR, "", bo);
   BinaryOperator *bxr = BinaryOperator::Create(Instruction::Xor, b, r, "", bo);
   BinaryOperator *notB =
       BinaryOperator::Create(Instruction::Xor, bxr, notR, "", bo);
@@ -1153,10 +1262,12 @@ static void andFourTerm(BinaryOperator *bo) {
       BinaryOperator::Create(Instruction::And, b, notR, "", bo); // b & ~r
   BinaryOperator *left =
       BinaryOperator::Create(Instruction::And, ar, br, "", bo); // (a&r)&(b&r)
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barLeft = insertOpaqueBarrier(IRB, left);
   BinaryOperator *right = BinaryOperator::Create(Instruction::And, anr, bnr, "",
                                                  bo); // (a&~r)&(b&~r)
   bo->replaceAllUsesWith(
-      BinaryOperator::Create(Instruction::Or, left, right, "", bo));
+      BinaryOperator::Create(Instruction::Or, barLeft, right, "", bo));
 }
 
 // AND: a&b = ~(~a | ~b) with extra NOT-double negation on one operand
@@ -1165,8 +1276,10 @@ static void andMirror(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   // ~~a = a, so: ~(~(~~a) | ~b) = ~(~a | ~b) = a&b ✓
   BinaryOperator *notA1 = BinaryOperator::CreateNot(a, "", bo);
-  BinaryOperator *notA2 = BinaryOperator::CreateNot(notA1, "", bo); // = a
-  BinaryOperator *notA3 = BinaryOperator::CreateNot(notA2, "", bo); // = ~a
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barNotA1 = insertOpaqueBarrier(IRB, notA1);
+  BinaryOperator *notA2 = BinaryOperator::CreateNot(barNotA1, "", bo); // = a
+  BinaryOperator *notA3 = BinaryOperator::CreateNot(notA2, "", bo);    // = ~a
   BinaryOperator *notB = BinaryOperator::CreateNot(b, "", bo);
   BinaryOperator *orNANB =
       BinaryOperator::Create(Instruction::Or, notA3, notB, "", bo);
@@ -1179,10 +1292,12 @@ static void orViaXorAnd(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *xorAB =
       BinaryOperator::Create(Instruction::Xor, a, b, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barXorAB = insertOpaqueBarrier(IRB, xorAB);
   BinaryOperator *andAB =
       BinaryOperator::Create(Instruction::And, a, b, "", bo);
   bo->replaceAllUsesWith(
-      BinaryOperator::Create(Instruction::Or, xorAB, andAB, "", bo));
+      BinaryOperator::Create(Instruction::Or, barXorAB, andAB, "", bo));
 }
 
 // OR: a|b = NOR(NOR(a,b), NOR(a,b)) with double-NOR form
@@ -1205,10 +1320,12 @@ static void orMerge(BinaryOperator *bo) {
   BinaryOperator *sum = BinaryOperator::Create(Instruction::Add, a, b, "", bo);
   BinaryOperator *sumR =
       BinaryOperator::Create(Instruction::Add, sum, r, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barSumR = insertOpaqueBarrier(IRB, sumR);
   BinaryOperator *andAB =
       BinaryOperator::Create(Instruction::And, a, b, "", bo);
   BinaryOperator *s2 =
-      BinaryOperator::Create(Instruction::Sub, sumR, andAB, "", bo);
+      BinaryOperator::Create(Instruction::Sub, barSumR, andAB, "", bo);
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Sub, s2, r, "", bo));
 }
@@ -1232,8 +1349,10 @@ static void orFourTerm(BinaryOperator *bo) {
   BinaryOperator *sum = BinaryOperator::Create(Instruction::Add, a, b, "", bo);
   BinaryOperator *sumR =
       BinaryOperator::Create(Instruction::Add, sum, r, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barSumR = insertOpaqueBarrier(IRB, sumR);
   BinaryOperator *s1 =
-      BinaryOperator::Create(Instruction::Sub, sumR, norNANB, "", bo);
+      BinaryOperator::Create(Instruction::Sub, barSumR, norNANB, "", bo);
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Sub, s1, r, "", bo));
 }
@@ -1242,9 +1361,11 @@ static void orFourTerm(BinaryOperator *bo) {
 static void xorViaCompl(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *notA = BinaryOperator::CreateNot(a, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barNotA = insertOpaqueBarrier(IRB, notA);
   BinaryOperator *notB = BinaryOperator::CreateNot(b, "", bo);
   bo->replaceAllUsesWith(
-      BinaryOperator::Create(Instruction::Xor, notA, notB, "", bo));
+      BinaryOperator::Create(Instruction::Xor, barNotA, notB, "", bo));
 }
 
 // XOR: split into high/low bit groups — each group's XOR is independent
@@ -1268,6 +1389,8 @@ static void xorHighLow(BinaryOperator *bo) {
   BinaryOperator *xH = BinaryOperator::Create(Instruction::Xor, aH, bH, "", bo);
   BinaryOperator *xHs =
       BinaryOperator::Create(Instruction::Shl, xH, kC, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barXHs = insertOpaqueBarrier(IRB, xHs);
   // Low bits: (a&mask)^(b&mask)
   BinaryOperator *aL =
       BinaryOperator::Create(Instruction::And, a, maskC, "", bo);
@@ -1275,7 +1398,7 @@ static void xorHighLow(BinaryOperator *bo) {
       BinaryOperator::Create(Instruction::And, b, maskC, "", bo);
   BinaryOperator *xL = BinaryOperator::Create(Instruction::Xor, aL, bL, "", bo);
   bo->replaceAllUsesWith(
-      BinaryOperator::Create(Instruction::Xor, xHs, xL, "", bo));
+      BinaryOperator::Create(Instruction::Xor, barXHs, xL, "", bo));
 }
 
 // XOR: a^b = (a^r1^b^r2)^(r1^r2)  for two independent random constants
@@ -1292,7 +1415,10 @@ static void xorDoubleRand(BinaryOperator *bo) {
   // r1^r2 compile-time constant
   uint64_t r12val = r1->getZExtValue() ^ r2->getZExtValue();
   ConstantInt *r12 = cast<ConstantInt>(ConstantInt::get(T, r12val));
-  BinaryOperator *ax = BinaryOperator::Create(Instruction::Xor, a, r1, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barR1 = insertOpaqueBarrier(IRB, r1);
+  BinaryOperator *ax =
+      BinaryOperator::Create(Instruction::Xor, a, barR1, "", bo);
   BinaryOperator *axb = BinaryOperator::Create(Instruction::Xor, ax, b, "", bo);
   BinaryOperator *axbr =
       BinaryOperator::Create(Instruction::Xor, axb, r2, "", bo);
@@ -1309,17 +1435,21 @@ static void xorFourTerm(BinaryOperator *bo) {
   BinaryOperator *orNANB =
       BinaryOperator::Create(Instruction::Or, notA, notB, "", bo);
   BinaryOperator *andAB = BinaryOperator::CreateNot(orNANB, "", bo); // a&b
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barAndAB = insertOpaqueBarrier(IRB, andAB);
   BinaryOperator *orAB = BinaryOperator::Create(Instruction::Or, a, b, "", bo);
   bo->replaceAllUsesWith(
-      BinaryOperator::Create(Instruction::Sub, orAB, andAB, "", bo));
+      BinaryOperator::Create(Instruction::Sub, orAB, barAndAB, "", bo));
 }
 
 // MUL: a*b = -(a * (-b)) = -(a * (0-b))
 static void mulViaNeg(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *negB = BinaryOperator::CreateNeg(b, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barNegB = insertOpaqueBarrier(IRB, negB);
   BinaryOperator *mulAB =
-      BinaryOperator::Create(Instruction::Mul, a, negB, "", bo);
+      BinaryOperator::Create(Instruction::Mul, a, barNegB, "", bo);
   bo->replaceAllUsesWith(BinaryOperator::CreateNeg(mulAB, "", bo));
 }
 
@@ -1330,8 +1460,10 @@ static void mulIncrement(BinaryOperator *bo) {
   ConstantInt *one = cast<ConstantInt>(ConstantInt::get(T, 1));
   BinaryOperator *bP1 =
       BinaryOperator::Create(Instruction::Add, b, one, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barBP1 = insertOpaqueBarrier(IRB, bP1);
   BinaryOperator *mul =
-      BinaryOperator::Create(Instruction::Mul, a, bP1, "", bo);
+      BinaryOperator::Create(Instruction::Mul, a, barBP1, "", bo);
   bo->replaceAllUsesWith(
       BinaryOperator::Create(Instruction::Sub, mul, a, "", bo));
 }
@@ -1341,8 +1473,10 @@ static void mulIncrement(BinaryOperator *bo) {
 static void mulDoubleHalf(BinaryOperator *bo) {
   Value *a = bo->getOperand(0), *b = bo->getOperand(1);
   BinaryOperator *notB = BinaryOperator::CreateNot(b, "", bo);
+  IRBuilder<NoFolder> IRB(bo);
+  Value *barNotB = insertOpaqueBarrier(IRB, notB);
   BinaryOperator *mulAB =
-      BinaryOperator::Create(Instruction::Mul, a, notB, "", bo);
+      BinaryOperator::Create(Instruction::Mul, a, barNotB, "", bo);
   BinaryOperator *negAB =
       BinaryOperator::CreateNeg(mulAB, "", bo); // -(a*~b) = ab+a
   bo->replaceAllUsesWith(

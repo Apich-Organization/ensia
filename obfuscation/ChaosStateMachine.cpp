@@ -24,6 +24,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/NoFolder.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/CommandLine.h"
 #include <unordered_set>
 
@@ -330,8 +331,25 @@ struct ChaosStateMachine : public FunctionPass {
 
     for (unsigned i = 0; i < numBBs; i++) {
       origBBs[i]->moveBefore(loopEnd);
+      BasicBlock *dispatchTarget = origBBs[i];
+      if (ChaosNestedDispatchTemp && numBBs >= 4) {
+        BasicBlock *realBB = origBBs[i];
+        BasicBlock *relay = BasicBlock::Create(Ctx, "csm.relay", F, realBB);
+        IRBuilder<NoFolder> IRBR(relay);
+        Value *rs = IRBR.CreateLoad(I32Ty, stateAlloca, "csm.relay.raw");
+        Value *rs_dec = IRBR.CreateXor(rs, ConstantInt::get(I32Ty, feistelK));
+        uint32_t innerMask = 0xF; // 16 possible inner targets
+        Value *inner = IRBR.CreateAnd(
+            rs_dec, ConstantInt::get(I32Ty, innerMask), "csm.inner");
+        SwitchInst *innerSw =
+            SwitchInst::Create(inner, realBB, innerMask + 1, relay);
+        for (uint32_t k = 0; k <= innerMask; k++)
+          innerSw->addCase(cast<ConstantInt>(ConstantInt::get(I32Ty, k)),
+                           realBB);
+        dispatchTarget = relay;
+      }
       switchI->addCase(cast<ConstantInt>(ConstantInt::get(I32Ty, caseVals[i])),
-                       origBBs[i]);
+                       dispatchTarget);
     }
 
     // ── Phase 7: per-block state update ──────────────────────────────────────
@@ -444,36 +462,6 @@ struct ChaosStateMachine : public FunctionPass {
       dfbPhiLoopEnd->addIncoming(pair.second, pair.first);
     }
     dfbPhiLoopEntry->addIncoming(dfbPhiLoopEnd, loopEnd);
-
-    // ── Phase 8: optional nested dispatch for extra path-explosion ───────────
-    if (ChaosNestedDispatchTemp && numBBs >= 4) {
-      // For each switch case, insert a relay block that performs a second
-      // dispatch keyed on the lower nibble of the (already decoded) chaos
-      // state. This doubles the number of CFG nodes a tool must enumerate.
-      uint32_t innerMask = 0xF; // 16 possible inner targets
-      for (unsigned i = 0; i < numBBs; i++) {
-        BasicBlock *realBB = origBBs[i];
-        BasicBlock *relay = BasicBlock::Create(Ctx, "csm.relay", F, realBB);
-        // Re-point the switch case to relay instead of realBB
-        switchI->removeCase(switchI->findCaseValue(
-            cast<ConstantInt>(ConstantInt::get(I32Ty, caseVals[i]))));
-        switchI->addCase(
-            cast<ConstantInt>(ConstantInt::get(I32Ty, caseVals[i])), relay);
-
-        IRBuilder<NoFolder> IRBR(relay);
-        Value *rs = IRBR.CreateLoad(I32Ty, stateAlloca, "csm.relay.raw");
-        Value *rs_dec = IRBR.CreateXor(rs, ConstantInt::get(I32Ty, feistelK));
-        Value *inner = IRBR.CreateAnd(
-            rs_dec, ConstantInt::get(I32Ty, innerMask), "csm.inner");
-        // Inner switch: all cases lead to realBB — confusing but correct
-        SwitchInst *innerSw =
-            SwitchInst::Create(inner, realBB, innerMask + 1, relay);
-        for (uint32_t k = 0; k <= innerMask; k++)
-          innerSw->addCase(cast<ConstantInt>(ConstantInt::get(I32Ty, k)),
-                           realBB);
-      }
-    }
-
     if (ObfVerbose)
       errs() << "ChaosStateMachine: fixing stack for " << F->getName() << "\n";
     fixStack(F);

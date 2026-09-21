@@ -70,6 +70,11 @@ struct StringEncryption : public ModulePass {
   StringRef getPassName() const override { return "StringEncryption"; }
 
   bool handleableGV(GlobalVariable *GV) {
+    if (GV->getName().starts_with("__ensia_") ||
+        GV->getName().starts_with("__ah_") ||
+        GV->getName().starts_with("__adb_") ||
+        GV->getName().starts_with("AntiRebindSymbol_"))
+      return false;
     if (GV->hasInitializer() && !GV->getSection().starts_with("llvm.") &&
         !(GV->getSection().contains("__objc") &&
           !GV->getSection().contains("array")) &&
@@ -198,35 +203,37 @@ struct StringEncryption : public ModulePass {
 
     // Update cache if config changed
     if (last_skip_content != cfg.skip_content) {
-        last_skip_content = cfg.skip_content;
-        skip_regexes.clear();
-        for (const auto &pat : cfg.skip_content) {
-            try {
-                skip_regexes.emplace_back(pat, std::regex::ECMAScript | std::regex::optimize);
-            } catch (const std::regex_error &) {
-            }
+      last_skip_content = cfg.skip_content;
+      skip_regexes.clear();
+      for (const auto &pat : cfg.skip_content) {
+        try {
+          skip_regexes.emplace_back(pat, std::regex::ECMAScript |
+                                             std::regex::optimize);
+        } catch (const std::regex_error &) {
         }
+      }
     }
 
     if (last_force_content != cfg.force_content) {
-        last_force_content = cfg.force_content;
-        force_regexes.clear();
-        for (const auto &pat : cfg.force_content) {
-            try {
-                force_regexes.emplace_back(pat, std::regex::ECMAScript | std::regex::optimize);
-            } catch (const std::regex_error &) {
-            }
+      last_force_content = cfg.force_content;
+      force_regexes.clear();
+      for (const auto &pat : cfg.force_content) {
+        try {
+          force_regexes.emplace_back(pat, std::regex::ECMAScript |
+                                              std::regex::optimize);
+        } catch (const std::regex_error &) {
         }
+      }
     }
 
     for (const auto &re : skip_regexes) {
-        if (std::regex_search(content, re))
-            return 0;
+      if (std::regex_search(content, re))
+        return 0;
     }
 
     for (const auto &re : force_regexes) {
-        if (std::regex_search(content, re))
-            return 100;
+      if (std::regex_search(content, re))
+        return 100;
     }
 
     return base;
@@ -245,6 +252,8 @@ struct StringEncryption : public ModulePass {
       for (Instruction &I : instructions(Func))
         HandleUser(&I, Globals, Users, VisitedUsers);
     }
+    if (Globals.empty())
+      return;
     std::unordered_set<GlobalVariable *> rawStrings;
     std::unordered_set<GlobalVariable *> objCStrings;
     std::unordered_map<GlobalVariable *,
@@ -324,8 +333,7 @@ struct StringEncryption : public ModulePass {
         }
       }
     for (GlobalVariable *GV : rawStrings) {
-      if (GV->getInitializer()->isZeroValue() ||
-          GV->getInitializer()->isNullValue())
+      if (GV->getInitializer()->isNullValue())
         continue;
       auto globalIt = globalOld2New.find(GV);
       if (globalIt != globalOld2New.end()) {
@@ -626,6 +634,8 @@ struct StringEncryption : public ModulePass {
     //     toDelete->eraseFromParent();
     //   }
     // }
+    if (GV2Keys.empty())
+      return;
     GlobalVariable *StatusGV = encstatus[Func];
     /*
        - Split Original EntryPoint BB into A and C.
@@ -893,6 +903,7 @@ struct StringEncryption : public ModulePass {
 
         LoadInst *encLoad =
             IRB.CreateLoad(CDA_k1->getElementType(), EncGEP, "strcry.enc");
+        encLoad->setVolatile(true);
         Value *decoded = encLoad;
 
         if (isI8) {
@@ -924,7 +935,9 @@ struct StringEncryption : public ModulePass {
           decoded = IRB.CreateXor(decoded, CDA_k1->getElementAsConstant(idx));
         }
 
-        IRB.CreateStore(decoded, DecGEP);
+        decoded = insertOpaqueBarrier(IRB, decoded);
+        StoreInst *stDec = IRB.CreateStore(decoded, DecGEP);
+        stDec->setVolatile(true);
       }
     }
     IRB.CreateBr(C);

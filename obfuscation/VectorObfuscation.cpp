@@ -21,6 +21,7 @@
 #include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/NoFolder.h"
@@ -48,8 +49,8 @@ static cl::opt<bool>
     VecShuffle("vec_shuffle",
                cl::desc("[VecObf] Insert a random shufflevector after the "
                         "vector op to defeat lane-extraction pattern matching"),
-               cl::init(false), cl::Optional);
-static thread_local bool VecShuffleTemp = false;
+               cl::init(true), cl::Optional);
+static thread_local bool VecShuffleTemp = true;
 
 static cl::opt<bool> VecICmp(
     "vec_icmp",
@@ -92,15 +93,15 @@ static Constant *randomNoise(Type *elemTy, unsigned elemBits) {
   return UndefValue::get(elemTy); // fallback
 }
 
-// ─── Build a fully-populated noise vector with realOp at lane K ──────────────
+// ─── Try to chain from a previous vector result (ExtractElement or vobf.slot
+// Load) ───
 
-static Value *buildNoiseVector(IRBuilder<NoFolder> &IRB, Value *realOp,
-                               unsigned K, unsigned lanes, Type *elemTy) {
+static Value *tryGetChainedVector(IRBuilder<NoFolder> &IRB, Value *scalarOp,
+                                  unsigned lanes, Type *elemTy, unsigned K) {
   Type *vecTy = FixedVectorType::get(elemTy, lanes);
-
-  if (auto *EEI = dyn_cast<ExtractElementInst>(realOp)) {
+  if (auto *EEI = dyn_cast<ExtractElementInst>(scalarOp)) {
     if (auto *vTy = dyn_cast<FixedVectorType>(EEI->getVectorOperandType())) {
-      if (vTy->getNumElements() == lanes) {
+      if (vTy->getNumElements() == lanes && vTy->getElementType() == elemTy) {
         if (auto *CIdx = dyn_cast<ConstantInt>(EEI->getIndexOperand())) {
           unsigned srcK = CIdx->getZExtValue();
           SmallVector<int, 16> mask(lanes);
@@ -108,11 +109,47 @@ static Value *buildNoiseVector(IRBuilder<NoFolder> &IRB, Value *realOp,
             mask[i] = i;
           mask[K] = srcK;
           mask[srcK] = K;
-          return IRB.CreateShuffleVector(EEI->getVectorOperand(), mask, "");
+          return IRB.CreateShuffleVector(EEI->getVectorOperand(), mask,
+                                         "vobf.chain.shuffle");
         }
       }
     }
   }
+
+  if (auto *LI = dyn_cast<LoadInst>(scalarOp)) {
+    if (auto *GEP = dyn_cast<GetElementPtrInst>(LI->getPointerOperand())) {
+      if (auto *slot = dyn_cast<AllocaInst>(GEP->getPointerOperand())) {
+        if (slot->getName().starts_with("vobf.slot") &&
+            slot->getAllocatedType() == vecTy) {
+          if (GEP->getNumIndices() == 2) {
+            auto idxIt = GEP->idx_begin() + 1;
+            if (auto *CIdx = dyn_cast<ConstantInt>(idxIt->get())) {
+              unsigned srcK = CIdx->getZExtValue();
+              Value *srcVec = IRB.CreateLoad(vecTy, slot, "vobf.chained.vec");
+              SmallVector<int, 16> mask(lanes);
+              for (unsigned i = 0; i < lanes; i++)
+                mask[i] = i;
+              mask[K] = srcK;
+              mask[srcK] = K;
+              return IRB.CreateShuffleVector(srcVec, mask,
+                                             "vobf.chain.shuffle");
+            }
+          }
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+
+// ─── Build a fully-populated noise vector with realOp at lane K ──────────────
+
+static Value *buildNoiseVector(IRBuilder<NoFolder> &IRB, Value *realOp,
+                               unsigned K, unsigned lanes, Type *elemTy) {
+  Type *vecTy = FixedVectorType::get(elemTy, lanes);
+
+  if (Value *chained = tryGetChainedVector(IRB, realOp, lanes, elemTy, K))
+    return chained;
 
   unsigned elemBits = elemTy->isIntegerTy() ? elemTy->getIntegerBitWidth()
                                             : (elemTy->isFloatTy() ? 32 : 64);
@@ -178,6 +215,62 @@ static std::pair<Value *, unsigned> applyShuffleNoise(IRBuilder<NoFolder> &IRB,
   return {shuffled, newK};
 }
 
+// ─── Memory-based lane extraction with opaque barrier ───────────────────────
+// Prevents LLVM's VectorCombinePass and InstCombinePass from scalarizing
+// vector operations back to scalar arithmetic.
+static Value *extractLaneOpaque(IRBuilder<NoFolder> &IRB, Value *vec,
+                                unsigned extractLane, Type *elemTy) {
+  LLVMContext &Ctx = vec->getContext();
+  if (elemTy->isIntegerTy(1)) {
+    // For i1 vectors, zext to i8 vector first, extract byte, then compare != 0
+    auto *FVT = cast<FixedVectorType>(vec->getType());
+    unsigned lanes = FVT->getNumElements();
+    Type *i8VecTy = FixedVectorType::get(Type::getInt8Ty(Ctx), lanes);
+    Value *v8 = IRB.CreateZExt(vec, i8VecTy, "vobf.zext");
+    Value *byteVal =
+        extractLaneOpaque(IRB, v8, extractLane, Type::getInt8Ty(Ctx));
+    return IRB.CreateICmpNE(byteVal, ConstantInt::get(Type::getInt8Ty(Ctx), 0),
+                            "vobf.cmp.res");
+  }
+
+  BasicBlock *BB = IRB.GetInsertBlock();
+  Function *F = BB->getParent();
+  BasicBlock &Entry = F->getEntryBlock();
+  IRBuilder<> EntryIRB(&Entry, Entry.getFirstInsertionPt());
+  AllocaInst *slot =
+      EntryIRB.CreateAlloca(vec->getType(), nullptr, "vobf.slot");
+
+  IRB.CreateStore(vec, slot);
+
+  Module *M = F->getParent();
+  Triple triple(M->getTargetTriple());
+  const char *asmCode = "nop";
+  if (triple.getArch() == Triple::x86_64 || triple.getArch() == Triple::x86) {
+    asmCode = "xorb $$0, $0";
+  } else if (triple.getArch() == Triple::aarch64 ||
+             triple.getArch() == Triple::arm) {
+    asmCode = "prfm pldl1keep, $0";
+  }
+
+  FunctionType *AsmFTy = FunctionType::get(
+      Type::getVoidTy(Ctx),
+      {PointerType::get(Ctx, 0), PointerType::get(Ctx, 0)}, false);
+  InlineAsm *IA = InlineAsm::get(AsmFTy, asmCode,
+                                 "=*m,*m,~{memory},~{dirflag},~{fpsr},~{flags}",
+                                 /*hasSideEffects=*/true);
+  CallInst *CI = IRB.CreateCall(AsmFTy, IA, {slot, slot});
+  CI->addParamAttr(0,
+                   Attribute::get(Ctx, Attribute::ElementType, vec->getType()));
+  CI->addParamAttr(1,
+                   Attribute::get(Ctx, Attribute::ElementType, vec->getType()));
+
+  Value *elemPtr = IRB.CreateConstGEP2_32(vec->getType(), slot, 0, extractLane,
+                                          "vobf.lane.ptr");
+  LoadInst *ld = IRB.CreateLoad(elemTy, elemPtr, "vobf.lane.val");
+  ld->setVolatile(true);
+  return ld;
+}
+
 // ─── Lift a scalar BinaryOperator to vector lane K ───────────────────────────
 
 static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
@@ -220,25 +313,11 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
                                 bool isShiftOperand) -> Value * {
     Type *vecTy = FixedVectorType::get(scalarTy, lanes);
 
-    // Attempt to chain from a previous extractelement
+    // Attempt to chain from a previous vector result
     if (!isShiftOperand) {
-      if (auto *EEI = dyn_cast<ExtractElementInst>(scalarOp)) {
-        if (auto *vTy =
-                dyn_cast<FixedVectorType>(EEI->getVectorOperandType())) {
-          if (vTy->getNumElements() == lanes) {
-            if (auto *CIdx = dyn_cast<ConstantInt>(EEI->getIndexOperand())) {
-              unsigned srcK = CIdx->getZExtValue();
-              SmallVector<int, 16> mask(lanes);
-              for (unsigned i = 0; i < lanes; i++)
-                mask[i] = i;
-              mask[K] = srcK; // Put the real value into lane K
-              mask[srcK] = K; // Swap the junk from lane K into srcK
-              // (If srcK == K, this is just an identity mask)
-              return IRB.CreateShuffleVector(EEI->getVectorOperand(), mask, "");
-            }
-          }
-        }
-      }
+      if (Value *chained =
+              tryGetChainedVector(IRB, scalarOp, lanes, scalarTy, K))
+        return chained;
     }
 
     // Fallback: build a new vector with junk lanes derived from the real scalar
@@ -275,8 +354,8 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
     extractLane = shuf.second;
   }
 
-  // Extract real result from lane K (or shuffled lane)
-  Value *result = IRB.CreateExtractElement(vres, (uint64_t)extractLane, "");
+  // Extract real result from lane K (or shuffled lane) via opaque stack load
+  Value *result = extractLaneOpaque(IRB, vres, extractLane, scalarTy);
   bo->replaceAllUsesWith(result);
   return true;
 }
@@ -313,8 +392,9 @@ static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
     extractLane = shuf.second;
   }
 
-  // Extract scalar i1 comparison result from the vector
-  Value *result = IRB.CreateExtractElement(vcmp, (uint64_t)extractLane, "vobf.cmp");
+  // Extract scalar i1 comparison result from the vector via opaque stack load
+  Value *result = extractLaneOpaque(IRB, vcmp, extractLane,
+                                    Type::getInt1Ty(ici->getContext()));
   ici->replaceAllUsesWith(result);
   return true;
 }
@@ -346,7 +426,8 @@ static bool liftFCmpToVector(FCmpInst *fci, unsigned totalBits,
     extractLane = shuf.second;
   }
 
-  Value *result = IRB.CreateExtractElement(vcmp, (uint64_t)extractLane, "vobf.fcmp");
+  Value *result = extractLaneOpaque(IRB, vcmp, extractLane,
+                                    Type::getInt1Ty(fci->getContext()));
   fci->replaceAllUsesWith(result);
   return true;
 }
@@ -387,7 +468,7 @@ static bool liftSelectToVector(SelectInst *sel, unsigned totalBits,
     extractLane = shuf.second;
   }
 
-  Value *result = IRB.CreateExtractElement(vSel, (uint64_t)extractLane, "");
+  Value *result = extractLaneOpaque(IRB, vSel, extractLane, scalarTy);
   sel->replaceAllUsesWith(result);
   return true;
 }
@@ -434,7 +515,7 @@ static bool liftCastToVector(CastInst *ci, unsigned totalBits, bool doShuffle) {
     extractLane = shuf.second;
   }
 
-  Value *result = IRB.CreateExtractElement(vCast, (uint64_t)extractLane, "");
+  Value *result = extractLaneOpaque(IRB, vCast, extractLane, dstTy);
   ci->replaceAllUsesWith(result);
   return true;
 }
@@ -450,6 +531,8 @@ struct VectorObfuscation : public FunctionPass {
   VectorObfuscation(bool flag) : FunctionPass(ID) { this->flag = flag; }
 
   bool runOnFunction(Function &F) override {
+    if (F.getName().starts_with("__ensia_"))
+      return false;
     if (!toObfuscate(flag, &F, "vobf"))
       return false;
 

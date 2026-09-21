@@ -57,17 +57,12 @@ static Value *buildHardwareTruePredicate(Module &M, IRBuilder<> &IRB) {
   if (targetIsX86(M)) {
     // CPUID leaf 1: EDX bit 25 = SSE support — always set on x86_64/modern x86
     FunctionType *AsmTy = FunctionType::get(I32Ty, {}, false);
-    const char *asmCode =
-        targetIsX86_64(M)
-            ? "mov %rbx, %r11\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tmov %r11, %rbx"
-            : "xchg %esi, %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\txchg %esi, %ebx";
+    const char *asmCode = "mov $$1, %eax\n\tcpuid";
     const char *asmConstraints =
-        targetIsX86_64(M)
-            ? "=r,~{eax},~{ecx},~{edx},~{r11},~{dirflag},~{fpsr},~{flags}"
-            : "=r,~{eax},~{ecx},~{edx},~{esi},~{dirflag},~{fpsr},~{flags}";
-    InlineAsm *cpuidAsm = InlineAsm::get(
-        AsmTy, asmCode, asmConstraints,
-        /*hasSideEffects=*/true, InlineAsm::AD_ATT);
+        "={dx},~{eax},~{ebx},~{ecx},~{dirflag},~{fpsr},~{flags}";
+    InlineAsm *cpuidAsm =
+        InlineAsm::get(AsmTy, asmCode, asmConstraints,
+                       /*hasSideEffects=*/true, InlineAsm::AD_ATT);
     Value *edx = IRB.CreateCall(AsmTy, cpuidAsm, {}, "bcf.cpuid.edx");
     Value *sse =
         IRB.CreateAnd(edx, ConstantInt::get(I32Ty, 1u << 25), "bcf.sse.bit");
@@ -121,17 +116,11 @@ static Value *buildEntropyChainPredicate(Module &M, IRBuilder<> &IRB,
   if (targetIsX86(M)) {
     // Tier 1: CPUID — EDX bit 25 = SSE (always 1 on x86_64)
     FunctionType *CpuidTy = FunctionType::get(I32Ty, {}, false);
-    const char *asmCode =
-        targetIsX86_64(M)
-            ? "mov %rbx, %r11\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\tmov %r11, %rbx"
-            : "xchg %esi, %ebx\n\tmov $$1, %eax\n\tcpuid\n\tmov %edx, $0\n\txchg %esi, %ebx";
+    const char *asmCode = "mov $$1, %eax\n\tcpuid";
     const char *asmConstraints =
-        targetIsX86_64(M)
-            ? "=r,~{eax},~{ecx},~{edx},~{r11},~{dirflag},~{fpsr},~{flags}"
-            : "=r,~{eax},~{ecx},~{edx},~{esi},~{dirflag},~{fpsr},~{flags}";
-    InlineAsm *cpuidIA = InlineAsm::get(
-        CpuidTy, asmCode, asmConstraints,
-        true, InlineAsm::AD_ATT);
+        "={dx},~{eax},~{ebx},~{ecx},~{dirflag},~{fpsr},~{flags}";
+    InlineAsm *cpuidIA = InlineAsm::get(CpuidTy, asmCode, asmConstraints, true,
+                                        InlineAsm::AD_ATT);
     Value *edx = IRB.CreateCall(CpuidTy, cpuidIA, {}, "bcf.ec.edx");
     Value *sse = IRB.CreateAnd(edx, ConstantInt::get(I32Ty, 1u << 25));
     Value *t1 = IRB.CreateICmpNE(sse, ConstantInt::get(I32Ty, 0), "bcf.ec.t1");
@@ -502,27 +491,35 @@ struct BogusControlFlow : public FunctionPass {
     LLVMContext &Ctx = F.getContext();
     Type *I32Ty = Type::getInt32Ty(Ctx);
 
-    // In junkBB1: perform synthetic arithmetic before jumping
+    // In junkBB1: perform synthetic arithmetic before jumping, sink with
+    // volatile store
     IRBuilder<> IRB1(junkBB1);
     uint32_t r1 = cryptoutils->get_uint32_t();
-    Value *val1 = IRB1.CreateAdd(ConstantInt::get(I32Ty, r1), ConstantInt::get(I32Ty, 0x1337), "bcf.exp1.val");
-    Value *xor1 = IRB1.CreateXor(val1, ConstantInt::get(I32Ty, 0x55AA55AA), "bcf.exp1.xor");
-    (void)xor1;
+    Value *val1 =
+        IRB1.CreateAdd(ConstantInt::get(I32Ty, r1),
+                       ConstantInt::get(I32Ty, 0x1337), "bcf.exp1.val");
+    Value *xor1 = IRB1.CreateXor(val1, ConstantInt::get(I32Ty, 0x55AA55AA),
+                                 "bcf.exp1.xor");
+    AllocaInst *sink1 = IRB1.CreateAlloca(I32Ty, nullptr, "bcf.exp1.sink");
+    IRB1.CreateStore(xor1, sink1, /*isVolatile=*/true);
     InlineAsm *IA1 = InlineAsm::get(
-        FunctionType::get(Type::getVoidTy(Ctx), false), "nop", "",
-        true, false);
+        FunctionType::get(Type::getVoidTy(Ctx), false), "nop", "", true, false);
     IRB1.CreateCall(IA1, {});
     IRB1.CreateBr(originalBB);
 
-    // In junkBB2: perform alternative synthetic arithmetic before jumping
+    // In junkBB2: perform alternative synthetic arithmetic before jumping, sink
+    // with volatile store
     IRBuilder<> IRB2(junkBB2);
     uint32_t r2 = cryptoutils->get_uint32_t();
-    Value *val2 = IRB2.CreateSub(ConstantInt::get(I32Ty, r2), ConstantInt::get(I32Ty, 0x42), "bcf.exp2.val");
-    Value *mul2 = IRB2.CreateMul(val2, ConstantInt::get(I32Ty, 33), "bcf.exp2.mul");
-    (void)mul2;
-    InlineAsm *IA2 = InlineAsm::get(
-        FunctionType::get(Type::getVoidTy(Ctx), false), "nop\nnop",
-        "", true, false);
+    Value *val2 = IRB2.CreateSub(ConstantInt::get(I32Ty, r2),
+                                 ConstantInt::get(I32Ty, 0x42), "bcf.exp2.val");
+    Value *mul2 =
+        IRB2.CreateMul(val2, ConstantInt::get(I32Ty, 33), "bcf.exp2.mul");
+    AllocaInst *sink2 = IRB2.CreateAlloca(I32Ty, nullptr, "bcf.exp2.sink");
+    IRB2.CreateStore(mul2, sink2, /*isVolatile=*/true);
+    InlineAsm *IA2 =
+        InlineAsm::get(FunctionType::get(Type::getVoidTy(Ctx), false),
+                       "nop\nnop", "", true, false);
     IRB2.CreateCall(IA2, {});
     IRB2.CreateBr(originalBB);
 
@@ -579,6 +576,7 @@ struct BogusControlFlow : public FunctionPass {
           ConstantInt::get(Type::getInt32Ty(F.getContext()), 0));
     }
 
+    cond = insertOpaqueBarrier(IRB, cond);
     IRB.CreateCondBr(cond, junkBB1, junkBB2);
     turnOffOptimization(basicBlock->getParent());
   }
@@ -732,8 +730,8 @@ struct BogusControlFlow : public FunctionPass {
         ji++;
       } // The instructions' informations are now all correct
 
-      // Erase stores and call side-effects from alteredBB so executing the dead block
-      // cannot corrupt program state or trigger invalid call frames.
+      // Erase stores and call side-effects from alteredBB so executing the dead
+      // block cannot corrupt program state or trigger invalid call frames.
       SmallVector<Instruction *, 16> sideEffectsToErase;
       for (Instruction &I : *alteredBB) {
         if (isa<StoreInst>(&I))
@@ -1061,6 +1059,28 @@ struct BogusControlFlow : public FunctionPass {
         }
       }
     }
+    // Retain computed values in alteredBB using volatile stack stores so that
+    // dead-code elimination (DCE) or backward taint analysis cannot slice
+    // alteredBB away as dead code.
+    if (!alteredBB->empty()) {
+      Instruction *sinkInsertPt = alteredBB->getTerminator();
+      if (!sinkInsertPt)
+        sinkInsertPt = &alteredBB->back();
+      SmallVector<Value *, 4> valsToSink;
+      for (Instruction &I : *alteredBB) {
+        if (!I.isTerminator() && !I.getType()->isVoidTy() &&
+            !isa<AllocaInst>(&I)) {
+          valsToSink.push_back(&I);
+          if (valsToSink.size() >= 4)
+            break;
+        }
+      }
+      for (Value *V : valsToSink) {
+        AllocaInst *sinkSlot =
+            new AllocaInst(V->getType(), 0, "bcf.sink.slot", sinkInsertPt);
+        new StoreInst(V, sinkSlot, /*isVolatile=*/true, sinkInsertPt);
+      }
+    }
     if (JunkAssemblyTemp || OnlyJunkAssemblyTemp) {
       std::string junk = "";
       for (uint32_t i = cryptoutils->get_range(MinNumberOfJunkAssemblyTemp,
@@ -1191,12 +1211,12 @@ struct BogusControlFlow : public FunctionPass {
       GlobalVariable *RHSGV =
           new GlobalVariable(M, Type::getInt32Ty(M.getContext()), false,
                              GlobalValue::PrivateLinkage, RHSC, rhsName);
-      LoadInst *LHS =
-          (CreateFunctionForOpaquePredicateTemp ? IRBOp : IRBReal)
-              ->CreateLoad(LHSGV->getValueType(), LHSGV, "Initial LHS");
-      LoadInst *RHS =
-          (CreateFunctionForOpaquePredicateTemp ? IRBOp : IRBReal)
-              ->CreateLoad(RHSGV->getValueType(), RHSGV, "Initial LHS");
+      LoadInst *LHS = (CreateFunctionForOpaquePredicateTemp ? IRBOp : IRBReal)
+                          ->CreateLoad(LHSGV->getValueType(), LHSGV,
+                                       /*isVolatile=*/true, "Initial LHS");
+      LoadInst *RHS = (CreateFunctionForOpaquePredicateTemp ? IRBOp : IRBReal)
+                          ->CreateLoad(RHSGV->getValueType(), RHSGV,
+                                       /*isVolatile=*/true, "Initial RHS");
 
       // To Speed-Up Evaluation
       Value *emuLHS = LHSC;
@@ -1205,8 +1225,13 @@ struct BogusControlFlow : public FunctionPass {
           ops[cryptoutils->get_range(sizeof(ops) / sizeof(ops[0]))];
       Value *emuLast =
           IRBEmu.CreateBinOp(initialOp, emuLHS, emuRHS, "EmuInitialCondition");
-      Value *Last = (CreateFunctionForOpaquePredicateTemp ? IRBOp : IRBReal)
-                        ->CreateBinOp(initialOp, LHS, RHS, "InitialCondition");
+      Value *barLHS = insertOpaqueBarrier(
+          *(CreateFunctionForOpaquePredicateTemp ? IRBOp : IRBReal), LHS);
+      Value *barRHS = insertOpaqueBarrier(
+          *(CreateFunctionForOpaquePredicateTemp ? IRBOp : IRBReal), RHS);
+      Value *Last =
+          (CreateFunctionForOpaquePredicateTemp ? IRBOp : IRBReal)
+              ->CreateBinOp(initialOp, barLHS, barRHS, "InitialCondition");
       for (uint32_t i = 0; i < ConditionExpressionComplexityTemp; i++) {
         Constant *newTmp =
             ConstantInt::get(I32Ty, cryptoutils->get_range(1, UINT32_MAX));
@@ -1225,6 +1250,7 @@ struct BogusControlFlow : public FunctionPass {
         Last = IRBReal->CreateCall(opFunction);
       } else {
         Value *swPred = IRBReal->CreateICmp(pred, Last, RealRHS);
+        swPred = insertOpaqueBarrier(*IRBReal, swPred);
         bool doEntropyChain =
             BCFEntropyChainTemp &&
             (ObfuscationMaxMode || cryptoutils->get_range(2) == 0);

@@ -22,6 +22,7 @@
 #include "include/SubstituteImpl.h"
 #include "include/Utils.h"
 #include "include/compat/CallSite.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -75,15 +76,15 @@ static cl::opt<uint32_t> KShareCount(
     "constenc_kshare",
     cl::desc("[ConstantEncryption] Number of XOR shares for ensemble "
              "secret-sharing (2=classic XOR, 3-5 recommended, max 8)"),
-    cl::value_desc("k"), cl::init(2), cl::Optional);
-static thread_local uint32_t KShareCountTemp = 2;
+    cl::value_desc("k"), cl::init(3), cl::Optional);
+static thread_local uint32_t KShareCountTemp = 3;
 
 static cl::opt<bool> FeistelTier(
     "constenc_feistel",
     cl::desc("[ConstantEncryption] Apply 4-round Feistel cipher before "
              "share-splitting (adds nonlinear layer defeating XOR analysis)"),
-    cl::init(false), cl::Optional);
-static thread_local bool FeistelTierTemp = false;
+    cl::init(true), cl::Optional);
+static thread_local bool FeistelTierTemp = true;
 
 namespace llvm {
 struct ConstantEncryption : public ModulePass {
@@ -96,6 +97,8 @@ struct ConstantEncryption : public ModulePass {
   ConstantEncryption() : ModulePass(ID) { this->flag = true; }
   bool shouldEncryptConstant(Instruction *I) {
     if (isSynthetic(I))
+      return false;
+    if (I->getFunction() && I->getFunction()->getName().starts_with("__ensia_"))
       return false;
     if (I->getType()->isVectorTy())
       return false;
@@ -141,7 +144,9 @@ struct ConstantEncryption : public ModulePass {
   }
   bool runOnModule(Module &M) override {
     dispatchonce = M.getFunction("dispatch_once");
-    for (Function &F : M)
+    for (Function &F : M) {
+      if (F.getName().starts_with("__ensia_"))
+        continue;
       if (toObfuscate(flag, &F, "constenc") && !F.isPresplitCoroutine()) {
         if (ObfVerbose)
           errs() << "Running ConstantEncryption On " << F.getName() << "\n";
@@ -194,6 +199,7 @@ struct ConstantEncryption : public ModulePass {
           Constant2GlobalVariable(F);
         }
       }
+    }
     if (!usedGlobals.empty()) {
       appendToCompilerUsed(M, usedGlobals);
       usedGlobals.clear();
@@ -296,7 +302,7 @@ struct ConstantEncryption : public ModulePass {
                         const std::vector<std::string> &skipVal = {},
                         const std::vector<std::string> &forceVal = {}) {
     SmallVector<std::pair<Instruction *, unsigned>, 64> targets;
-    SmallVector<GlobalVariable *, 32> gvTargets;
+    SmallSetVector<GlobalVariable *, 32> gvTargets;
 
     for (Instruction &I : instructions(F)) {
       if (!shouldEncryptConstant(&I))
@@ -311,8 +317,9 @@ struct ConstantEncryption : public ModulePass {
         if (GlobalVariable *G = dyn_cast<GlobalVariable>(Op))
           if (G->hasInitializer() &&
               (G->hasPrivateLinkage() || G->hasInternalLinkage()) &&
-              isa<ConstantInt>(G->getInitializer()))
-            gvTargets.push_back(G);
+              isa<ConstantInt>(G->getInitializer()) &&
+              handled_gvs.find(G) == handled_gvs.end())
+            gvTargets.insert(G);
       }
     }
 
@@ -343,11 +350,18 @@ struct ConstantEncryption : public ModulePass {
     for (auto &T : filteredTargets) {
       HandleConstantIntOperand(T.first, T.second);
     }
+
+    uint32_t gvCount = 0;
+    uint32_t maxGVTargets = ObfuscationMaxMode ? 60 : 30;
     for (GlobalVariable *G : gvTargets) {
+      if (gvCount >= maxGVTargets)
+        break;
       const ConstantInt *CI = cast<ConstantInt>(G->getInitializer());
       int gate = valueGate(CI, skipVal, forceVal);
-      if (gate >= 0)
+      if (gate >= 0) {
         HandleConstantIntInitializerGV(G);
+        gvCount++;
+      }
     }
   }
 
@@ -379,6 +393,8 @@ struct ConstantEncryption : public ModulePass {
   }
 
   void HandleConstantIntInitializerGV(GlobalVariable *GVPtr) {
+    if (!GVPtr || handled_gvs.find(GVPtr) != handled_gvs.end())
+      return;
     if (!(flag || AreUsersInOneFunction(GVPtr)) || isDispatchOnceToken(GVPtr) ||
         isAtomicLoaded(GVPtr))
       return;
@@ -386,18 +402,14 @@ struct ConstantEncryption : public ModulePass {
       if (!isa<LoadInst>(U) && !isa<StoreInst>(U))
         return;
     }
-    // Prepare Types and Keys
-    std::pair<ConstantInt *, ConstantInt *> keyandnew;
+    handled_gvs.insert(GVPtr);
     ConstantInt *Old = dyn_cast<ConstantInt>(GVPtr->getInitializer());
-    bool hasHandled = true;
-    if (handled_gvs.find(GVPtr) == handled_gvs.end()) {
-      hasHandled = false;
-      keyandnew = PairConstantInt(Old);
-      handled_gvs.insert(GVPtr);
-    }
+    if (!Old)
+      return;
+    auto keyandnew = PairConstantInt(Old);
     ConstantInt *XORKey = keyandnew.first;
     ConstantInt *newGVInit = keyandnew.second;
-    if (hasHandled || !XORKey || !newGVInit)
+    if (!XORKey || !newGVInit)
       return;
     GVPtr->setInitializer(newGVInit);
     bool isSigned = XORKey->getValue().isSignBitSet() ||
@@ -406,6 +418,7 @@ struct ConstantEncryption : public ModulePass {
     for (User *U : GVPtr->users()) {
       BinaryOperator *XORInst = nullptr;
       if (LoadInst *LI = dyn_cast<LoadInst>(U)) {
+        LI->setVolatile(true);
         if (LI->getType() != XORKey->getType()) {
           Instruction *IntegerCast =
               BitCastInst::CreateIntegerCast(LI, XORKey->getType(), isSigned);
@@ -413,6 +426,9 @@ struct ConstantEncryption : public ModulePass {
           XORInst =
               BinaryOperator::Create(Instruction::Xor, IntegerCast, XORKey);
           XORInst->insertAfter(IntegerCast);
+          IRBuilder<NoFolder> IRB(XORInst);
+          Value *barKey = insertOpaqueBarrier(IRB, XORKey);
+          XORInst->setOperand(1, barKey);
           Instruction *IntegerCast2 =
               BitCastInst::CreateIntegerCast(XORInst, LI->getType(), isSigned);
           IntegerCast2->insertAfter(XORInst);
@@ -422,6 +438,9 @@ struct ConstantEncryption : public ModulePass {
         } else {
           XORInst = BinaryOperator::Create(Instruction::Xor, LI, XORKey);
           XORInst->insertAfter(LI);
+          IRBuilder<NoFolder> IRB(XORInst);
+          Value *barKey = insertOpaqueBarrier(IRB, XORKey);
+          XORInst->setOperand(1, barKey);
           LI->replaceUsesWithIf(
               XORInst, [XORInst](Use &U) { return U.getUser() != XORInst; });
         }
@@ -457,10 +476,41 @@ struct ConstantEncryption : public ModulePass {
   // FeistelState, which is passed from feistelEncrypt to emitFeistelDecryptIR
   // so that the IR emitter uses the same keys used for encryption.
 
+  GlobalVariable *getOrCreateKeyTable(Module &M) {
+    if (GlobalVariable *GV = M.getGlobalVariable("__ensia_const_sbox", true))
+      return GV;
+    LLVMContext &Ctx = M.getContext();
+    Type *I32Ty = Type::getInt32Ty(Ctx);
+    ArrayType *ArrTy = ArrayType::get(I32Ty, 256);
+    GlobalVariable *KeyTable = new GlobalVariable(
+        M, ArrTy, /*isConstant=*/false, GlobalValue::InternalLinkage,
+        ConstantAggregateZero::get(ArrTy), "__ensia_const_sbox");
+    usedGlobals.push_back(KeyTable);
+
+    // Create constructor function __ensia_init_const_sbox
+    FunctionType *FT = FunctionType::get(Type::getVoidTy(Ctx), false);
+    Function *InitFn = Function::Create(FT, GlobalValue::InternalLinkage,
+                                        "__ensia_init_const_sbox", &M);
+    BasicBlock *BB = BasicBlock::Create(Ctx, "entry", InitFn);
+    IRBuilder<> IRB(BB);
+
+    for (unsigned i = 0; i < 256; i++) {
+      uint32_t val =
+          (uint32_t)((i * 0x9e3779b9ULL) ^ 0x85ebca6bULL) + 0x1337c0deU;
+      Value *ptr = IRB.CreateConstGEP2_32(ArrTy, KeyTable, 0, i);
+      IRB.CreateStore(ConstantInt::get(I32Ty, val), ptr);
+    }
+    IRB.CreateRetVoid();
+    appendToGlobalCtors(M, InitFn, 65535);
+    return KeyTable;
+  }
+
   struct FeistelState {
     APInt K[4][2]; // K[round][0=mulKey, 1=xorKey], both masked to half-width
     unsigned half; // half bit-width of the constant (bits/2)
     APInt mask;    // low half bits mask
+    unsigned slot; // key table slot
+    uint32_t dynKey;
   };
 
   // Compile-time: encrypt C using 4-round Feistel, filling fst with round keys.
@@ -471,6 +521,9 @@ struct ConstantEncryption : public ModulePass {
       return nullptr; // need at least 8-bit halves
     fst.half = bits / 2;
     fst.mask = APInt::getLowBitsSet(bits, fst.half);
+    fst.slot = cryptoutils->get_range(256);
+    fst.dynKey =
+        (uint32_t)((fst.slot * 0x9e3779b9ULL) ^ 0x85ebca6bULL) + 0x1337c0deU;
 
     APInt val = C->getValue();
     APInt L = val.lshr(fst.half) & fst.mask;
@@ -493,6 +546,9 @@ struct ConstantEncryption : public ModulePass {
       L = R;
       R = newR;
     }
+    // Mask round 0 K1 with dynamic key
+    fst.K[0][1] ^= (APInt(bits, fst.dynKey, false, true) & fst.mask);
+
     APInt enc = (L.shl(fst.half) | R);
     return cast<ConstantInt>(ConstantInt::get(C->getType(), enc));
   }
@@ -505,34 +561,64 @@ struct ConstantEncryption : public ModulePass {
                               const FeistelState &fst) {
     ConstantInt *halfC = cast<ConstantInt>(ConstantInt::get(T, fst.half));
     ConstantInt *maskC = cast<ConstantInt>(ConstantInt::get(T, fst.mask));
+    Module &M = *I->getModule();
+    GlobalVariable *KT = getOrCreateKeyTable(M);
+    Type *I32Ty = Type::getInt32Ty(M.getContext());
 
     // Extract halves: L = upper half, R = lower half
     Value *L = BinaryOperator::Create(
         Instruction::And,
-        BinaryOperator::Create(Instruction::LShr, encVal, halfC, "constenc.feistel.lshr", I), maskC,
-        "constenc.feistel.L", I);
-    Value *R = BinaryOperator::Create(Instruction::And, encVal, maskC, "constenc.feistel.R", I);
+        BinaryOperator::Create(Instruction::LShr, encVal, halfC,
+                               "constenc.feistel.lshr", I),
+        maskC, "constenc.feistel.L", I);
+    Value *R = BinaryOperator::Create(Instruction::And, encVal, maskC,
+                                      "constenc.feistel.R", I);
 
     // Apply 4 inverse rounds in reverse order (r = 3, 2, 1, 0)
     for (int r = 3; r >= 0; r--) {
       ConstantInt *K0 = cast<ConstantInt>(ConstantInt::get(T, fst.K[r][0]));
-      ConstantInt *K1 = cast<ConstantInt>(ConstantInt::get(T, fst.K[r][1]));
+      Value *K1Val = cast<ConstantInt>(ConstantInt::get(T, fst.K[r][1]));
+      if (r == 0) {
+        // Unmask K1 using dynamic table load
+        IRBuilder<NoFolder> IRBDyn(I);
+        Value *gepKey = IRBDyn.CreateConstGEP2_32(
+            KT->getValueType(), KT, 0, fst.slot, "constenc.feistel.gep");
+        LoadInst *ldKey =
+            IRBDyn.CreateLoad(I32Ty, gepKey, "constenc.feistel.ld");
+        ldKey->setVolatile(true);
+        Value *dynKeyIR = ldKey;
+        if (T->getBitWidth() != 32)
+          dynKeyIR =
+              IRBDyn.CreateZExtOrTrunc(ldKey, T, "constenc.feistel.cast");
+        Value *dynKeyMasked = IRBDyn.CreateAnd(dynKeyIR, maskC);
+        K1Val = BinaryOperator::Create(Instruction::Xor, K1Val, dynKeyMasked,
+                                       "constenc.feistel.k1dyn", I);
+      }
       // F_r(L) = ((L * K0) ^ K1) & mask
-      Value *mul = BinaryOperator::Create(Instruction::Mul, L, K0, "constenc.feistel.mul", I);
-      Value *xorK = BinaryOperator::Create(Instruction::Xor, mul, K1, "constenc.feistel.xor", I);
-      Value *F = BinaryOperator::Create(Instruction::And, xorK, maskC, "constenc.feistel.F", I);
+      Value *mul = BinaryOperator::Create(Instruction::Mul, L, K0,
+                                          "constenc.feistel.mul", I);
+      Value *xorK = BinaryOperator::Create(Instruction::Xor, mul, K1Val,
+                                           "constenc.feistel.xor", I);
+      Value *F = BinaryOperator::Create(Instruction::And, xorK, maskC,
+                                        "constenc.feistel.F", I);
       // Inverse: newL = R ^ F(L),  newR = L
       Value *newL = BinaryOperator::Create(
           Instruction::And,
-          BinaryOperator::Create(Instruction::Xor, R, F, "constenc.feistel.rxor", I), maskC, "constenc.feistel.newL", I);
+          BinaryOperator::Create(Instruction::Xor, R, F,
+                                 "constenc.feistel.rxor", I),
+          maskC, "constenc.feistel.newL", I);
+      IRBuilder<NoFolder> IRBFeistel(I);
+      newL = insertOpaqueBarrier(IRBFeistel, newL);
       Value *newR = L;
       L = newL;
       R = newR;
     }
 
     // Recombine: (L << half) | R
-    Value *Lsh = BinaryOperator::Create(Instruction::Shl, L, halfC, "constenc.feistel.shl", I);
-    return BinaryOperator::Create(Instruction::Or, Lsh, R, "constenc.feistel.rec", I);
+    Value *Lsh = BinaryOperator::Create(Instruction::Shl, L, halfC,
+                                        "constenc.feistel.shl", I);
+    return BinaryOperator::Create(Instruction::Or, Lsh, R,
+                                  "constenc.feistel.rec", I);
   }
 
   // ── k-share ensemble secret sharing ─────────────────────────────────────
@@ -548,6 +634,12 @@ struct ConstantEncryption : public ModulePass {
       // Narrow ints or k<2: fall back to single XOR
       return nullptr;
     }
+
+    GlobalVariable *KT = getOrCreateKeyTable(M);
+    unsigned slot = cryptoutils->get_range(256);
+    uint32_t dynKeyVal =
+        (uint32_t)((slot * 0x9e3779b9ULL) ^ 0x85ebca6bULL) + 0x1337c0deU;
+    APInt dynKey(bits, dynKeyVal, false, true);
 
     // Generate k−1 random APInt shares; last share = C ^ xor(r_1..r_{k-1})
     SmallVector<APInt, 8> shares;
@@ -568,6 +660,10 @@ struct ConstantEncryption : public ModulePass {
     }
     shares.push_back(xorAccum); // last share makes XOR-of-all = C
 
+    // Mask first share with dynKey so it cannot be folded without runtime table
+    // lookup
+    shares[0] ^= dynKey;
+
     // Create k GlobalVariables for the shares
     SmallVector<GlobalVariable *, 8> gvs;
     for (unsigned i = 0; i < k; i++) {
@@ -578,11 +674,29 @@ struct ConstantEncryption : public ModulePass {
       gvs.push_back(GV);
     }
 
-    // Emit XOR chain: load g0, load g1, ... XOR all together
-    Value *acc = new LoadInst(T, gvs[0], "", I);
+    // Emit XOR chain: load g0, unmask with dynamic key table load, load g1, ...
+    // XOR all together with volatile loads and opaque barrier
+    IRBuilder<NoFolder> IRB(I);
+    LoadInst *ld0 =
+        new LoadInst(T, gvs[0], "constenc.share0", /*isVolatile=*/true, I);
+
+    Type *I32Ty = Type::getInt32Ty(M.getContext());
+    Value *gepKey = IRB.CreateConstGEP2_32(KT->getValueType(), KT, 0, slot,
+                                           "constenc.kt.gep");
+    LoadInst *ldKey = IRB.CreateLoad(I32Ty, gepKey, "constenc.kt.ld");
+    ldKey->setVolatile(true);
+    Value *dynKeyIR = ldKey;
+    if (bits != 32)
+      dynKeyIR = IRB.CreateZExtOrTrunc(ldKey, T, "constenc.kt.cast");
+    Value *realShare0 = BinaryOperator::Create(Instruction::Xor, ld0, dynKeyIR,
+                                               "constenc.share0.dyn", I);
+
+    Value *acc = insertOpaqueBarrier(IRB, realShare0);
     for (unsigned i = 1; i < k; i++) {
-      Value *ld = new LoadInst(T, gvs[i], "", I);
-      acc = BinaryOperator::Create(Instruction::Xor, acc, ld, "", I);
+      Value *ld =
+          new LoadInst(T, gvs[i], "constenc.share", /*isVolatile=*/true, I);
+      acc =
+          BinaryOperator::Create(Instruction::Xor, acc, ld, "constenc.xor", I);
       // Optionally substitute the XOR for additional depth
       if (SubstituteXorTemp &&
           cryptoutils->get_range(100) <= SubstituteXorProbTemp)
@@ -618,16 +732,18 @@ struct ConstantEncryption : public ModulePass {
 
     // ── k-share ensemble or classic XOR ─────────────────────────────────────
     Value *reconstructed = nullptr;
-    if (k >= 3) {
+    if (k >= 2) {
       reconstructed = emitKShareDecrypt(I, workC, k);
     }
     if (!reconstructed) {
-      // Classic single-XOR: emit (New ^ Key) just before I
+      // Classic single-XOR: emit (New ^ Key) through opaque memory barrier
       auto kn = PairConstantInt(workC);
       if (!kn.first || !kn.second)
         return;
-      BinaryOperator *xorInst =
-          BinaryOperator::Create(Instruction::Xor, kn.second, kn.first, "", I);
+      IRBuilder<NoFolder> IRB(I);
+      Value *op0 = insertOpaqueBarrier(IRB, kn.second);
+      BinaryOperator *xorInst = BinaryOperator::Create(
+          Instruction::Xor, op0, kn.first, "constenc.val", I);
       if (SubstituteXorTemp &&
           cryptoutils->get_range(100) <= SubstituteXorProbTemp)
         SubstituteImpl::substituteXor(xorInst);

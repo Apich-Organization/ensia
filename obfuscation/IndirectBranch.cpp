@@ -44,10 +44,9 @@ static cl::opt<bool>
 static thread_local bool UseStackTemp = true;
 
 static cl::opt<bool>
-    EncryptJumpTarget("indibran-enc-jump-target", cl::init(false),
-                      cl::NotHidden,
+    EncryptJumpTarget("indibran-enc-jump-target", cl::init(true), cl::NotHidden,
                       cl::desc("[IndirectBranch]Encrypt jump target"));
-static thread_local bool EncryptJumpTargetTemp = false;
+static thread_local bool EncryptJumpTargetTemp = true;
 
 // Per-function Knuth-hash encryption parameters
 struct KnuthEncKey {
@@ -98,6 +97,8 @@ struct IndirectBranch : public FunctionPass {
     SmallVector<Constant *, 32> BBs;
     unsigned long long i = 0;
     for (Function &F : M) {
+      if (F.getName().starts_with("__ensia_"))
+        continue;
       if (!toObfuscate(flag, &F, "indibr"))
         continue;
       else
@@ -161,6 +162,8 @@ struct IndirectBranch : public FunctionPass {
     return true;
   }
   bool runOnFunction(Function &Func) override {
+    if (Func.getName().starts_with("__ensia_"))
+      return false;
     Module *M = Func.getParent();
     if (!this->initialized)
       initialize(*M);
@@ -229,30 +232,44 @@ struct IndirectBranch : public FunctionPass {
       // deleted, leaking one object per branch instruction.
       IRBuilder<NoFolder> IRBBIStorage(BI);
       IRBuilder<NoFolder> *IRBBI = &IRBBIStorage;
-      SmallVector<BasicBlock *, 2> BBs;
-      // We use the condition's evaluation result to generate the GEP
-      // instruction  False evaluates to 0 while true evaluates to 1.  So here
-      // we insert the false block first
-      if (BI->isConditional() && !BI->getSuccessor(1)->isEntryBlock())
-        BBs.emplace_back(BI->getSuccessor(1));
-      if (!BI->getSuccessor(0)->isEntryBlock())
-        BBs.emplace_back(BI->getSuccessor(0));
-
+      SmallVector<BasicBlock *, 4> BBs;
+      unsigned slotFalse = 0, slotTrue = 1;
       GlobalVariable *LoadFrom = nullptr;
-      if (BI->isConditional() ||
-          indexmap.find(BI->getSuccessor(0)) == indexmap.end()) {
-        ArrayType *AT = ArrayType::get(Int8PtrTy, BBs.size());
-        SmallVector<Constant *, 2> BlockAddresses;
-        for (BasicBlock *BB : BBs)
+      if (BI->isConditional()) {
+        BasicBlock *falseBB = BI->getSuccessor(1);
+        BasicBlock *trueBB = BI->getSuccessor(0);
+        if (falseBB->isEntryBlock() || trueBB->isEntryBlock())
+          continue;
+
+        slotFalse = cryptoutils->get_range(4);
+        slotTrue = (slotFalse + 1 + cryptoutils->get_range(3)) % 4;
+
+        SmallVector<BasicBlock *, 4> tableBBs(4);
+        for (unsigned k = 0; k < 4; k++) {
+          if (k == slotFalse)
+            tableBBs[k] = falseBB;
+          else if (k == slotTrue)
+            tableBBs[k] = trueBB;
+          else
+            tableBBs[k] = (k % 2 == 0) ? falseBB : trueBB;
+        }
+
+        BBs.push_back(falseBB);
+        if (trueBB != falseBB)
+          BBs.push_back(trueBB);
+
+        ArrayType *AT = ArrayType::get(Int8PtrTy, 4);
+        SmallVector<Constant *, 4> BlockAddresses;
+        for (unsigned k = 0; k < 4; k++)
           BlockAddresses.emplace_back(
               EncryptJumpTargetTempLocal
                   ? ConstantExpr::getGetElementPtr(
                         Int8Ty,
-                        ConstantExpr::getBitCast(BlockAddress::get(BB),
+                        ConstantExpr::getBitCast(BlockAddress::get(tableBBs[k]),
                                                  Int8PtrTy),
                         encmap[&Func])
-                  : BlockAddress::get(BB));
-        // Create a new GV
+                  : BlockAddress::get(tableBBs[k]));
+
         Constant *BlockAddressArray =
             ConstantArray::get(AT, ArrayRef<Constant *>(BlockAddresses));
         LoadFrom = new GlobalVariable(
@@ -260,33 +277,66 @@ struct IndirectBranch : public FunctionPass {
             BlockAddressArray, "EnsiaConditionalLocalIndirectBranchingTable");
         usedGlobals.push_back(LoadFrom);
       } else {
-        LoadFrom = M->getGlobalVariable("IndirectBranchingGlobalTable", true);
+        if (!BI->getSuccessor(0)->isEntryBlock())
+          BBs.emplace_back(BI->getSuccessor(0));
+        if (BBs.empty())
+          continue;
+        if (indexmap.find(BI->getSuccessor(0)) == indexmap.end()) {
+          ArrayType *AT = ArrayType::get(Int8PtrTy, BBs.size());
+          SmallVector<Constant *, 2> BlockAddresses;
+          for (BasicBlock *BB : BBs)
+            BlockAddresses.emplace_back(
+                EncryptJumpTargetTempLocal
+                    ? ConstantExpr::getGetElementPtr(
+                          Int8Ty,
+                          ConstantExpr::getBitCast(BlockAddress::get(BB),
+                                                   Int8PtrTy),
+                          encmap[&Func])
+                    : BlockAddress::get(BB));
+          Constant *BlockAddressArray =
+              ConstantArray::get(AT, ArrayRef<Constant *>(BlockAddresses));
+          LoadFrom = new GlobalVariable(
+              *M, AT, false, GlobalValue::LinkageTypes::PrivateLinkage,
+              BlockAddressArray, "EnsiaConditionalLocalIndirectBranchingTable");
+          usedGlobals.push_back(LoadFrom);
+        } else {
+          LoadFrom = M->getGlobalVariable("IndirectBranchingGlobalTable", true);
+        }
       }
+      if (!LoadFrom)
+        continue;
+
       AllocaInst *LoadFromAI = nullptr;
       if (UseStackTempLocal) {
         LoadFromAI = IRBEntry->CreateAlloca(LoadFrom->getType());
         IRBEntry->CreateStore(LoadFrom, LoadFromAI);
       }
-      Value *index, *RealIndex = nullptr;
       Value *indexVal = nullptr;
       if (BI->isConditional()) {
         Value *condition = BI->getCondition();
-        Value *zext = IRBBI->CreateZExt(condition, Int32Ty);
+        Value *condZext = IRBBI->CreateZExt(condition, Int32Ty, "indibr.cond");
+        int32_t diff = (int32_t)slotTrue - (int32_t)slotFalse;
+        Value *term = IRBBI->CreateMul(
+            condZext, ConstantInt::get(Int32Ty, diff), "indibr.diff");
+        Value *slotVal = IRBBI->CreateAdd(ConstantInt::get(Int32Ty, slotFalse),
+                                          term, "indibr.slot");
+        slotVal = insertOpaqueBarrier(*IRBBI, slotVal);
         if (knuthKeys.count(&Func)) {
           const KnuthEncKey &kk = knuthKeys[&Func];
           Value *mulV = IRBBI->CreateMul(
-              zext, ConstantInt::get(Int32Ty, (uint32_t)kk.mult));
+              slotVal, ConstantInt::get(Int32Ty, (uint32_t)kk.mult));
           Value *addV = IRBBI->CreateAdd(
               mulV, ConstantInt::get(Int32Ty, (uint32_t)kk.delta));
-          zext = IRBBI->CreateXor(addV,
-                                  ConstantInt::get(Int32Ty, (uint32_t)kk.xorK));
+          slotVal = IRBBI->CreateXor(
+              addV, ConstantInt::get(Int32Ty, (uint32_t)kk.xorK));
+          slotVal = insertOpaqueBarrier(*IRBBI, slotVal);
         }
         if (UseStackTempLocal) {
           AllocaInst *condAI = IRBEntry->CreateAlloca(Int32Ty);
-          IRBBI->CreateStore(zext, condAI);
+          IRBBI->CreateStore(slotVal, condAI);
           indexVal = IRBBI->CreateLoad(Int32Ty, condAI);
         } else {
-          indexVal = zext;
+          indexVal = slotVal;
         }
       } else {
         uint32_t targetIdx = indexmap[BI->getSuccessor(0)];
@@ -322,7 +372,7 @@ struct IndirectBranch : public FunctionPass {
         }
       }
 
-      Value *LI, *enckeyLoad, *gepptr = nullptr;
+      Value *LI = nullptr, *enckeyLoad = nullptr, *gepptr = nullptr;
 
       Value *effectiveIndex = indexVal;
       if (knuthKeys.count(&Func)) {
@@ -342,6 +392,7 @@ struct IndirectBranch : public FunctionPass {
         effectiveIndex = IRBBI->CreateMul(
             undelta, ConstantInt::get(I32Ty, (uint32_t)multInv),
             "indibr.decidx");
+        effectiveIndex = insertOpaqueBarrier(*IRBBI, effectiveIndex);
       }
 
       if (UseStackTempLocal) {
@@ -349,30 +400,42 @@ struct IndirectBranch : public FunctionPass {
             IRBBI->CreateLoad(LoadFrom->getType(), LoadFromAI);
         Value *GEP = IRBBI->CreateGEP(LoadFrom->getValueType(), LILoadFrom,
                                       {zero, effectiveIndex});
-        if (!EncryptJumpTargetTempLocal)
-          LI = IRBBI->CreateLoad(Int8PtrTy, GEP,
-                                 "IndirectBranchingTargetAddress");
-        else
-          gepptr = IRBBI->CreateLoad(Int8PtrTy, GEP);
+        if (!EncryptJumpTargetTempLocal) {
+          LoadInst *ld = IRBBI->CreateLoad(Int8PtrTy, GEP,
+                                           "IndirectBranchingTargetAddress");
+          ld->setVolatile(true);
+          LI = ld;
+        } else {
+          LoadInst *ld = IRBBI->CreateLoad(Int8PtrTy, GEP);
+          ld->setVolatile(true);
+          gepptr = ld;
+        }
       } else {
         Value *GEP = IRBBI->CreateGEP(LoadFrom->getValueType(), LoadFrom,
                                       {zero, effectiveIndex});
-        if (!EncryptJumpTargetTempLocal)
-          LI = IRBBI->CreateLoad(Int8PtrTy, GEP,
-                                 "IndirectBranchingTargetAddress");
-        else
-          gepptr = IRBBI->CreateLoad(Int8PtrTy, GEP);
+        if (!EncryptJumpTargetTempLocal) {
+          LoadInst *ld = IRBBI->CreateLoad(Int8PtrTy, GEP,
+                                           "IndirectBranchingTargetAddress");
+          ld->setVolatile(true);
+          LI = ld;
+        } else {
+          LoadInst *ld = IRBBI->CreateLoad(Int8PtrTy, GEP);
+          ld->setVolatile(true);
+          gepptr = ld;
+        }
       }
       if (EncryptJumpTargetTempLocal) {
-        enckeyLoad = IRBBI->CreateXor(
-            IRBBI->CreateLoad(funcEnckeyGV->getValueType(), funcEnckeyGV),
-            funcEncEncKey);
+        LoadInst *ldEnc =
+            IRBBI->CreateLoad(funcEnckeyGV->getValueType(), funcEnckeyGV);
+        ldEnc->setVolatile(true);
+        enckeyLoad = IRBBI->CreateXor(ldEnc, funcEncEncKey);
+        enckeyLoad = insertOpaqueBarrier(*IRBBI, enckeyLoad);
         LI =
             IRBBI->CreateGEP(Int8Ty, gepptr, IRBBI->CreateSub(zero, enckeyLoad),
                              "IndirectBranchingTargetAddress");
       }
 
-      Value *finalTarget = LI;
+      Value *finalTarget = insertOpaqueBarrier(*IRBBI, LI);
       IndirectBrInst *indirBr = IndirectBrInst::Create(finalTarget, BBs.size());
       for (BasicBlock *BB : BBs)
         indirBr->addDestination(BB);

@@ -20,13 +20,13 @@
 
 #include "llvm/ADT/StringRef.h"
 #include <cstdint>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <regex>
 #include <string>
 #include <vector>
-#include <map>
-#include <mutex>
-#include <memory>
 
 namespace llvm {
 
@@ -181,8 +181,8 @@ struct ObfPolicy {
   std::string func_regex;   // regex on function name (empty = module-wide)
   std::optional<std::regex> compiled_module_regex;
   std::optional<std::regex> compiled_func_regex;
-  std::string preset;       // optional: "low"|"mid"|"high" base for this rule
-  ObfPassConfig overrides;  // specific per-pass overrides
+  std::string preset;      // optional: "low"|"mid"|"high" base for this rule
+  ObfPassConfig overrides; // specific per-pass overrides
 };
 
 // ── Top-level config
@@ -190,8 +190,8 @@ struct ObfPolicy {
 
 struct ObfGlobalConfig {
   struct Cache {
-    std::map<std::pair<std::string, std::string>, ObfPassConfig> resolve_cache;
     std::mutex mutex;
+    std::map<std::pair<std::string, std::string>, ObfPassConfig> resolve_cache;
   };
   mutable std::shared_ptr<Cache> cache{std::make_shared<Cache>()};
 

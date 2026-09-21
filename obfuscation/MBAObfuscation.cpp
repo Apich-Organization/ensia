@@ -53,31 +53,62 @@ static thread_local bool MBAHeuristicTemp = true;
 static Value *buildZeroTerm(IRBuilder<NoFolder> &IRB, Value *a, Value *b,
                             unsigned kind) {
   Type *T = a->getType();
+  Constant *one = ConstantInt::get(T, 1);
+  Constant *two = ConstantInt::get(T, 2);
+
   switch (kind & 7) {
-  case 0: // a ^ a = 0
-    return IRB.CreateXor(a, a);
-  case 1: // b ^ b = 0
-    return IRB.CreateXor(b, b);
-  case 2: // a & ~a = 0
-    return IRB.CreateAnd(a, IRB.CreateNot(a));
-  case 3: // b & ~b = 0
-    return IRB.CreateAnd(b, IRB.CreateNot(b));
-  case 4: { // (a | ~a) + 1 = 0   (since a|~a = -1 = 0xFF..., +1 wraps to 0)
-    Value *allOnes = IRB.CreateOr(a, IRB.CreateNot(a)); // -1
-    return IRB.CreateAdd(allOnes, ConstantInt::get(T, 1));
+  case 0: { // ((a * (a - 1)) & 1) == 0  (consecutive integer parity)
+    Value *opA = insertOpaqueBarrier(IRB, a);
+    Value *aminus1 = IRB.CreateSub(opA, one);
+    Value *mul = IRB.CreateMul(a, aminus1);
+    return IRB.CreateAnd(mul, one, "mba.poly.zero0");
   }
-  case 5: { // (a XOR b) XOR (a XOR b) = 0
+  case 1: { // ((b * (b + 1)) & 1) == 0  (consecutive integer parity)
+    Value *opB = insertOpaqueBarrier(IRB, b);
+    Value *bplus1 = IRB.CreateAdd(opB, one);
+    Value *mul = IRB.CreateMul(b, bplus1);
+    return IRB.CreateAnd(mul, one, "mba.poly.zero1");
+  }
+  case 2: { // ((a*a + a) & 1) == 0  (quadratic parity)
+    Value *opA = insertOpaqueBarrier(IRB, a);
+    Value *a2 = IRB.CreateMul(a, opA);
+    Value *sum = IRB.CreateAdd(a2, a);
+    return IRB.CreateAnd(sum, one, "mba.poly.zero2");
+  }
+  case 3: { // ((b*b - b) & 1) == 0  (quadratic parity)
+    Value *opB = insertOpaqueBarrier(IRB, b);
+    Value *b2 = IRB.CreateMul(b, opB);
+    Value *sub = IRB.CreateSub(b2, b);
+    return IRB.CreateAnd(sub, one, "mba.poly.zero3");
+  }
+  case 4: { // (((a ^ b) * ((a ^ b) + 1)) & 1) == 0
     Value *x = IRB.CreateXor(a, b);
-    return IRB.CreateXor(x, x);
+    Value *opX = insertOpaqueBarrier(IRB, x);
+    Value *xplus1 = IRB.CreateAdd(opX, one);
+    Value *mul = IRB.CreateMul(x, xplus1);
+    return IRB.CreateAnd(mul, one, "mba.poly.zero4");
   }
-  case 6: { // (a + r) - (a + r) = 0  for random r
-    Constant *r = ConstantInt::get(T, cryptoutils->get_uint64_t());
-    Value *ar = IRB.CreateAdd(a, r);
-    return IRB.CreateSub(ar, ar);
+  case 5: { // (((a + b) * ((a + b) - 1)) & 1) == 0
+    Value *s = IRB.CreateAdd(a, b);
+    Value *opS = insertOpaqueBarrier(IRB, s);
+    Value *sminus1 = IRB.CreateSub(opS, one);
+    Value *mul = IRB.CreateMul(s, sminus1);
+    return IRB.CreateAnd(mul, one, "mba.poly.zero5");
   }
-  default: { // (a & b) - (a & b) = 0
-    Value *x = IRB.CreateAnd(a, b);
-    return IRB.CreateSub(x, x);
+  case 6: { // ((a * (a + 1) * (a + 2)) & 1) == 0 (product of 3 integers)
+    Value *opA = insertOpaqueBarrier(IRB, a);
+    Value *ap1 = IRB.CreateAdd(opA, one);
+    Value *ap2 = IRB.CreateAdd(opA, two);
+    Value *m1 = IRB.CreateMul(a, ap1);
+    Value *m2 = IRB.CreateMul(m1, ap2);
+    return IRB.CreateAnd(m2, one, "mba.poly.zero6");
+  }
+  default: { // ((a * a * a - a) & 1) == 0 (cubic parity)
+    Value *opA = insertOpaqueBarrier(IRB, a);
+    Value *a2 = IRB.CreateMul(a, opA);
+    Value *a3 = IRB.CreateMul(a2, a);
+    Value *sub = IRB.CreateSub(a3, opA);
+    return IRB.CreateAnd(sub, one, "mba.poly.zero7");
   }
   }
 }
@@ -130,25 +161,31 @@ static Value *injectNoise(IRBuilder<NoFolder> &IRB, Value *base, Value *a,
       Value *opZero;
       switch (cryptoutils->get_range(4)) {
       case 0: { // (L * (L - 1)) & 1 == 0  (non-linear algebraic)
-        Value *Lminus1 = IRB.CreateSub(L, ConstantInt::get(T, 1));
+        Value *barL = insertOpaqueBarrier(IRB, L);
+        Value *Lminus1 = IRB.CreateSub(barL, ConstantInt::get(T, 1));
         Value *mul = IRB.CreateMul(L, Lminus1);
         opZero = IRB.CreateAnd(mul, ConstantInt::get(T, 1), "mba.op.zero1");
         break;
       }
-      case 1: { // (L + L) & 1 == 0
-        Value *add = IRB.CreateAdd(L, L);
-        opZero = IRB.CreateAnd(add, ConstantInt::get(T, 1), "mba.op.zero2");
+      case 1: { // (L * (L + 1)) & 1 == 0  (non-linear algebraic)
+        Value *barL = insertOpaqueBarrier(IRB, L);
+        Value *Lplus1 = IRB.CreateAdd(barL, ConstantInt::get(T, 1));
+        Value *mul = IRB.CreateMul(L, Lplus1);
+        opZero = IRB.CreateAnd(mul, ConstantInt::get(T, 1), "mba.op.zero2");
         break;
       }
-      case 2: { // L & ~L == 0
-        Value *notL = IRB.CreateNot(L);
-        opZero = IRB.CreateAnd(L, notL, "mba.op.zero3");
+      case 2: { // (L * L + L) & 1 == 0  (quadratic parity)
+        Value *barL = insertOpaqueBarrier(IRB, L);
+        Value *L2 = IRB.CreateMul(L, barL);
+        Value *sum = IRB.CreateAdd(L2, L);
+        opZero = IRB.CreateAnd(sum, ConstantInt::get(T, 1), "mba.op.zero3");
         break;
       }
-      default: { // (L | ~L) + 1 == 0
-        Value *notL = IRB.CreateNot(L);
-        Value *orL = IRB.CreateOr(L, notL);
-        opZero = IRB.CreateAdd(orL, ConstantInt::get(T, 1), "mba.op.zero4");
+      default: { // (L * L - L) & 1 == 0  (quadratic parity)
+        Value *barL = insertOpaqueBarrier(IRB, L);
+        Value *L2 = IRB.CreateMul(L, barL);
+        Value *sub = IRB.CreateSub(L2, L);
+        opZero = IRB.CreateAnd(sub, ConstantInt::get(T, 1), "mba.op.zero4");
         break;
       }
       }
@@ -186,7 +223,8 @@ void mbaAddRandLinear(BinaryOperator *bo) {
   Value *tworb = IRB.CreateMul(andr_b, two);
   Value *twoR = IRB.CreateMul(r, two);
   Value *sum1 = IRB.CreateAdd(ar, br);
-  Value *sum2 = IRB.CreateAdd(sum1, twora);
+  Value *barSum1 = insertOpaqueBarrier(IRB, sum1);
+  Value *sum2 = IRB.CreateAdd(barSum1, twora);
   Value *sum3 = IRB.CreateAdd(sum2, tworb);
   bo->replaceAllUsesWith(IRB.CreateSub(sum3, twoR));
 }
@@ -273,7 +311,8 @@ void mbaSub(BinaryOperator *bo) {
     Value *twoa = IRB.CreateMul(andA, two);
     Value *twob = IRB.CreateMul(andB, two);
     Value *diff = IRB.CreateSub(ar, br);
-    Value *d2 = IRB.CreateAdd(diff, twoa);
+    Value *barDiff = insertOpaqueBarrier(IRB, diff);
+    Value *d2 = IRB.CreateAdd(barDiff, twoa);
     res = IRB.CreateSub(d2, twob);
     break;
   }
@@ -651,9 +690,10 @@ void mbaBPP(BinaryOperator *bo) {
   Value *term1 = IRB.CreateMul(constA1, a);
   Value *term2 = IRB.CreateAdd(term1, constB);
   Value *y = IRB.CreateXor(term2, constK, "bpp.y");
+  Value *barY = insertOpaqueBarrier(IRB, y);
 
   // Evaluate P^-1(y) = inv * ((y ^ k) - b)
-  Value *unK = IRB.CreateXor(y, constK);
+  Value *unK = IRB.CreateXor(barY, constK);
   Value *unB = IRB.CreateSub(unK, constB);
   Value *invY = IRB.CreateMul(constInv, unB, "bpp.x");
 
@@ -679,8 +719,8 @@ void mbaBivariateNonlinear(BinaryOperator *bo) {
     Value *twoAnd = IRB.CreateMul(andAB, ConstantInt::get(T, 2));
     Value *base = IRB.CreateAdd(xorAB, twoAnd);
 
-    // Injected non-linear zero term: (a ^ a) * b^2
-    Value *zeroTerm = IRB.CreateXor(a, a);
+    // Injected non-linear zero term: (a ^ a) * b^2 with opaque barrier
+    Value *zeroTerm = IRB.CreateXor(a, insertOpaqueBarrier(IRB, a));
     Value *b2 = IRB.CreateMul(b, b);
     Value *nlNoise = IRB.CreateMul(zeroTerm, b2);
     res = IRB.CreateAdd(base, nlNoise);
@@ -693,8 +733,9 @@ void mbaBivariateNonlinear(BinaryOperator *bo) {
     Value *twoAnd = IRB.CreateMul(andNB, ConstantInt::get(T, 2));
     Value *base = IRB.CreateAdd(subAB, twoAnd);
 
-    // Injected non-linear zero term: (b & ~b) * a^3
-    Value *zeroTerm = IRB.CreateAnd(b, IRB.CreateNot(b));
+    // Injected non-linear zero term: (b & ~b) * a^3 with opaque barrier
+    Value *zeroTerm =
+        IRB.CreateAnd(b, IRB.CreateNot(insertOpaqueBarrier(IRB, b)));
     Value *a3 = IRB.CreateMul(IRB.CreateMul(a, a), a);
     Value *nlNoise = IRB.CreateMul(zeroTerm, a3);
     res = IRB.CreateAdd(base, nlNoise);
@@ -719,6 +760,8 @@ struct MBAObfuscation : public FunctionPass {
   MBAObfuscation(bool flag) : FunctionPass(ID) { this->flag = flag; }
 
   bool runOnFunction(Function &F) override {
+    if (F.getName().starts_with("__ensia_"))
+      return false;
     if (!toObfuscate(flag, &F, "mba"))
       return false;
     {

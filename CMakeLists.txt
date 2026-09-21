@@ -3,6 +3,18 @@ project(ollvm-next)
 
 set(LT_LLVM_INSTALL_DIR  "" CACHE PATH "LLVM install prefix (e.g. /opt/homebrew/opt/llvm@20)")
 
+if("${LT_LLVM_INSTALL_DIR}" STREQUAL "")
+  if(DEFINED ENV{LT_LLVM_INSTALL_DIR})
+    set(LT_LLVM_INSTALL_DIR "$ENV{LT_LLVM_INSTALL_DIR}")
+  elseif(DEFINED ENSIA_USE_LLVM23 AND ENSIA_USE_LLVM23)
+    file(GLOB WORKSPACE_LLVM23 "${CMAKE_CURRENT_SOURCE_DIR}/LLVM-23*")
+    if(WORKSPACE_LLVM23 AND EXISTS "${WORKSPACE_LLVM23}/lib/cmake/llvm")
+      set(LT_LLVM_INSTALL_DIR "${WORKSPACE_LLVM23}")
+      message(STATUS "[Ensia] Selected workspace LLVM 23: ${LT_LLVM_INSTALL_DIR}")
+    endif()
+  endif()
+endif()
+
 list(APPEND CMAKE_PREFIX_PATH "${LT_LLVM_INSTALL_DIR}/lib/cmake/llvm/")
 
 find_package(LLVM REQUIRED CONFIG)
