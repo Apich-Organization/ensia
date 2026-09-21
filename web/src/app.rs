@@ -6,8 +6,8 @@ use crate::{
     },
     theme,
 };
-use wasm_bindgen::prelude::*;
 use leptos::prelude::*;
+use wasm_bindgen::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub enum Page {
