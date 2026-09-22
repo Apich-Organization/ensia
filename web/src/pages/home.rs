@@ -15,9 +15,9 @@ pub fn HomePage() -> impl IntoView {
             <h1 class="hero-title">"Ensia"</h1>
             <p class="hero-sub">
                 "Principled, precise, and open-source IR-level code protection
-                 built on LLVM \u{2014} continuing the Hikari lineage, modernised for LLVM 21/22.
-                 Designed for security researchers, compiler engineers,
-                 and software teams who need transparent, auditable obfuscation."
+                 built on LLVM \u{2014} continuing the Hikari lineage, modernised for LLVM 21, 22, and 23.
+                 Engineered for x86_64, AArch64 (ARM64), and i386 across Linux, Windows (MSVC/clang-cl/MinGW),
+                 macOS, iOS, and Android for transparent, high-resilience binary hardening."
             </p>
 
             // ── Citation & release badges ──────────────────────────────────
@@ -159,23 +159,29 @@ pub fn HomePage() -> impl IntoView {
                     <strong style="color: var(--c-danger);">"Single Point of Failure (SPOF)"</strong>
                     ": once an analyst devirtualizes the core handler table or dispatches the central loop, the entire protection layer collapses at once."
                 </p>
-                <div class="grid-3 mt-md">
+                <div class="grid-4 mt-md">
                     <div class="glass-alt card-pad">
-                        <h4>"\u{2B21} Vector-Space Lifting (SIMD)"</h4>
+                        <h4>"\u{2694} Zero-SPOF Algebraic Masking"</h4>
                         <p class="text-sm mt-xs">
-                            "Lifts scalar logic into multi-lane SIMD vector operations (<4 x i32>, <8 x float>), forcing symbolic execution tools (Angr/KLEE) to model complex vector registers."
+                            "Replaces fragile volatile switch variables with branchless algebraic masking: condExt = zext(cond), mask = 0 - condExt, nextState = caseFalse ^ (mask & diff). Retains 100% dispatch switches under opt -O3 even if volatile is stripped."
                         </p>
                     </div>
                     <div class="glass-alt card-pad">
-                        <h4>"\u{1F500} Interlocked Data & Control Flow"</h4>
+                        <h4>"\u{1F6E1} 3-Tier Anti-Taint Engine"</h4>
                         <p class="text-sm mt-xs">
-                            "Data encryption and MBA expressions are embedded inside CFF/CSM dispatch blocks, while decryption stubs are themselves flattened and bogus-branched."
+                            "Combines Global Identity LUT memory dereferences, implicit control-flow bit laundering with select over pure constants, and SIMD vector diffusion to sever register-level ALU taint propagation in Triton and angr."
                         </p>
                     </div>
                     <div class="glass-alt card-pad">
-                        <h4>"\u{03A3} Multi-Term MBA & Opaque Predicates"</h4>
+                        <h4>"\u{1F3B2} Polymorphic Hardware Barriers"</h4>
                         <p class="text-sm mt-xs">
-                            "Injects non-linear polynomial MBAs and hardware-bound opaque predicates (CPUID, RDTSC/CNTVCT), triggering exponential SMT solver path explosion."
+                            "Randomized 9-variant x86 instruction families (orb, andb, addb, subb, rolb, rorb, incb/decb, notb/notb) and 4 ARM64 pipeline barriers eliminate uniform signature patterns and defeat YARA scanning."
+                        </p>
+                    </div>
+                    <div class="glass-alt card-pad">
+                        <h4>"\u{2B21} SIMD Vector Lifting & Anti-Dump"</h4>
+                        <p class="text-sm mt-xs">
+                            "Lifts scalar logic into multi-lane SIMD vector operations (<4 x i32>, <8 x float>) up to 512-bit width, paired with volatile exit zeroization that cleans decrypted buffers to defeat memory dumping."
                         </p>
                     </div>
                 </div>
@@ -229,26 +235,30 @@ pub fn HomePage() -> impl IntoView {
                 </p>
             </div>
             <div class="pipeline-steps">
-                <PipelineStep n="1" label="AntiHooking (module)"
-                    detail="E9/48B8 byte-pattern scan on function prologues; BSD kernel-level syscall bypass path; RDTSC-gated timing noise. Runs module-wide before any IR transform." />
-                <PipelineStep n="2" label="AntiClassDump (module)"
-                    detail="ObjC-only: ScrambleMethodOrder via Fisher-Yates shuffle, RandomisedRename with 64-bit hex suffixes, DummySelectorInjection of phantom IMP entries." />
-                <PipelineStep n="3" label="FunctionCallObfuscate (function)"
-                    detail="Replaces direct call instructions with dlopen/dlsym indirection. Runs per-function so transformed call sites are ready before later CFG passes." />
-                <PipelineStep n="4" label="AntiDebugging (module)"
-                    detail="Injects ptrace/sysctl probes, CPUID hypervisor-bit check, RDTSC variance test (512K-cycle threshold), PR_GET_DUMPABLE on Linux, PEB.NtGlobalFlag on Windows." />
-                <PipelineStep n="5" label="StringEncryption (module)"
-                    detail="Dual-layer cipher: OTP XOR (Vernam) followed by GF(2^8) multiply with AES irreducible polynomial 0x11b. Per-string split-key storage; unordered decryption at first use." />
-                <PipelineStep n="6" label="Per-function passes (a-g)"
-                    detail="In order: SplitBasicBlocks (inline-ASM stack confusion) -> BogusControlFlow (4 hardware-predicate tiers: CPUID/RDTSC/MRS/software) -> Substitution -> MBAObfuscation (42 identity variants) -> ChaosStateMachine (Q16 logistic-map IR chain) -> Flattening (skipped if CSM ran) -> VectorObfuscation (lane-insert SIMD lift)." />
-                <PipelineStep n="7" label="ConstantEncryption (module)"
-                    detail="k-share XOR ensemble (all shares required); optional 26-instruction Feistel nonlinear layer per constant. Runs after function passes so inserted constants are also candidates." />
+                <PipelineStep n="1" label="AntiHooking & AntiClassDump (module)"
+                    detail="Validates function prologue integrity; BSD direct syscall bypass path; 3-tier anti-taint engine (LUT, bit laundering, vector diffusion); ObjC metadata scrambling." />
+                <PipelineStep n="2" label="FunctionCallObfuscate (module)"
+                    detail="Replaces direct call instructions with runtime dlopen/dlsym indirection, eliminating static import references and stripping cross-module call graphs." />
+                <PipelineStep n="3" label="AntiDebugging (module)"
+                    detail="Multi-vector hardware & kernel probes: ptrace, hardware debug registers (DR0-DR7), EFLAGS.TF single-step traps with AMD64 Red Zone preservation, and unrecoverable violent exit." />
+                <PipelineStep n="4" label="StringEncryption (module)"
+                    detail="Dual-layer cipher: Vernam OTP + GF(2^8) Rijndael polynomial multiplication; on-demand decrypt stubs with automatic volatile zeroization at function exit (Anti-Dump)." />
+                <PipelineStep n="5" label="ConstantEncryption Phase 1 (module)"
+                    detail="Pre-CFG constant blinding: bivariate MBA, 4-round Feistel network, and AntiDebug token entanglement applied to original user literals before control-flow expansion." />
+                <PipelineStep n="6" label="Per-Function Transformations (a-g)"
+                    detail="In order: Substitution -> MBAObfuscation (42 identities + polymorphic barriers) -> SplitBasicBlocks -> BogusControlFlow (hardware opaque predicates) -> ChaosStateMachine (Q16 logistic map) / Classic CFF (Zero-SPOF algebraic masking) -> VectorObfuscation (512-bit SIMD lift)." />
+                <PipelineStep n="7" label="ConstantEncryption Phase 2 (module)"
+                    detail="Post-CFG constant blinding: targets new state constants, dispatcher cases, and opaque keys generated by BCF, CSM, and CFF, neutralizing reverse-engineering pattern matching." />
                 <PipelineStep n="8" label="IndirectBranch (module)"
-                    detail="3-instruction decryption chain per branch target: (raw_addr + delta1) * KNUTH_MULT ^ KNUTH_XOR. Per-function unique keys; shuffle-after-encrypt prevents pattern matching." />
+                    detail="Knuth multiplicative target hashing with per-function keys; replaces direct basic block jumps with encrypted indirect branch tables." />
                 <PipelineStep n="9" label="FunctionWrapper (module)"
-                    detail="Three strategies: A - dead stack slots in proxy frame; B - argument XOR shuffle before forwarding; C - return value XOR masking. Chain depth configurable." />
+                    detail="Polymorphic proxy wrappers with frame-depth mutation, argument XOR shuffling, and return value masking to destroy static call-graph topologies." />
                 <PipelineStep n="10" label="FeatureElimination (module)"
-                    detail="Final pass strips debug metadata, lifetime markers, and other IR annotations that would aid symbolic execution or type recovery." />
+                    detail="Strips DWARF debug metadata, anonymizes TU paths to single-character identifiers, erases llvm.ident, and scrambles private symbol names." />
+                <PipelineStep n="11" label="Sentinel Cleanup & Sanitization (module)"
+                    detail="Erases internal compilation markers (__dlsym_proxy_*, ensia_*), validates module structural invariants, and ensures pristine binary output." />
+                <PipelineStep n="12" label="LTO Evasion & Linkage Sealing (module)"
+                    detail="Enforces Attribute::OptimizeNone and Attribute::NoInline on protected functions, preventing cross-module LTO inlining and post-link deobfuscation." />
             </div>
         </section>
 

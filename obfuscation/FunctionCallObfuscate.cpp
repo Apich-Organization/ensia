@@ -28,6 +28,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Triple.h"
@@ -66,21 +67,42 @@ struct FunctionCallObfuscate : public FunctionPass {
   StringRef getPassName() const override { return "FunctionCallObfuscate"; }
   bool initialize(Module &M) {
     // Basic Defs
-    if (SymbolConfigPath == "+-x/") {
-      SmallString<32> Path;
-      if (sys::path::home_directory(Path)) { // Stolen from LineEditor.cpp
-        sys::path::append(Path, "Ensia", "SymbolConfig.json");
-        SymbolConfigPath = Path.c_str();
+    bool explicitlySpecified = (SymbolConfigPath != "+-x/");
+    if (!explicitlySpecified) {
+      if (const char *env = getenv("ENSIA_SYMBOL_CONFIG")) {
+        SymbolConfigPath = env;
+        explicitlySpecified = true;
+      } else if (sys::fs::exists("SymbolConfig.json")) {
+        SymbolConfigPath = "SymbolConfig.json";
+      } else {
+        SmallString<64> Path;
+        if (sys::path::home_directory(Path)) {
+          sys::path::append(Path, ".config", "ensia", "SymbolConfig.json");
+          if (sys::fs::exists(Path)) {
+            SymbolConfigPath = Path.c_str();
+          } else {
+            Path.clear();
+            sys::path::home_directory(Path);
+            sys::path::append(Path, "Ensia", "SymbolConfig.json");
+            if (sys::fs::exists(Path))
+              SymbolConfigPath = Path.c_str();
+            else
+              SymbolConfigPath = ""; // optional config; fallback to defaults
+          }
+        }
       }
     }
-    std::ifstream infile(SymbolConfigPath);
-    if (infile.good()) {
-      errs() << "Loading Symbol Configuration From:" << SymbolConfigPath
-             << "\n";
-      infile >> this->Configuration;
-    } else {
-      errs() << "Failed To Load Symbol Configuration From:" << SymbolConfigPath
-             << "\n";
+    if (!SymbolConfigPath.empty() && SymbolConfigPath != "+-x/") {
+      std::ifstream infile(SymbolConfigPath);
+      if (infile.good()) {
+        if (ObfVerbose)
+          errs() << "Loading Symbol Configuration From:" << SymbolConfigPath
+                 << "\n";
+        infile >> this->Configuration;
+      } else if (explicitlySpecified || ObfVerbose) {
+        errs() << "Failed To Load Symbol Configuration From:"
+               << SymbolConfigPath << "\n";
+      }
     }
     this->triple = Triple(M.getTargetTriple());
     if (triple.getVendor() == Triple::VendorType::Apple) {

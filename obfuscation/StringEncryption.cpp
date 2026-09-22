@@ -24,6 +24,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Operator.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
@@ -40,6 +41,12 @@ static cl::opt<uint32_t>
                                 "ConstantDataSequential will be "
                                 "obfuscated by the -strcry pass"));
 static thread_local uint32_t ElementEncryptProbTemp = 100;
+
+static cl::opt<bool> AntiDump(
+    "strcry_antidump", cl::init(true), cl::NotHidden,
+    cl::desc("[StringEncryption] Zeroize decrypted plaintext string buffers "
+             "at function exit to prevent dynamic memory dumping"));
+static thread_local bool AntiDumpTemp = true;
 
 namespace llvm {
 struct StringEncryption : public ModulePass {
@@ -103,6 +110,9 @@ struct StringEncryption : public ModulePass {
           auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
           ElementEncryptProbTemp =
               ec.str_enc.probability.value_or((uint32_t)ElementEncryptProb);
+        }
+        if (!toObfuscateBoolOption(&F, "strcry_antidump", &AntiDumpTemp)) {
+          AntiDumpTemp = AntiDump;
         }
 
         // Check if the number of applications is correct
@@ -338,10 +348,10 @@ struct StringEncryption : public ModulePass {
       auto globalIt = globalOld2New.find(GV);
       if (globalIt != globalOld2New.end()) {
         old2new[GV] = globalIt->second;
-        // 更新当前函数的GV2Keys和mgv2keys
+        // Update GV2Keys and mgv2keys for the current function
         GV2Keys[globalIt->second.second] = mgv2keys[globalIt->second.second];
         mgv2keys[globalIt->second.second] = GV2Keys[globalIt->second.second];
-        continue; // 跳过生成新变量步骤
+        continue; // Skip generating new variable
       }
       // Per-GV content filter: skip or force-encrypt based on string content.
       uint32_t gvProb = contentProb(GV, ec.str_enc, ElementEncryptProbTemp);
@@ -675,6 +685,79 @@ struct StringEncryption : public ModulePass {
                       StatusGV, C->getFirstNonPHIOrDbgOrLifetime());
     SI->setAlignment(Align(4));
     SI->setAtomic(AtomicOrdering::Release); // Release the lock acquired in LI
+
+    // AntiDump: zeroize decrypted plaintext string buffers at function exit
+    if (AntiDumpTemp) {
+      const DataLayout &DL = Func->getParent()->getDataLayout();
+      SmallVector<Instruction *, 8> exitTerms;
+      DenseSet<GlobalVariable *> returnedGVs;
+      DenseSet<const Value *> visited;
+      std::function<void(Value *)> findGVs = [&](Value *V) {
+        if (!V || !visited.insert(V).second)
+          return;
+        V = V->stripPointerCasts();
+        if (GlobalVariable *GV = dyn_cast<GlobalVariable>(V)) {
+          returnedGVs.insert(GV);
+          return;
+        }
+        if (GEPOperator *GEP = dyn_cast<GEPOperator>(V)) {
+          findGVs(GEP->getPointerOperand());
+          return;
+        }
+        if (PHINode *PN = dyn_cast<PHINode>(V)) {
+          for (Value *inc : PN->incoming_values())
+            findGVs(inc);
+          return;
+        }
+        if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
+          findGVs(SI->getTrueValue());
+          findGVs(SI->getFalseValue());
+          return;
+        }
+        if (LoadInst *LI = dyn_cast<LoadInst>(V)) {
+          Value *ptr = LI->getPointerOperand();
+          for (User *U : ptr->users()) {
+            if (StoreInst *SI = dyn_cast<StoreInst>(U)) {
+              if (SI->getPointerOperand() == ptr)
+                findGVs(SI->getValueOperand());
+            }
+          }
+          return;
+        }
+      };
+      for (BasicBlock &BB : *Func) {
+        Instruction *term = BB.getTerminator();
+        if (ReturnInst *RI = dyn_cast<ReturnInst>(term)) {
+          exitTerms.push_back(term);
+          if (Value *retVal = RI->getReturnValue()) {
+            findGVs(retVal);
+          }
+        } else if (isa<ResumeInst>(term)) {
+          exitTerms.push_back(term);
+        }
+      }
+      for (Instruction *term : exitTerms) {
+        IRBuilder<> IRBRet(term);
+        for (auto &pair : GV2Keys) {
+          GlobalVariable *decGV = pair.first;
+          if (returnedGVs.count(decGV))
+            continue;
+          Type *allocTy = decGV->getValueType();
+          uint64_t sz = DL.getTypeAllocSize(allocTy);
+          if (sz > 0) {
+            IRBRet.CreateMemSet(decGV, IRBRet.getInt8(0), sz, MaybeAlign(1),
+                                /*isVolatile=*/true);
+          }
+        }
+        if (returnedGVs.empty()) {
+          StoreInst *resetSI = IRBRet.CreateStore(
+              ConstantInt::get(Type::getInt32Ty(Func->getContext()), 0),
+              StatusGV);
+          resetSI->setAlignment(Align(4));
+          resetSI->setAtomic(AtomicOrdering::Release);
+        }
+      }
+    }
   } // End of HandleFunction
 
   GlobalVariable *ObjectiveCString(GlobalVariable *GV, std::string name,
@@ -950,5 +1033,5 @@ ModulePass *createStringEncryptionPass(bool flag) {
 } // namespace llvm
 
 char StringEncryption::ID = 0;
-INITIALIZE_PASS(StringEncryption, "strcry", "Enable String Encryption", false,
-                false)
+INITIALIZE_PASS(StringEncryption, "strcryobf", "Enable String Encryption",
+                false, false)

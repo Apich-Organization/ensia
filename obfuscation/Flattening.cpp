@@ -140,9 +140,12 @@ void Flattening::flatten(Function *f) {
   // Remove jump
   oldTerm->eraseFromParent();
 
-  new StoreInst(ConstantInt::get(Type::getInt32Ty(f->getContext()),
-                                 cryptoutils->scramble32(0, scrambling_key)),
-                switchVar, /*isVolatile=*/true, insert);
+  Value *initCase =
+      ConstantInt::get(Type::getInt32Ty(f->getContext()),
+                       cryptoutils->scramble32(0, scrambling_key));
+  IRBuilder<> IRBInit(insert);
+  Value *opaqueInitCase = insertOpaqueBarrier(IRBInit, initCase);
+  new StoreInst(opaqueInitCase, switchVar, /*isVolatile=*/true, insert);
   new StoreInst(switchVar, switchVarAddr, /*isVolatile=*/true, insert);
 
   // Create main loop
@@ -225,8 +228,11 @@ void Flattening::flatten(Function *f) {
       }
 
       if (numCase) {
-        i->getTerminator()->eraseFromParent();
-        new StoreInst(numCase,
+        Instruction *term = i->getTerminator();
+        IRBuilder<> IRB(term);
+        Value *opaqueCase = insertOpaqueBarrier(IRB, numCase);
+        term->eraseFromParent();
+        new StoreInst(opaqueCase,
                       new LoadInst(switchVarAddr->getAllocatedType(),
                                    switchVarAddr, "", /*isVolatile=*/true, i),
                       /*isVolatile=*/true, i);
@@ -261,24 +267,46 @@ void Flattening::flatten(Function *f) {
       Value *cond = br->getCondition();
 
       if (numCaseTrue && numCaseFalse) {
-        SelectInst *sel = SelectInst::Create(cond, numCaseTrue, numCaseFalse,
-                                             "", i->getTerminator());
-        i->getTerminator()->eraseFromParent();
-        new StoreInst(sel,
+        Instruction *term = i->getTerminator();
+        IRBuilder<> IRB(term);
+        // Branchless algebraic mask computation instead of naked SelectInst:
+        // cond: i1 -> zext to i32 (0 or 1)
+        // mask: 0 - cond (0 or 0xFFFFFFFF)
+        // diff: numCaseTrue ^ numCaseFalse
+        // nextState = numCaseFalse ^ (mask & diff)
+        Type *Ty = numCaseTrue->getType();
+        Value *condExt = IRB.CreateZExt(cond, Ty, "fla.c.ext");
+        Value *mask =
+            IRB.CreateSub(ConstantInt::get(Ty, 0), condExt, "fla.c.mask");
+        Value *diff = ConstantInt::get(Ty, numCaseTrue->getValue() ^
+                                               numCaseFalse->getValue());
+        Value *maskedDiff = IRB.CreateAnd(mask, diff, "fla.c.diff");
+        Value *nextState =
+            IRB.CreateXor(numCaseFalse, maskedDiff, "fla.c.state");
+        Value *opaqueState = insertOpaqueBarrier(IRB, nextState);
+
+        term->eraseFromParent();
+        new StoreInst(opaqueState,
                       new LoadInst(switchVarAddr->getAllocatedType(),
                                    switchVarAddr, "", /*isVolatile=*/true, i),
                       /*isVolatile=*/true, i);
         BranchInst::Create(loopEnd, i);
       } else if (numCaseTrue && !numCaseFalse) {
-        i->getTerminator()->eraseFromParent();
-        new StoreInst(numCaseTrue,
+        Instruction *term = i->getTerminator();
+        IRBuilder<> IRB(term);
+        Value *opaqueCase = insertOpaqueBarrier(IRB, numCaseTrue);
+        term->eraseFromParent();
+        new StoreInst(opaqueCase,
                       new LoadInst(switchVarAddr->getAllocatedType(),
                                    switchVarAddr, "", /*isVolatile=*/true, i),
                       /*isVolatile=*/true, i);
         BranchInst::Create(loopEnd, succFalse, cond, i);
       } else if (!numCaseTrue && numCaseFalse) {
-        i->getTerminator()->eraseFromParent();
-        new StoreInst(numCaseFalse,
+        Instruction *term = i->getTerminator();
+        IRBuilder<> IRB(term);
+        Value *opaqueCase = insertOpaqueBarrier(IRB, numCaseFalse);
+        term->eraseFromParent();
+        new StoreInst(opaqueCase,
                       new LoadInst(switchVarAddr->getAllocatedType(),
                                    switchVarAddr, "", /*isVolatile=*/true, i),
                       /*isVolatile=*/true, i);

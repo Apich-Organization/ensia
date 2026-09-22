@@ -65,6 +65,7 @@ Value *insertOpaqueBarrier(IRBuilder<> &IRB, Value *V);
 
 GlobalVariable *getOrCreateOpaqueSink(Module *M);
 std::string getViolentExitAsm(const Triple &triple);
+std::string getPolymorphicBarrierAsm(const Triple &triple);
 void insertViolentExit(IRBuilder<> &IRB, const Triple &triple);
 
 // ── Anti-Taint & Data-Flow Entanglement Primitives ──────────────────────────

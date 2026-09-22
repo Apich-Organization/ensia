@@ -467,7 +467,8 @@ struct IndirectBranch : public FunctionPass {
 } // anonymous namespace
 
 char IndirectBranch::ID = 0;
-INITIALIZE_PASS(IndirectBranch, "indibran", "IndirectBranching", false, false)
+INITIALIZE_PASS(IndirectBranch, "indibranobf", "IndirectBranching", false,
+                false)
 
 FunctionPass *llvm::createIndirectBranchPass(bool flag) {
   return new IndirectBranch(flag);

@@ -201,6 +201,8 @@ struct AntiHook : public ModulePass {
     SmallVector<Function *, 16> protectedFuncs;
     for (Function &F : M) {
       if (toObfuscate(flag, &F, "antihook")) {
+        if (triple.getArch() == Triple::x86_64)
+          F.addFnAttr(Attribute::NoRedZone);
         if (ObfVerbose)
           errs() << "Running AntiHooking On " << F.getName() << "\n";
         if (!this->initialized)
@@ -949,4 +951,4 @@ struct AntiHook : public ModulePass {
 
 ModulePass *llvm::createAntiHookPass(bool flag) { return new AntiHook(flag); }
 char AntiHook::ID = 0;
-INITIALIZE_PASS(AntiHook, "antihook", "AntiHook", false, false)
+INITIALIZE_PASS(AntiHook, "antihookobf", "AntiHook", false, false)

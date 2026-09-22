@@ -115,3 +115,8 @@ LLVM-*
 __pycache__/
 *.pyc
 
+# Intermediate LLVM IR and ASM dumps
+*.ll
+*.s
+
+

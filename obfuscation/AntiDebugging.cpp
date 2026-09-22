@@ -28,6 +28,7 @@
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/SourceMgr.h"
@@ -70,89 +71,109 @@ struct AntiDebugging : public ModulePass {
   }
   StringRef getPassName() const override { return "AntiDebugging"; }
   bool initialize(Module &M) {
-    if (PreCompiledIRPath == "") {
-      SmallString<32> Path;
-      if (sys::path::home_directory(Path)) { // Stolen from LineEditor.cpp
-        sys::path::append(Path, "Ensia");
+    bool explicitlySpecified = !PreCompiledIRPath.empty();
+    if (!explicitlySpecified) {
+      if (const char *env = getenv("ENSIA_PRECOMPILED_ADB")) {
+        PreCompiledIRPath = env;
+        explicitlySpecified = true;
+      } else {
         Triple tri(M.getTargetTriple());
-        sys::path::append(Path, "PrecompiledAntiDebugging-" +
-                                    Triple::getArchTypeName(tri.getArch()) +
-                                    "-" + Triple::getOSTypeName(tri.getOS()) +
-                                    ".bc");
-        PreCompiledIRPath = Path.c_str();
+        std::string filename = ("PrecompiledAntiDebugging-" +
+                                Triple::getArchTypeName(tri.getArch()) + "-" +
+                                Triple::getOSTypeName(tri.getOS()) + ".bc")
+                                   .str();
+        if (sys::fs::exists(filename)) {
+          PreCompiledIRPath = filename;
+        } else {
+          SmallString<64> Path;
+          if (sys::path::home_directory(Path)) {
+            sys::path::append(Path, "Ensia", filename);
+            if (sys::fs::exists(Path))
+              PreCompiledIRPath = Path.c_str();
+            else
+              PreCompiledIRPath =
+                  ""; // optional; fallback to inline IR generation
+          }
+        }
       }
     }
-    std::ifstream f(PreCompiledIRPath);
-    if (f.good()) {
-      errs() << "Linking PreCompiled AntiDebugging IR From:"
-             << PreCompiledIRPath << "\n";
-      SMDiagnostic SMD;
-      std::unique_ptr<Module> ADBM(
-          parseIRFile(StringRef(PreCompiledIRPath), SMD, M.getContext()));
-      Linker::linkModules(M, std::move(ADBM), Linker::Flags::LinkOnlyNeeded);
-      Function *ADBCallBack = M.getFunction("ADBCallBack");
-      if (ADBCallBack) {
-        assert(!ADBCallBack->isDeclaration() &&
-               "AntiDebuggingCallback is not concrete!");
+    if (!PreCompiledIRPath.empty()) {
+      std::ifstream f(PreCompiledIRPath);
+      if (f.good()) {
+        if (ObfVerbose)
+          errs() << "Linking PreCompiled AntiDebugging IR From:"
+                 << PreCompiledIRPath << "\n";
+        SMDiagnostic SMD;
+        std::unique_ptr<Module> ADBM(
+            parseIRFile(StringRef(PreCompiledIRPath), SMD, M.getContext()));
+        Linker::linkModules(M, std::move(ADBM), Linker::Flags::LinkOnlyNeeded);
+        Function *ADBCallBack = M.getFunction("ADBCallBack");
+        if (ADBCallBack) {
+          assert(!ADBCallBack->isDeclaration() &&
+                 "AntiDebuggingCallback is not concrete!");
 
-        // Scramble names of every private/internal GlobalVariable referenced
-        // from ADBCallBack so IR symbol names give no hint about the detection
-        // logic.  Then inject decoy GVs with matching types to confuse pattern
-        // matchers that try to locate the real variables by count or position.
-        SmallPtrSet<GlobalVariable *, 8> seen;
-        SmallVector<GlobalVariable *, 8> refGVs;
-        for (BasicBlock &BB : *ADBCallBack) {
-          for (Instruction &I : BB) {
-            for (Use &U : I.operands()) {
-              if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U.get())) {
-                if ((GV->hasPrivateLinkage() || GV->hasInternalLinkage()) &&
-                    seen.insert(GV).second)
-                  refGVs.push_back(GV);
+          // Scramble names of every private/internal GlobalVariable referenced
+          // from ADBCallBack so IR symbol names give no hint about the
+          // detection logic.  Then inject decoy GVs with matching types to
+          // confuse pattern matchers that try to locate the real variables by
+          // count or position.
+          SmallPtrSet<GlobalVariable *, 8> seen;
+          SmallVector<GlobalVariable *, 8> refGVs;
+          for (BasicBlock &BB : *ADBCallBack) {
+            for (Instruction &I : BB) {
+              for (Use &U : I.operands()) {
+                if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U.get())) {
+                  if ((GV->hasPrivateLinkage() || GV->hasInternalLinkage()) &&
+                      seen.insert(GV).second)
+                    refGVs.push_back(GV);
+                }
               }
             }
           }
-        }
-        for (GlobalVariable *GV : refGVs) {
-          // Replace name with random 16-char hex so no semantic hint survives
-          std::string newName;
-          raw_string_ostream OS(newName);
-          OS << format("g%08x%08x", cryptoutils->get_uint32_t(),
-                       cryptoutils->get_uint32_t());
-          GV->setName(OS.str());
-        }
-        // Decoy GVs: one extra per real GV, same type, random initialiser
-        for (GlobalVariable *GV : refGVs) {
-          Constant *init = GV->hasInitializer()
-                               ? GV->getInitializer()
-                               : Constant::getNullValue(GV->getValueType());
-          std::string decoyName;
-          raw_string_ostream OS(decoyName);
-          OS << format("g%08x%08x", cryptoutils->get_uint32_t(),
-                       cryptoutils->get_uint32_t());
-          (void)new GlobalVariable(M, GV->getValueType(), GV->isConstant(),
-                                   GlobalValue::PrivateLinkage, init, OS.str());
-        }
+          for (GlobalVariable *GV : refGVs) {
+            // Replace name with random 16-char hex so no semantic hint survives
+            std::string newName;
+            raw_string_ostream OS(newName);
+            OS << format("g%08x%08x", cryptoutils->get_uint32_t(),
+                         cryptoutils->get_uint32_t());
+            GV->setName(OS.str());
+          }
+          // Decoy GVs: one extra per real GV, same type, random initialiser
+          for (GlobalVariable *GV : refGVs) {
+            Constant *init = GV->hasInitializer()
+                                 ? GV->getInitializer()
+                                 : Constant::getNullValue(GV->getValueType());
+            std::string decoyName;
+            raw_string_ostream OS(decoyName);
+            OS << format("g%08x%08x", cryptoutils->get_uint32_t(),
+                         cryptoutils->get_uint32_t());
+            (void)new GlobalVariable(M, GV->getValueType(), GV->isConstant(),
+                                     GlobalValue::PrivateLinkage, init,
+                                     OS.str());
+          }
 
-        ADBCallBack->setVisibility(
-            GlobalValue::VisibilityTypes::HiddenVisibility);
-        ADBCallBack->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
-        ADBCallBack->removeFnAttr(Attribute::AttrKind::NoInline);
-        ADBCallBack->removeFnAttr(Attribute::AttrKind::OptimizeNone);
-        ADBCallBack->addFnAttr(Attribute::AttrKind::AlwaysInline);
+          ADBCallBack->setVisibility(
+              GlobalValue::VisibilityTypes::HiddenVisibility);
+          ADBCallBack->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
+          ADBCallBack->removeFnAttr(Attribute::AttrKind::NoInline);
+          ADBCallBack->removeFnAttr(Attribute::AttrKind::OptimizeNone);
+          ADBCallBack->addFnAttr(Attribute::AttrKind::AlwaysInline);
+        }
+        Function *ADBInit = M.getFunction("InitADB");
+        if (ADBInit) {
+          assert(!ADBInit->isDeclaration() &&
+                 "AntiDebuggingInitializer is not concrete!");
+          ADBInit->setVisibility(
+              GlobalValue::VisibilityTypes::HiddenVisibility);
+          ADBInit->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
+          ADBInit->removeFnAttr(Attribute::AttrKind::NoInline);
+          ADBInit->removeFnAttr(Attribute::AttrKind::OptimizeNone);
+          ADBInit->addFnAttr(Attribute::AttrKind::AlwaysInline);
+        }
+      } else if (explicitlySpecified || ObfVerbose) {
+        errs() << "Failed To Link PreCompiled AntiDebugging IR From:"
+               << PreCompiledIRPath << "\n";
       }
-      Function *ADBInit = M.getFunction("InitADB");
-      if (ADBInit) {
-        assert(!ADBInit->isDeclaration() &&
-               "AntiDebuggingInitializer is not concrete!");
-        ADBInit->setVisibility(GlobalValue::VisibilityTypes::HiddenVisibility);
-        ADBInit->setLinkage(GlobalValue::LinkageTypes::PrivateLinkage);
-        ADBInit->removeFnAttr(Attribute::AttrKind::NoInline);
-        ADBInit->removeFnAttr(Attribute::AttrKind::OptimizeNone);
-        ADBInit->addFnAttr(Attribute::AttrKind::AlwaysInline);
-      }
-    } else {
-      errs() << "Failed To Link PreCompiled AntiDebugging IR From:"
-             << PreCompiledIRPath << "\n";
     }
     this->initialized = true;
     this->triple = Triple(M.getTargetTriple());
@@ -192,6 +213,9 @@ struct AntiDebugging : public ModulePass {
         FunctionType::get(Type::getVoidTy(M.getContext()), false);
     Function *CtorFn = Function::Create(CtorFTy, GlobalValue::InternalLinkage,
                                         "__adb_init_watchdog", &M);
+    if (triple.getArch() == Triple::x86_64) {
+      CtorFn->addFnAttr(Attribute::NoRedZone);
+    }
     BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "entry", CtorFn);
     IRBuilder<> CIRB(CtorBB);
     ReturnInst *RetInst = CIRB.CreateRetVoid();
@@ -202,6 +226,10 @@ struct AntiDebugging : public ModulePass {
   bool runOnFunction(Function &F) {
     if (F.isDeclaration() || F.empty())
       return false;
+
+    if (triple.getArch() == Triple::x86_64) {
+      F.addFnAttr(Attribute::NoRedZone);
+    }
 
     BasicBlock *EntryBlock = &(F.getEntryBlock());
     Function *ADBCallBack = F.getParent()->getFunction("ADBCallBack");
@@ -723,8 +751,10 @@ struct AntiDebugging : public ModulePass {
           sasm += "1:\n\t";
         } else {
           // Scattered Trap Flag (single-step debugger detection)
+          sasm += "subq $$128, %rsp\n\t";
           sasm += "pushfq\n\t";
           sasm += "popq %rax\n\t";
+          sasm += "addq $$128, %rsp\n\t";
           sasm += "testq $$0x100, %rax\n\t";
           sasm += "jz 2f\n\t";
           sasm += GetPlatformAbort(triple);
@@ -774,4 +804,4 @@ ModulePass *createAntiDebuggingPass(bool flag) {
 } // namespace llvm
 
 char AntiDebugging::ID = 0;
-INITIALIZE_PASS(AntiDebugging, "adb", "Enable AntiDebugging.", false, false)
+INITIALIZE_PASS(AntiDebugging, "adbobf", "Enable AntiDebugging.", false, false)

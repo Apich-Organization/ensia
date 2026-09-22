@@ -25,6 +25,7 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Dominators.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
@@ -90,14 +91,43 @@ namespace llvm {
 struct ConstantEncryption : public ModulePass {
   static char ID;
   bool flag;
+  bool isPrePhase;
   bool dispatchonce;
   std::unordered_set<GlobalVariable *> handled_gvs;
   SmallVector<GlobalValue *, 1024> usedGlobals;
-  ConstantEncryption(bool flag) : ModulePass(ID) { this->flag = flag; }
-  ConstantEncryption() : ModulePass(ID) { this->flag = true; }
+  std::unordered_map<Function *, Value *> funcTokens;
+
+  ConstantEncryption(bool flag, bool isPrePhase = false)
+      : ModulePass(ID), flag(flag), isPrePhase(isPrePhase) {}
+  ConstantEncryption() : ModulePass(ID), flag(true), isPrePhase(false) {}
+
+  static bool isTrivialConstant(const ConstantInt *CI) {
+    if (CI->getBitWidth() <= 64) {
+      int64_t v = CI->getSExtValue();
+      if (v >= -1 && v <= 8)
+        return true;
+      uint64_t uv = CI->getZExtValue();
+      if (uv == 0xFF || uv == 0xFFFF || uv == 0xFFFFFFFF)
+        return true;
+    }
+    return false;
+  }
+
   bool shouldEncryptConstant(Instruction *I) {
-    if (isSynthetic(I))
+    if (I->hasMetadata("constenc.done") || I->hasMetadata("ensia.synthetic"))
       return false;
+    StringRef name = I->getName();
+    if (name.starts_with("constenc."))
+      return false;
+    if (isPrePhase) {
+      if (isSynthetic(I))
+        return false;
+    } else {
+      // Phase 2: strictly target CFF / CSM / BCF skeleton constants
+      if (!name.starts_with("csm.") && !name.starts_with("fla.") &&
+          !name.starts_with("bcf."))
+        return false;
+    }
     if (I->getFunction() && I->getFunction()->getName().starts_with("__ensia_"))
       return false;
     if (I->getType()->isVectorTy())
@@ -107,11 +137,9 @@ struct ConstantEncryption : public ModulePass {
         return false;
     }
     if (isa<SwitchInst>(I) || isa<IntrinsicInst>(I) ||
-        isa<GetElementPtrInst>(I) || isa<PHINode>(I) || I->isAtomic())
+        isa<GetElementPtrInst>(I) || isa<PHINode>(I) || isa<AllocaInst>(I) ||
+        I->isAtomic())
       return false;
-    if (AllocaInst *AI = dyn_cast<AllocaInst>(I))
-      if (AI->isSwiftError())
-        return false;
     if (isa<CallInst>(I) || isa<InvokeInst>(I)) {
       CallSite CS(I);
       if (CS.getCalledFunction() &&
@@ -314,28 +342,44 @@ struct ConstantEncryption : public ModulePass {
         Value *Op = I.getOperand(i);
         if (isa<ConstantInt>(Op))
           targets.push_back({&I, i});
-        if (GlobalVariable *G = dyn_cast<GlobalVariable>(Op))
-          if (G->hasInitializer() &&
-              (G->hasPrivateLinkage() || G->hasInternalLinkage()) &&
-              isa<ConstantInt>(G->getInitializer()) &&
-              handled_gvs.find(G) == handled_gvs.end())
-            gvTargets.insert(G);
+        if (isPrePhase) {
+          if (GlobalVariable *G = dyn_cast<GlobalVariable>(Op)) {
+            StringRef gName = G->getName();
+            if (gName.starts_with("bcf.") || gName.starts_with("bcf_") ||
+                gName.starts_with("LHSGV") || gName.starts_with("RHSGV") ||
+                gName.starts_with("IndirectBranching") ||
+                gName.starts_with("__ah_") || gName.starts_with("ensia_") ||
+                gName.starts_with("barrier.") || gName.contains("reg2mem"))
+              continue;
+            if (G->hasInitializer() &&
+                (G->hasPrivateLinkage() || G->hasInternalLinkage()) &&
+                isa<ConstantInt>(G->getInitializer()) &&
+                handled_gvs.find(G) == handled_gvs.end())
+              gvTargets.insert(G);
+          }
+        }
       }
     }
 
     uint32_t eligible = targets.size() + gvTargets.size();
-    errs() << "[OLLVM-Next][7] ConstantEncryption: Found " << targets.size()
-           << " inst targets and " << gvTargets.size() << " GV targets.\n";
     if (eligible == 0)
       return;
+    if (ObfVerbose || ObfTrace) {
+      errs() << "[OLLVM-Next] ConstantEncryption [" << F.getName()
+             << "]: Found " << targets.size() << " inst targets and "
+             << gvTargets.size() << " GV targets.\n";
+    }
 
-    // Filter targets by valueGate
+    // Filter targets by valueGate and trivial constant whitelist
     SmallVector<std::pair<Instruction *, unsigned>, 64> filteredTargets;
     for (auto &T : targets) {
       const ConstantInt *CI = cast<ConstantInt>(T.first->getOperand(T.second));
       int gate = valueGate(CI, skipVal, forceVal);
-      if (gate >= 0)
-        filteredTargets.push_back(T);
+      if (gate < 0)
+        continue;
+      if (gate == 0 && isTrivialConstant(CI))
+        continue;
+      filteredTargets.push_back(T);
     }
 
     uint32_t maxTargets = ObfuscationMaxMode ? 60 : 30;
@@ -358,10 +402,12 @@ struct ConstantEncryption : public ModulePass {
         break;
       const ConstantInt *CI = cast<ConstantInt>(G->getInitializer());
       int gate = valueGate(CI, skipVal, forceVal);
-      if (gate >= 0) {
-        HandleConstantIntInitializerGV(G);
-        gvCount++;
-      }
+      if (gate < 0)
+        continue;
+      if (gate == 0 && isTrivialConstant(CI))
+        continue;
+      HandleConstantIntInitializerGV(G);
+      gvCount++;
     }
   }
 
@@ -691,6 +737,47 @@ struct ConstantEncryption : public ModulePass {
     Value *realShare0 = BinaryOperator::Create(Instruction::Xor, ld0, dynKeyIR,
                                                "constenc.share0.dyn", I);
 
+    // Scheme C: Entangle keystream with runtime dynamic debug token if present
+    Function *F = I->getFunction();
+    if (F && !F->getName().starts_with("__ensia_") && !F->isDeclaration()) {
+      auto it = funcTokens.find(F);
+      Value *tok = nullptr;
+      if (it != funcTokens.end()) {
+        tok = it->second;
+      } else {
+        for (Instruction &inst : instructions(F)) {
+          if (CallInst *ci = dyn_cast<CallInst>(&inst)) {
+            if (ci->getName().starts_with("adb.tok")) {
+              tok = ci;
+              break;
+            }
+          }
+        }
+        funcTokens[F] = tok;
+      }
+      bool dominates = false;
+      if (Instruction *tokInst = dyn_cast_or_null<Instruction>(tok)) {
+        if (tokInst->getParent() == &F->getEntryBlock()) {
+          dominates = (I->getParent() != &F->getEntryBlock()) ||
+                      tokInst->comesBefore(I);
+        } else {
+          DominatorTree DT(*F);
+          dominates = DT.dominates(tokInst, I);
+        }
+      }
+      if (tok && !isa<ConstantInt>(tok) && dominates) {
+        Value *tokCast = tok;
+        if (bits < 64) {
+          tokCast = IRB.CreateTrunc(tok, T, "constenc.c.tok");
+        } else if (bits > 64) {
+          tokCast = IRB.CreateZExt(tok, T, "constenc.c.tok");
+        }
+        realShare0 =
+            BinaryOperator::Create(Instruction::Xor, realShare0, tokCast,
+                                   "constenc.share0.entangle", I);
+      }
+    }
+
     Value *acc = insertOpaqueBarrier(IRB, realShare0);
     for (unsigned i = 1; i < k; i++) {
       Value *ld =
@@ -759,6 +846,7 @@ struct ConstantEncryption : public ModulePass {
     }
 
     I->setOperand(opindex, reconstructed);
+    I->setMetadata("constenc.done", MDNode::get(I->getContext(), {}));
   }
 
   std::pair<ConstantInt * /*key*/, ConstantInt * /*new*/>
@@ -784,10 +872,10 @@ struct ConstantEncryption : public ModulePass {
   }
 };
 
-ModulePass *createConstantEncryptionPass(bool flag) {
-  return new ConstantEncryption(flag);
+ModulePass *createConstantEncryptionPass(bool flag, bool isPrePhase) {
+  return new ConstantEncryption(flag, isPrePhase);
 }
 } // namespace llvm
 char ConstantEncryption::ID = 0;
-INITIALIZE_PASS(ConstantEncryption, "constenc",
+INITIALIZE_PASS(ConstantEncryption, "constencobf",
                 "Enable ConstantInt GV Encryption.", false, false)

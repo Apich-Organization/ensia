@@ -23,6 +23,8 @@
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Format.h"
+#include "llvm/Support/raw_ostream.h"
 #include <set>
 
 using namespace llvm;
@@ -59,33 +61,41 @@ static void injectStackConfusion(BasicBlock *BB, Function *F) {
   if (moduleIsX86_64(F)) {
     // Safe register-only junk sequence on scratch registers r10 and r11
     // (Never touches rsp/stack to strictly respect x86-64 System V ABI
-    // red-zone).
-    std::string asmStr = "xorq %r10, %r10\n\t"
-                         "addq $$0x13371337, %r10\n\t"
-                         "subq $$0x13371337, %r10\n\t"
-                         "xorq %r11, %r11\n\t"
-                         "addq $$0x12345678, %r11\n\t"
-                         "subq $$0x12345678, %r11\n\t";
+    // red-zone). Randomize constants to eliminate static signature.
+    uint32_t k1 = cryptoutils->get_uint32_t() & 0x7fffffff;
+    uint32_t k2 = cryptoutils->get_uint32_t() & 0x7fffffff;
+    std::string asmStr;
+    raw_string_ostream OS(asmStr);
+    OS << "xorq %r10, %r10\n\t"
+       << "addq $$0x" << format_hex_no_prefix(k1, 8) << ", %r10\n\t"
+       << "subq $$0x" << format_hex_no_prefix(k1, 8) << ", %r10\n\t"
+       << "xorq %r11, %r11\n\t"
+       << "addq $$0x" << format_hex_no_prefix(k2, 8) << ", %r11\n\t"
+       << "subq $$0x" << format_hex_no_prefix(k2, 8) << ", %r11\n\t";
     std::string constraints = "~{r10},~{r11},~{dirflag},~{fpsr},~{flags}";
 
     FunctionType *AsmFTy =
         FunctionType::get(Type::getVoidTy(BB->getContext()), false);
-    InlineAsm *IA = InlineAsm::get(AsmFTy, asmStr, constraints,
+    InlineAsm *IA = InlineAsm::get(AsmFTy, OS.str(), constraints,
                                    /*hasSideEffects=*/true, InlineAsm::AD_ATT);
     CallInst::Create(AsmFTy, IA, {}, "", insertPt);
     turnOffOptimization(F);
 
   } else if (moduleIsAArch64(F)) {
     // Safe register-only junk sequence on scratch registers x9 and x10
-    std::string asmStr = "eor x9, x9, x9\n\t"
-                         "add x9, x9, #0x42\n\t"
-                         "sub x9, x9, #0x42\n\t"
-                         "eor x10, x10, x10\n\t"
-                         "add x10, x10, #0x77\n\t"
-                         "sub x10, x10, #0x77\n\t";
+    uint32_t k1 = (cryptoutils->get_range(0xFFF) + 1);
+    uint32_t k2 = (cryptoutils->get_range(0xFFF) + 1);
+    std::string asmStr;
+    raw_string_ostream OS(asmStr);
+    OS << "eor x9, x9, x9\n\t"
+       << "add x9, x9, #" << k1 << "\n\t"
+       << "sub x9, x9, #" << k1 << "\n\t"
+       << "eor x10, x10, x10\n\t"
+       << "add x10, x10, #" << k2 << "\n\t"
+       << "sub x10, x10, #" << k2 << "\n\t";
     FunctionType *AsmFTy =
         FunctionType::get(Type::getVoidTy(BB->getContext()), false);
-    InlineAsm *IA = InlineAsm::get(AsmFTy, asmStr,
+    InlineAsm *IA = InlineAsm::get(AsmFTy, OS.str(),
                                    "~{x9},~{x10},~{dirflag},~{fpsr},~{flags}",
                                    /*hasSideEffects=*/true, InlineAsm::AD_ATT);
     CallInst::Create(AsmFTy, IA, {}, "", insertPt);
@@ -140,6 +150,16 @@ struct SplitBasicBlock : public FunctionPass {
       if (bb_size < 2 || containsPHI(currBB) || containsSwiftError(currBB))
         continue;
 
+      if (currBB->isEntryBlock()) {
+        size_t nonAllocaCount = 0;
+        for (Instruction &I : *currBB) {
+          if (!isa<AllocaInst>(&I))
+            nonAllocaCount++;
+        }
+        if (nonAllocaCount < 2)
+          continue;
+      }
+
       size_t split_ctr = std::min((size_t)SplitNumTemp, bb_size - 1);
 
       // Generate splits point
@@ -176,13 +196,11 @@ struct SplitBasicBlock : public FunctionPass {
         if (curr_bb_it == curr_bb_offset->end())
           break;
 
-        // Skip splitting inside the alloca run of a probe-stack entry block.
-        // The probe thunk expects all allocas to stay in the entry block;
-        // moving one out causes stack probing to under-probe, leading to a
-        // guard-page segfault.  Skip any split point that still points at
-        // an alloca and let the iterator advance to a non-alloca instruction.
-        if (F->hasFnAttribute("probe-stack") && currBB->isEntryBlock()) {
-          // Advance past any trailing allocas at this split point
+        // Ensure all allocas remain strictly in the entry block.
+        // Moving allocas into split blocks corrupts LLVM entry alloca
+        // invariants, breaks probe-stack thunks, and induces stack layout
+        // corruption.
+        if (currBB->isEntryBlock()) {
           while (curr_bb_it != curr_bb_offset->end() &&
                  isa<AllocaInst>(curr_bb_it))
             ++curr_bb_it;

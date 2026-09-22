@@ -117,8 +117,14 @@ int main(int argc, char **argv) {
   volatile uint8_t *p = (volatile uint8_t *)target_func;
 
   if (strcmp(argv[1], "--tamper-hook") == 0) {
+#if defined(__aarch64__) || defined(__arm64__)
+    // Inject AArch64 B branch instruction (0x14000001 = B .+4, classic Dobby /
+    // Substrate / Frida inline hook)
+    *(volatile uint32_t *)p = 0x14000001;
+#else
     // Inject 0xE9 (JMP rel32 - classic Detours / Frida hook)
     *p = 0xE9;
+#endif
   } else if (strcmp(argv[1], "--tamper-code") == 0) {
     // Tamper an internal instruction byte (integrity violation)
     *(p + 5) ^= 0x42;

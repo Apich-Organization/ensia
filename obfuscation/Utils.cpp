@@ -492,13 +492,15 @@ void tagSynthetic(Instruction *I) {
 bool isSynthetic(const Instruction *I) {
   if (!I)
     return false;
-  if (I->hasMetadata("ensia.synthetic"))
+  if (I->hasMetadata("ensia.synthetic") || I->hasMetadata("constenc.done"))
     return true;
   StringRef name = I->getName();
   if (name.starts_with("ensia.") || name.starts_with("csm.") ||
       name.starts_with("bcf.") || name.starts_with("vobf.") ||
       name.starts_with("mba.") || name.starts_with("sub.") ||
-      name.starts_with("constenc.") || name.starts_with("bpp."))
+      name.starts_with("constenc.") || name.starts_with("bpp.") ||
+      name.starts_with("gf8.") || name.starts_with("strcry.") ||
+      name.starts_with("barrier."))
     return true;
   return false;
 }
@@ -530,6 +532,26 @@ GlobalVariable *getOrCreateOpaqueSink(Module *M) {
   return GV;
 }
 
+std::string getPolymorphicBarrierAsm(const Triple &triple) {
+  if (triple.getArch() == Triple::x86_64 || triple.getArch() == Triple::x86) {
+    static const char *x86Barriers[] = {
+        "xorb $$0, $0", "orb $$0, $0",        "andb $$-1, $0",
+        "addb $$0, $0", "subb $$0, $0",       "rolb $$0, $0",
+        "rorb $$0, $0", "notb $0\n\tnotb $0", "incb $0\n\tdecb $0"};
+    unsigned idx =
+        cryptoutils->get_range(sizeof(x86Barriers) / sizeof(x86Barriers[0]));
+    return x86Barriers[idx];
+  } else if (triple.isAArch64() || triple.getArch() == Triple::arm) {
+    static const char *armBarriers[] = {"prfm pldl1keep, $0",
+                                        "prfm pstl1keep, $0", "dmb ishld",
+                                        "isb", "prfm pldl2keep, $0"};
+    unsigned idx =
+        cryptoutils->get_range(sizeof(armBarriers) / sizeof(armBarriers[0]));
+    return armBarriers[idx];
+  }
+  return "nop";
+}
+
 template <typename BuilderTy>
 static Value *insertOpaqueBarrierImpl(BuilderTy &IRB, Value *V) {
   if (!V)
@@ -550,31 +572,26 @@ static Value *insertOpaqueBarrierImpl(BuilderTy &IRB, Value *V) {
   AllocaInst *slot = nullptr;
   for (Instruction &I : Entry) {
     if (AllocaInst *AI = dyn_cast<AllocaInst>(&I)) {
-      if (AI->getAllocatedType() == T &&
-          AI->getName().starts_with("barrier.slot")) {
+      if (AI->getAllocatedType() == T && !AI->getName().contains("reg2mem") &&
+          (AI->hasMetadata("ensia.barrier.slot") ||
+           AI->getName().starts_with("barrier.slot."))) {
         slot = AI;
         break;
       }
     }
   }
   if (!slot) {
+    std::string slotName =
+        "barrier.slot." + std::to_string(T->getPrimitiveSizeInBits());
     IRBuilder<> EntryIRB(&Entry, Entry.getFirstInsertionPt());
-    slot = EntryIRB.CreateAlloca(T, nullptr, "barrier.slot");
+    slot = EntryIRB.CreateAlloca(T, nullptr, slotName);
+    slot->setMetadata("ensia.barrier.slot", MDNode::get(Ctx, {}));
   }
 
   IRB.CreateStore(V, slot);
 
-  // Architecture-specific real machine instruction that touches slot memory
-  // without changing the stored value:
-  // - x86/x86_64: xorb $0, (%0) touches lowest byte of slot memory
-  // - AArch64: prfm pldl1keep, [%0] touches memory hierarchy
-  // - Generic: nop
-  const char *asmCode = "nop";
-  if (moduleIsX86(M)) {
-    asmCode = "xorb $$0, $0";
-  } else if (moduleIsAArch64(M)) {
-    asmCode = "prfm pldl1keep, $0";
-  }
+  Triple triple(M->getTargetTriple());
+  std::string asmCode = getPolymorphicBarrierAsm(triple);
 
   FunctionType *AsmFTy = FunctionType::get(
       Type::getVoidTy(Ctx),
@@ -593,17 +610,21 @@ static Value *insertOpaqueBarrierImpl(BuilderTy &IRB, Value *V) {
     Value *sinkVal = nullptr;
     if (T->isIntegerTy()) {
       if (T->getIntegerBitWidth() <= 64)
-        sinkVal =
-            IRB.CreateZExtOrTrunc(V, Type::getInt64Ty(Ctx), "barrier.sink");
+        sinkVal = IRB.CreateZExtOrTrunc(V, Type::getInt64Ty(Ctx), "");
     } else if (T->isPointerTy()) {
-      sinkVal = IRB.CreatePtrToInt(V, Type::getInt64Ty(Ctx), "barrier.sink");
+      sinkVal = IRB.CreatePtrToInt(V, Type::getInt64Ty(Ctx), "");
     }
     if (sinkVal) {
-      IRB.CreateStore(sinkVal, sinkGV, /*isVolatile=*/true);
+      if (Instruction *sinkInst = dyn_cast<Instruction>(sinkVal))
+        sinkInst->setMetadata("ensia.synthetic", MDNode::get(Ctx, {}));
+      Instruction *st = IRB.CreateStore(sinkVal, sinkGV, /*isVolatile=*/true);
+      st->setMetadata("ensia.synthetic", MDNode::get(Ctx, {}));
     }
   }
 
-  return IRB.CreateLoad(T, slot, "barrier.val");
+  Instruction *loadInst = IRB.CreateLoad(T, slot, "");
+  loadInst->setMetadata("ensia.synthetic", MDNode::get(Ctx, {}));
+  return loadInst;
 }
 
 Value *insertOpaqueBarrier(IRBuilder<NoFolder> &IRB, Value *V) {
@@ -744,10 +765,11 @@ std::string getViolentExitAsm(const Triple &triple) {
       s += "brk #0xF003\n\t";
 
       // Synchronous Data Abort: store 0 to NULL
-      s += "str xzr, [xzr]\n\t";
+      s += "mov x0, #0\n\t";
+      s += "str xzr, [x0]\n\t";
 
       // SP alignment fault & bad return
-      s += "mov sp, xzr\n\t";
+      s += "mov sp, x0\n\t";
       s += "ret\n\t";
 
       // Privileged memory write
@@ -770,10 +792,11 @@ std::string getViolentExitAsm(const Triple &triple) {
       s += "svc #0x80\n\t";
 
       // Layer 2: Synchronous Data Abort (null dereference)
-      s += "str xzr, [xzr]\n\t";
+      s += "mov x0, #0\n\t";
+      s += "str xzr, [x0]\n\t";
 
       // Layer 3: SP alignment fault
-      s += "mov sp, xzr\n\t";
+      s += "mov sp, x0\n\t";
       s += "ret\n\t";
 
       // Layer 4: Synchronous exception trap
@@ -796,10 +819,11 @@ std::string getViolentExitAsm(const Triple &triple) {
       s += "svc #0\n\t";
 
       // Layer 3: Synchronous Data Abort
-      s += "str xzr, [xzr]\n\t";
+      s += "mov x0, #0\n\t";
+      s += "str xzr, [x0]\n\t";
 
       // Layer 4: SP alignment fault & bad ret
-      s += "mov sp, xzr\n\t";
+      s += "mov sp, x0\n\t";
       s += "ret\n\t";
 
       // Layer 5: Privileged instruction trap (access EL1 register from EL0)
@@ -1031,6 +1055,10 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
   Type *PtrTy = PointerType::getUnqual(Ctx);
   FunctionType *DbgFTy = FunctionType::get(I64Ty, false);
 
+  if (triple.getArch() == Triple::x86_64) {
+    F->addFnAttr(Attribute::NoRedZone);
+  }
+
   std::string s;
 
   if ((triple.isOSLinux() || triple.isAndroid()) &&
@@ -1063,8 +1091,12 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
     s += "orq %r10, %r8\n\t";
     s += "10:\n\t";
     // 2. TF trap flag in EFLAGS check (debugger single stepping)
+    // Red-zone safe: adjust rsp by 128 bytes before pushfq to prevent
+    // clobbering leaf function red zone
+    s += "subq $$128, %rsp\n\t";
     s += "pushfq\n\t";
     s += "popq %rdx\n\t";
+    s += "addq $$128, %rsp\n\t";
     s += "testq $$0x100, %rdx\n\t";
     s += "jz 11f\n\t";
     s += "movabsq $$0xDEAD0002, %r10\n\t";
@@ -1101,8 +1133,10 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
     s += "xorq %rcx, %rcx\n\t";
     s += "syscall\n\t";
     // 2. TF trap flag in EFLAGS
+    s += "subq $$128, %rsp\n\t";
     s += "pushfq\n\t";
     s += "popq %rdx\n\t";
+    s += "addq $$128, %rsp\n\t";
     s += "testq $$0x100, %rdx\n\t";
     s += "jz 10f\n\t";
     s += "movabsq $$0xDEAD0002, %r10\n\t";

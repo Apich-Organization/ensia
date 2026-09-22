@@ -146,7 +146,8 @@ static Value *computeDataFeedback(IRBuilder<NoFolder> &IRB, Function *F,
       argVal = IRB.CreateTrunc(ptrInt, I32Ty);
     }
     if (argVal) {
-      Value *mul33 = IRB.CreateMul(dataFeedback, ConstantInt::get(I32Ty, 33));
+      Value *mul33 = IRB.CreateMul(dataFeedback, ConstantInt::get(I32Ty, 33),
+                                   "csm.dfb.mul");
       dataFeedback = IRB.CreateXor(mul33, argVal, "csm.dfb.acc");
     }
   }
@@ -162,7 +163,8 @@ static Value *computeDataFeedback(IRBuilder<NoFolder> &IRB, Function *F,
     }
     for (Instruction *I : targets) {
       Value *val = IRB.CreateZExtOrTrunc(I, I32Ty);
-      Value *mul33 = IRB.CreateMul(dataFeedback, ConstantInt::get(I32Ty, 33));
+      Value *mul33 = IRB.CreateMul(dataFeedback, ConstantInt::get(I32Ty, 33),
+                                   "csm.dfb.mul");
       dataFeedback = IRB.CreateXor(mul33, val, "csm.dfb.bb");
     }
   }
@@ -298,7 +300,8 @@ struct ChaosStateMachine : public FunctionPass {
                                              dataFeedbackEntry, "csm.initmask");
     Value *initValMasked = IRBEntry.CreateXor(
         ConstantInt::get(I32Ty, caseVals[0]), maskValEntry, "csm.initstate");
-    IRBEntry.CreateStore(initValMasked, stateAlloca);
+    Value *opaqueInit = insertOpaqueBarrier(IRBEntry, initValMasked);
+    IRBEntry.CreateStore(opaqueInit, stateAlloca);
     oldTerm->eraseFromParent();
 
     // ── Phase 5: loop structure
@@ -387,7 +390,8 @@ struct ChaosStateMachine : public FunctionPass {
               IRB.CreateXor(nextRaw, ConstantInt::get(I32Ty, corr), "csm.next");
           Value *nextMasked =
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
-          IRB.CreateStore(nextMasked, stateAlloca);
+          Value *opaqueNext = insertOpaqueBarrier(IRB, nextMasked);
+          IRB.CreateStore(opaqueNext, stateAlloca);
           term->eraseFromParent();
           loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(loopEnd, BB);
@@ -412,13 +416,19 @@ struct ChaosStateMachine : public FunctionPass {
           uint32_t corrF = logisticNext[i] ^ caseF;
 
           Value *nextRaw = buildLogisticIR(IRB, stateDemasked, Ctx);
-          Value *corrSel =
-              IRB.CreateSelect(cond, ConstantInt::get(I32Ty, corrT),
-                               ConstantInt::get(I32Ty, corrF), "csm.corr");
-          Value *nextDecoded = IRB.CreateXor(nextRaw, corrSel, "csm.next");
+          // Branchless algebraic mask computation instead of naked SelectInst
+          Value *condExt = IRB.CreateZExt(cond, I32Ty, "csm.c.ext");
+          Value *mask =
+              IRB.CreateSub(ConstantInt::get(I32Ty, 0), condExt, "csm.c.mask");
+          Value *diff = ConstantInt::get(I32Ty, corrT ^ corrF);
+          Value *maskedDiff = IRB.CreateAnd(mask, diff, "csm.c.diff");
+          Value *corrVal = IRB.CreateXor(ConstantInt::get(I32Ty, corrF),
+                                         maskedDiff, "csm.c.corr");
+          Value *nextDecoded = IRB.CreateXor(nextRaw, corrVal, "csm.next");
           Value *nextMasked =
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
-          IRB.CreateStore(nextMasked, stateAlloca);
+          Value *opaqueNext = insertOpaqueBarrier(IRB, nextMasked);
+          IRB.CreateStore(opaqueNext, stateAlloca);
           term->eraseFromParent();
           loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(loopEnd, BB);
@@ -430,7 +440,8 @@ struct ChaosStateMachine : public FunctionPass {
               nextRaw, ConstantInt::get(I32Ty, corrT), "csm.next");
           Value *nextMasked =
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
-          IRB.CreateStore(nextMasked, stateAlloca);
+          Value *opaqueNext = insertOpaqueBarrier(IRB, nextMasked);
+          IRB.CreateStore(opaqueNext, stateAlloca);
           term->eraseFromParent();
           loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(loopEnd, succFalse, cond, BB);
@@ -442,7 +453,8 @@ struct ChaosStateMachine : public FunctionPass {
               nextRaw, ConstantInt::get(I32Ty, corrF), "csm.next");
           Value *nextMasked =
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
-          IRB.CreateStore(nextMasked, stateAlloca);
+          Value *opaqueNext = insertOpaqueBarrier(IRB, nextMasked);
+          IRB.CreateStore(opaqueNext, stateAlloca);
           term->eraseFromParent();
           loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(succTrue, loopEnd, cond, BB);

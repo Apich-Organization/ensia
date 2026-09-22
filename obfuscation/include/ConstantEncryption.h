@@ -23,7 +23,7 @@
 
 namespace llvm {
 
-ModulePass *createConstantEncryptionPass(bool flag);
+ModulePass *createConstantEncryptionPass(bool flag, bool isPrePhase = false);
 void initializeConstantEncryptionPass(PassRegistry &Registry);
 
 } // namespace llvm

@@ -32,37 +32,39 @@
 //                                       info-theoretically
 //                                        secure; different from
 //                                        ConstantEncryption)
-//  6. Per-function (order is deliberate — see rationale below):
-//     a. SplitBasicBlocks             — split + stack-confusion injection
-//                                       (more granular dispatch targets for
-//                                       CFF)
-//     b. BogusControlFlow             — hardware-predicate opaque edges
-//                                       (runs on unsplit blocks for wider
-//                                       scope)
-//     c. Substitution                 — integer/shift instruction substitution
+//  6. Per-function (order is deliberate for maximum non-linear coupling):
+//     a. Substitution                 — integer/shift instruction substitution
 //                                       (Sub+AShr+Shl/LShr with verified
 //                                       identities)
-//     d. MBAObfuscation               — multi-term Mixed Boolean-Arithmetic
+//     b. MBAObfuscation               — multi-term Mixed Boolean-Arithmetic
 //                                       (sees Substitution output → stacked
-//                                       layers)
+//                                       layers,
+//                                        embeds polymorphic hardware barriers)
+//     c. SplitBasicBlocks             — slices across expanded MBA instruction
+//     chains
+//                                       + injects randomized stack-confusion
+//                                       (cuts single MBA expressions across
+//                                       multiple BBs!)
+//     d. BogusControlFlow             — hardware-predicate opaque edges & block
+//     cloning
+//                                       (clones blocks containing split MBA
+//                                       fragments)
 //     e. ChaosStateMachine            — logistic-map quadratic CFF (strongest)
-//                                       (runs first so it sees the clean
-//                                       original
-//                                        function; stamps done functions so
+//                                       (runs on the split & cloned graph so
+//                                       disjoint
+//                                        MBA fragments live in separate chaotic
+//                                        states; stamps done functions so
 //                                        Flattening skips them)
 //     f. Flattening                   — chaos-seeded classic CFF (fallback)
 //                                       (only processes functions CSM skipped:
 //                                        EH pads, coroutines, ≤1 block, etc.)
 //     g. VectorObfuscation            — SIMD scalar→vector lifting
-//                                       (runs last so even CFF dispatch gets
-//                                       lifted)
-//  7. ConstantEncryption   (module)   — k-share XOR ensemble + Feistel
-//  nonlinear layer
-//                                       (runs after Sub/MBA so it also encrypts
-//                                       their
-//                                        injected constants; Feistel adds 26 IR
-//                                        instrs per constant on top of the XOR
-//                                        share chain)
+//                                       (runs last per-fn so even CFF dispatch
+//                                       gets lifted)
+//  7. ConstantEncryption   (module)   — Phase 2: encrypts skeleton constants
+//  from
+//                                       CSM, CFF, BCF, Vec via k-share XOR +
+//                                       Feistel + adb.tok
 //  8. IndirectBranch       (function) — Knuth-hash encrypted branch targets
 //                                       (sees the Flatten/CSM switch tables)
 //  9. FunctionWrapper      (module)   — polymorphic proxy generation
@@ -73,14 +75,20 @@
 //                                       name-matching works correctly in all
 //                                       preceding passes.
 // 11. Cleanup: remove ensia_* marker declarations
+// 12. LTO Evasion: optnone + noinline attributes
 //
 // ── Ordering rationale
 // ────────────────────────────────────────────────────────
 //  • Sub → MBA: MBA sees both original and Substitution-generated ops.
-//  • MBA → CSM: the chaos switch dispatch contains MBA-obfuscated values.
+//  • MBA → Split: Split cuts through the dense MBA instruction chains,
+//  distributing
+//    parts of a single algebraic operation across multiple basic blocks.
+//  • Split → BCF: BCF clones the split blocks and injects opaque edges.
+//  • BCF → CSM: the chaotic state machine flattens all split & bogus blocks
+//  into
+//    disjoint dispatch states, forcing an analyst to reverse the entire chaotic
+//    transition graph just to reconstruct a single arithmetic operation!
 //  • CSM → Flatten: CSM stamps processed functions; Flattening skips them.
-//    Running Flatten AFTER CSM on the same function would feed Flatten's
-//    LowerSwitchPass a switch with O(N) cases → O(N²) binary-compare tree.
 //    Inversion ensures every function gets exactly ONE CFF layer, the
 //    strongest available: CSM when eligible, classic Flatten as fallback.
 //  • Vec last (per-fn): SIMD-lifts even the CFF/CSM dispatch arithmetic.
@@ -220,11 +228,79 @@ static cl::opt<bool> EnableObfTrace(
         "Also prints function name + sub-pass tag for each per-function step. "
         "Max output: ~15 lines + ~7 per function. Use to diagnose 0% CPU "
         "hangs."));
+static cl::opt<bool> EnableHighObfuscation(
+    "enable-highobf", cl::init(false), cl::NotHidden,
+    cl::desc("[OLLVM-Next] High-intensity obfuscation: all passes active with "
+             "high parameters. CSM preferred over Flatten."));
+static cl::opt<bool> EnableLowObfuscation(
+    "enable-lowobf", cl::init(false), cl::NotHidden,
+    cl::desc(
+        "[OLLVM-Next] Low-intensity lightweight obfuscation: Sub+MBA+Split+"
+        "BCF+StrEnc+ConstEnc."));
 static cl::opt<bool> EnableMedObfuscation(
     "enable-medobf", cl::init(false), cl::NotHidden,
     cl::desc(
         "[OLLVM-Next] Medium-intensity obfuscation: Sub+MBA+ConstEnc+StrEnc+"
         "Flatten. Good for production builds."));
+
+// ── Command-line aliases for standard OLLVM compatibility ──────────────────
+static cl::alias SubAlias("sub", cl::desc("Alias for -enable-subobf"),
+                          cl::aliasopt(EnableSubstitution));
+static cl::alias FlaAlias("fla", cl::desc("Alias for -enable-cffobf"),
+                          cl::aliasopt(EnableFlattening));
+static cl::alias CffAlias("cff", cl::desc("Alias for -enable-cffobf"),
+                          cl::aliasopt(EnableFlattening));
+static cl::alias BcfAlias("bcf", cl::desc("Alias for -enable-bcfobf"),
+                          cl::aliasopt(EnableBogusControlFlow));
+static cl::alias SplitAlias("split", cl::desc("Alias for -enable-splitobf"),
+                            cl::aliasopt(EnableBasicBlockSplit));
+static cl::alias StrcryAlias("sobf", cl::desc("Alias for -enable-strcry"),
+                             cl::aliasopt(EnableStringEncryption));
+static cl::alias StrencAlias("strenc", cl::desc("Alias for -enable-strcry"),
+                             cl::aliasopt(EnableStringEncryption));
+static cl::alias ConstencAlias("constenc",
+                               cl::desc("Alias for -enable-constenc"),
+                               cl::aliasopt(EnableConstantEncryption));
+static cl::alias IndibranAlias("indibran",
+                               cl::desc("Alias for -enable-indibran"),
+                               cl::aliasopt(EnableIndirectBranching));
+static cl::alias IndibrAlias("indibr", cl::desc("Alias for -enable-indibran"),
+                             cl::aliasopt(EnableIndirectBranching));
+static cl::alias FuncwraAlias("funcwra", cl::desc("Alias for -enable-funcwra"),
+                              cl::aliasopt(EnableFunctionWrapper));
+static cl::alias FwAlias("fw", cl::desc("Alias for -enable-funcwra"),
+                         cl::aliasopt(EnableFunctionWrapper));
+static cl::alias CsmAlias("csm", cl::desc("Alias for -enable-csmobf"),
+                          cl::aliasopt(EnableChaosStateMachine));
+static cl::alias MbaAlias("mba", cl::desc("Alias for -enable-mbaobf"),
+                          cl::aliasopt(EnableMBAObfuscation));
+static cl::alias VobfAlias("vobf", cl::desc("Alias for -enable-vobf"),
+                           cl::aliasopt(EnableVectorObfuscation));
+static cl::alias VecAlias("vec", cl::desc("Alias for -enable-vobf"),
+                          cl::aliasopt(EnableVectorObfuscation));
+static cl::alias FcoAlias("fco", cl::desc("Alias for -enable-fco"),
+                          cl::aliasopt(EnableFunctionCallObfuscate));
+static cl::alias AntihookAlias("antihook",
+                               cl::desc("Alias for -enable-antihook"),
+                               cl::aliasopt(EnableAntiHooking));
+static cl::alias AdbAlias("adb", cl::desc("Alias for -enable-adb"),
+                          cl::aliasopt(EnableAntiDebugging));
+static cl::alias AcdAlias("acd", cl::desc("Alias for -enable-acdobf"),
+                          cl::aliasopt(EnableAntiClassDump));
+static cl::alias AllobfAlias("allobf", cl::desc("Alias for -enable-allobf"),
+                             cl::aliasopt(EnableAllObfuscation));
+static cl::alias MaxobfAlias("maxobf", cl::desc("Alias for -enable-maxobf"),
+                             cl::aliasopt(EnableMaxObfuscation));
+static cl::alias HighobfAlias("highobf", cl::desc("Alias for -enable-highobf"),
+                              cl::aliasopt(EnableHighObfuscation));
+static cl::alias HighAlias("high", cl::desc("Alias for -enable-highobf"),
+                           cl::aliasopt(EnableHighObfuscation));
+static cl::alias MedobfAlias("medobf", cl::desc("Alias for -enable-medobf"),
+                             cl::aliasopt(EnableMedObfuscation));
+static cl::alias LowobfAlias("lowobf", cl::desc("Alias for -enable-lowobf"),
+                             cl::aliasopt(EnableLowObfuscation));
+static cl::alias LowAlias("low", cl::desc("Alias for -enable-lowobf"),
+                          cl::aliasopt(EnableLowObfuscation));
 
 // ── Structured preset and TOML config
 // ─────────────────────────────────────────
@@ -280,25 +356,25 @@ static std::optional<bool> getEnvBool(const char *name) {
 static void LoadEnv() {
   if (getEnvBool("ENSIA").value_or(false))
     EnableIRObfusaction = true;
-  if (getenv("SPLITOBF"))
+  if (getenv("SPLITOBF") || getenv("SPLIT"))
     EnableBasicBlockSplit = true;
-  if (getenv("SUBOBF"))
+  if (getenv("SUBOBF") || getenv("SUB"))
     EnableSubstitution = true;
-  if (getenv("ALLOBF"))
+  if (getenv("ALLOBF") || getenv("ALL"))
     EnableAllObfuscation = true;
   if (getenv("FCO"))
     EnableFunctionCallObfuscate = true;
-  if (getenv("STRCRY"))
+  if (getenv("STRCRY") || getenv("SOBF") || getenv("STRENC"))
     EnableStringEncryption = true;
-  if (getenv("INDIBRAN"))
+  if (getenv("INDIBRAN") || getenv("INDIBR"))
     EnableIndirectBranching = true;
-  if (getenv("FUNCWRA"))
+  if (getenv("FUNCWRA") || getenv("FW"))
     EnableFunctionWrapper = true;
-  if (getenv("BCFOBF"))
+  if (getenv("BCFOBF") || getenv("BCF"))
     EnableBogusControlFlow = true;
-  if (getenv("ACDOBF"))
+  if (getenv("ACDOBF") || getenv("ACD"))
     EnableAntiClassDump = true;
-  if (getenv("CFFOBF"))
+  if (getenv("CFFOBF") || getenv("CFF") || getenv("FLA"))
     EnableFlattening = true;
   if (getenv("CONSTENC"))
     EnableConstantEncryption = true;
@@ -307,16 +383,20 @@ static void LoadEnv() {
   if (getenv("ADB"))
     EnableAntiDebugging = true;
   // OLLVM-Next new passes
-  if (getenv("CSMOBF"))
+  if (getenv("CSMOBF") || getenv("CSM"))
     EnableChaosStateMachine = true;
-  if (getenv("MBAOBF"))
+  if (getenv("MBAOBF") || getenv("MBA"))
     EnableMBAObfuscation = true;
-  if (getenv("VOBF"))
+  if (getenv("VOBF") || getenv("VEC"))
     EnableVectorObfuscation = true;
-  if (getenv("MAXOBF"))
+  if (getenv("MAXOBF") || getenv("MAX"))
     EnableMaxObfuscation = true;
-  if (getenv("MEDOBF"))
+  if (getenv("HIGHOBF") || getenv("HIGH"))
+    EnableHighObfuscation = true;
+  if (getenv("MEDOBF") || getenv("MED") || getenv("MID"))
     EnableMedObfuscation = true;
+  if (getenv("LOWOBF") || getenv("LOW"))
+    EnableLowObfuscation = true;
   if (getenv("VERBOSE"))
     EnableObfVerbose = true;
   if (getenv("TRACE"))
@@ -507,6 +587,16 @@ static void ensureObfConfigLoaded() {
   std::call_once(s_init_obf_config_flag, []() {
     loadObfConfig();
     LoadEnv();
+    if (EnableMaxObfuscation || EnableHighObfuscation || EnableMedObfuscation ||
+        EnableLowObfuscation || EnableAllObfuscation || EnableAntiClassDump ||
+        EnableAntiHooking || EnableAntiDebugging || EnableBogusControlFlow ||
+        EnableFlattening || EnableBasicBlockSplit || EnableSubstitution ||
+        EnableFunctionCallObfuscate || EnableStringEncryption ||
+        EnableConstantEncryption || EnableIndirectBranching ||
+        EnableFunctionWrapper || EnableChaosStateMachine ||
+        EnableMBAObfuscation || EnableVectorObfuscation || !ObfPreset.empty()) {
+      EnableIRObfusaction = true;
+    }
   });
 }
 
@@ -654,6 +744,20 @@ struct Obfuscation : public ModulePass {
     ObfVerbose = EnableObfVerbose;
     ObfTrace = EnableObfTrace;
 
+    // Normalize preset selection from CLI / config
+    if (ObfPreset == "max" || GObfConfig.preset == "max") {
+      EnableMaxObfuscation = true;
+    } else if (ObfPreset == "high" || GObfConfig.preset == "high" ||
+               EnableHighObfuscation) {
+      EnableHighObfuscation = true;
+    } else if (ObfPreset == "mid" || ObfPreset == "med" ||
+               GObfConfig.preset == "mid" || EnableMedObfuscation) {
+      EnableMedObfuscation = true;
+    } else if (ObfPreset == "low" || GObfConfig.preset == "low" ||
+               EnableLowObfuscation) {
+      EnableLowObfuscation = true;
+    }
+
     // ── Maximum-intensity mode: all passes + extreme tuning ──────────────
     if (EnableMaxObfuscation) {
       ObfuscationMaxMode = true;
@@ -684,8 +788,33 @@ struct Obfuscation : public ModulePass {
              << "    ConstEnc:constenc_times=3, kshare=6, feistel=true\n";
     }
 
+    // ── High-intensity mode: all passes at balanced high settings ────────
+    if (EnableHighObfuscation && !EnableMaxObfuscation) {
+      GObfConfig.preset = "high";
+      ObfPassConfig highPreset = ObfGlobalConfig::presetConfig("high");
+      ObfGlobalConfig::merge(highPreset, GObfConfig.passes);
+      GObfConfig.passes = highPreset;
+      EnableSubstitution = true;
+      EnableMBAObfuscation = true;
+      EnableBasicBlockSplit = true;
+      EnableBogusControlFlow = true;
+      EnableStringEncryption = true;
+      EnableConstantEncryption = true;
+      EnableVectorObfuscation = true;
+      EnableChaosStateMachine = true;
+      EnableIndirectBranching = true;
+      EnableFunctionWrapper = true;
+      EnableFunctionCallObfuscate = true;
+      EnableAntiHooking = true;
+      EnableAntiDebugging = true;
+      EnableAntiClassDump = true;
+      errs() << "[OLLVM-Next] High obfuscation mode active: all passes at high "
+                "intensity\n";
+    }
+
     // ── Medium-intensity mode: production-safe subset ─────────────────────
-    if (EnableMedObfuscation && !EnableMaxObfuscation) {
+    if (EnableMedObfuscation && !EnableMaxObfuscation &&
+        !EnableHighObfuscation) {
       GObfConfig.preset = "mid";
       ObfPassConfig midPreset = ObfGlobalConfig::presetConfig("mid");
       ObfGlobalConfig::merge(midPreset, GObfConfig.passes);
@@ -695,8 +824,30 @@ struct Obfuscation : public ModulePass {
       EnableConstantEncryption = true;
       EnableStringEncryption = true;
       EnableFlattening = true;
-      errs() << "[OLLVM-Next] Medium obfuscation mode: Sub+MBA+ConstEnc+"
-                "StrEnc+Flatten\n";
+      EnableBasicBlockSplit = true;
+      EnableBogusControlFlow = true;
+      EnableVectorObfuscation = true;
+      EnableIndirectBranching = true;
+      errs()
+          << "[OLLVM-Next] Medium obfuscation mode: Sub+MBA+Split+BCF+ConstEnc+"
+             "StrEnc+Flatten+Vec+IndirBranch\n";
+    }
+
+    // ── Low-intensity mode: lightweight subset ────────────────────────────
+    if (EnableLowObfuscation && !EnableMaxObfuscation &&
+        !EnableHighObfuscation && !EnableMedObfuscation) {
+      GObfConfig.preset = "low";
+      ObfPassConfig lowPreset = ObfGlobalConfig::presetConfig("low");
+      ObfGlobalConfig::merge(lowPreset, GObfConfig.passes);
+      GObfConfig.passes = lowPreset;
+      EnableSubstitution = true;
+      EnableMBAObfuscation = true;
+      EnableBasicBlockSplit = true;
+      EnableBogusControlFlow = true;
+      EnableStringEncryption = true;
+      EnableConstantEncryption = true;
+      errs() << "[OLLVM-Next] Low obfuscation mode: "
+                "Sub+MBA+Split+BCF+StrEnc+ConstEnc\n";
     }
 
     // ── Structured preset / TOML config ───────────────────────────────────
@@ -707,8 +858,9 @@ struct Obfuscation : public ModulePass {
     if (GObfConfig.trace)
       ObfTrace = true;
 
-    // Apply preset/config enables (only if not already forced by max/med mode).
-    if (!EnableMaxObfuscation && !EnableMedObfuscation) {
+    // Apply preset/config enables (only if not already forced by preset mode).
+    if (!EnableMaxObfuscation && !EnableHighObfuscation &&
+        !EnableMedObfuscation && !EnableLowObfuscation) {
       auto &pc = GObfConfig.passes;
       if (pc.bcf.enabled.value_or(false))
         EnableBogusControlFlow = true;
@@ -756,7 +908,8 @@ struct Obfuscation : public ModulePass {
 
     // ── 1. AntiHooking ─────────────────────────────────────────────────────
     {
-      ModulePass *MP = createAntiHookPass(EnableAntiHooking);
+      ModulePass *MP =
+          createAntiHookPass(EnableAllObfuscation || EnableAntiHooking);
       MP->doInitialization(M);
       MP->runOnModule(M);
       delete MP;
@@ -782,7 +935,8 @@ struct Obfuscation : public ModulePass {
 
     // ── 4. AntiDebugging ───────────────────────────────────────────────────
     {
-      ModulePass *MP = createAntiDebuggingPass(EnableAntiDebugging);
+      ModulePass *MP =
+          createAntiDebuggingPass(EnableAllObfuscation || EnableAntiDebugging);
       MP->runOnModule(M);
       delete MP;
     }
@@ -799,6 +953,21 @@ struct Obfuscation : public ModulePass {
     if (ObfTrace)
       errs() << "[OLLVM-Next][5] StringEncryption: done\n";
 
+    // ── 5b. ConstantEncryption (Phase 1: Pre-phase for user literals) ─────
+    // Encrypts original programmer constants before CFG transformations so
+    // BCF / MBA / CSM / Flattening tangle the constant decryption logic.
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][5b] ConstantEncryption (Phase 1: Pre-phase)\n";
+    {
+      ModulePass *MP = createConstantEncryptionPass(
+          EnableAllObfuscation || EnableConstantEncryption,
+          /*isPrePhase=*/true);
+      MP->runOnModule(M);
+      delete MP;
+    }
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][5b] ConstantEncryption (Phase 1): done\n";
+
     // ── 6. Per-function passes ─────────────────────────────────────────────
     if (ObfTrace)
       errs() << "[OLLVM-Next][6] per-function loop: start\n";
@@ -809,51 +978,54 @@ struct Obfuscation : public ModulePass {
       if (ObfTrace)
         errs() << "[OLLVM-Next][6] F=" << F.getName() << "\n";
 
-      // 6a. SplitBasicBlocks — creates finer-grained dispatch targets for CFF
+      // 6a. Instruction Substitution — transforms integer/shift instructions
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6a] split\n";
-      {
-        FunctionPass *P = createSplitBasicBlockPass(EnableAllObfuscation ||
-                                                    EnableBasicBlockSplit);
-        P->runOnFunction(F);
-        delete P;
-      }
-      // 6b. BogusControlFlow — inserts opaque hardware-predicate edges
-      if (ObfTrace)
-        errs() << "[OLLVM-Next][6b] bcf\n";
-      {
-        FunctionPass *P = createBogusControlFlowPass(EnableAllObfuscation ||
-                                                     EnableBogusControlFlow);
-        P->runOnFunction(F);
-        delete P;
-      }
-      // 6c. Instruction Substitution — runs before Flatten so MBA expressions
-      //     are embedded in blocks that Flatten must then dispatch through
-      if (ObfTrace)
-        errs() << "[OLLVM-Next][6c] sub\n";
+        errs() << "[OLLVM-Next][6a] sub\n";
       {
         FunctionPass *P =
             createSubstitutionPass(EnableAllObfuscation || EnableSubstitution);
         P->runOnFunction(F);
         delete P;
       }
-      // 6d. MBAObfuscation — multi-term MBA after Substitution so both layers
-      //     compound; before Flatten so the dispatch table contains MBA exprs
+
+      // 6b. MBAObfuscation — multi-term Mixed Boolean-Arithmetic on Sub output;
+      //     embeds polymorphic hardware barriers into instruction chains
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6d] mba\n";
+        errs() << "[OLLVM-Next][6b] mba\n";
       {
         FunctionPass *P = createMBAObfuscationPass(EnableAllObfuscation ||
                                                    EnableMBAObfuscation);
         P->runOnFunction(F);
         delete P;
       }
-      // 6e. ChaosStateMachine — logistic-map CFF on the clean original
-      // function.
-      //     This is the strongest CFF variant; it stamps processed functions
-      //     with "ensia.csm.done" so Flattening (below) skips them.
-      //     Running CSM first avoids the cascade: if Flattening ran first,
-      //     CSM's own LowerSwitchPass would explode the Flattening switch into
-      //     a binary-compare tree (O(N²) BB growth) before re-flattening.
+
+      // 6c. SplitBasicBlocks — slices across expanded MBA instruction chains
+      //     and injects randomized stack-confusion instructions at block
+      //     entries (cuts single MBA operations across multiple basic blocks)
+      if (ObfTrace)
+        errs() << "[OLLVM-Next][6c] split\n";
+      {
+        FunctionPass *P = createSplitBasicBlockPass(EnableAllObfuscation ||
+                                                    EnableBasicBlockSplit);
+        P->runOnFunction(F);
+        delete P;
+      }
+
+      // 6d. BogusControlFlow — inserts opaque hardware-predicate edges & clones
+      //     the split blocks containing partial MBA expressions
+      if (ObfTrace)
+        errs() << "[OLLVM-Next][6d] bcf\n";
+      {
+        FunctionPass *P = createBogusControlFlowPass(EnableAllObfuscation ||
+                                                     EnableBogusControlFlow);
+        P->runOnFunction(F);
+        delete P;
+      }
+
+      // 6e. ChaosStateMachine — logistic-map quadratic CFF on the obfuscated
+      // CFG.
+      //     Stamps processed functions with "ensia.csm.done" so Flattening
+      //     skips them.
       if (ObfTrace)
         errs() << "[OLLVM-Next][6e] csm\n";
       {
@@ -862,6 +1034,7 @@ struct Obfuscation : public ModulePass {
         P->runOnFunction(F);
         delete P;
       }
+
       // 6f. Classic Flattening — fallback CFF for functions CSM couldn't handle
       //     (EH pads, coroutines, ≤1 block, or exceeding csm_maxblocks).
       //     Checks "ensia.csm.done" attribute and skips if CSM already ran.
@@ -873,7 +1046,11 @@ struct Obfuscation : public ModulePass {
         P->runOnFunction(F);
         delete P;
       }
-      // 6g. VectorObfuscation — SIMD scalar→vector lifting as final per-fn step
+
+      // 6g. VectorObfuscation — SIMD scalar→vector lifting as final per-fn
+      // step.
+      //     Lifts remaining scalar arithmetic, state transition logic, and
+      //     comparisons into wide SIMD vectors.
       if (ObfTrace)
         errs() << "[OLLVM-Next][6g] vec\n";
       {
@@ -895,16 +1072,20 @@ struct Obfuscation : public ModulePass {
     // Must run BEFORE FeatureElimination (step 9) so TOML policy
     // module/function name regexes can still match the original source file and
     // function names.
+    // ── 7. ConstantEncryption (Phase 2: Post-phase for skeleton constants) ─
+    // Encrypts skeleton constants introduced by BCF, CSM, and CFF,
+    // with small-constant whitelisting to eliminate combinatorial explosion.
     if (ObfTrace)
-      errs() << "[OLLVM-Next][7] ConstantEncryption\n";
+      errs() << "[OLLVM-Next][7] ConstantEncryption (Phase 2: Post-phase)\n";
     {
-      ModulePass *MP = createConstantEncryptionPass(EnableAllObfuscation ||
-                                                    EnableConstantEncryption);
+      ModulePass *MP = createConstantEncryptionPass(
+          EnableAllObfuscation || EnableConstantEncryption,
+          /*isPrePhase=*/false);
       MP->runOnModule(M);
       delete MP;
     }
     if (ObfTrace)
-      errs() << "[OLLVM-Next][7] ConstantEncryption: done\n";
+      errs() << "[OLLVM-Next][7] ConstantEncryption (Phase 2): done\n";
 
     // ── 8. IndirectBranch (Knuth-hash encrypted targets) ─────────────────
     // Also before FeatureElimination for the same naming reason.
@@ -1059,47 +1240,69 @@ PassPluginLibraryInfo getEnsiaPluginInfo() {
             PB.registerPipelineParsingCallback(
                 [](StringRef Name, ModulePassManager &MPM,
                    ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-                  if (Name != EnableIRObfusaction.ArgStr)
+                  if (Name != EnableIRObfusaction.ArgStr && Name != "ensia")
                     return false;
                   EnableIRObfusaction = true;
                   for (const auto &E : InnerPipeline) {
                     auto n = E.Name;
-                    if (n == EnableAntiClassDump.ArgStr)
+                    if (n == EnableAntiClassDump.ArgStr || n == "acd" ||
+                        n == "acdobf")
                       EnableAntiClassDump = true;
-                    else if (n == EnableAntiHooking.ArgStr)
+                    else if (n == EnableAntiHooking.ArgStr || n == "antihook")
                       EnableAntiHooking = true;
-                    else if (n == EnableAntiDebugging.ArgStr)
+                    else if (n == EnableAntiDebugging.ArgStr || n == "adb")
                       EnableAntiDebugging = true;
-                    else if (n == EnableBogusControlFlow.ArgStr)
+                    else if (n == EnableBogusControlFlow.ArgStr || n == "bcf" ||
+                             n == "bcfobf")
                       EnableBogusControlFlow = true;
-                    else if (n == EnableFlattening.ArgStr)
+                    else if (n == EnableFlattening.ArgStr || n == "fla" ||
+                             n == "cff" || n == "cffobf")
                       EnableFlattening = true;
-                    else if (n == EnableBasicBlockSplit.ArgStr)
+                    else if (n == EnableBasicBlockSplit.ArgStr ||
+                             n == "split" || n == "splitobf")
                       EnableBasicBlockSplit = true;
-                    else if (n == EnableSubstitution.ArgStr)
+                    else if (n == EnableSubstitution.ArgStr || n == "sub" ||
+                             n == "subobf")
                       EnableSubstitution = true;
-                    else if (n == EnableAllObfuscation.ArgStr)
+                    else if (n == EnableAllObfuscation.ArgStr ||
+                             n == "allobf" || n == "all")
                       EnableAllObfuscation = true;
-                    else if (n == EnableFunctionCallObfuscate.ArgStr)
+                    else if (n == EnableFunctionCallObfuscate.ArgStr ||
+                             n == "fco")
                       EnableFunctionCallObfuscate = true;
-                    else if (n == EnableStringEncryption.ArgStr)
+                    else if (n == EnableStringEncryption.ArgStr ||
+                             n == "strcry" || n == "sobf" || n == "strenc")
                       EnableStringEncryption = true;
-                    else if (n == EnableConstantEncryption.ArgStr)
+                    else if (n == EnableConstantEncryption.ArgStr ||
+                             n == "constenc")
                       EnableConstantEncryption = true;
-                    else if (n == EnableIndirectBranching.ArgStr)
+                    else if (n == EnableIndirectBranching.ArgStr ||
+                             n == "indibran" || n == "indibr")
                       EnableIndirectBranching = true;
-                    else if (n == EnableFunctionWrapper.ArgStr)
+                    else if (n == EnableFunctionWrapper.ArgStr ||
+                             n == "funcwra" || n == "fw")
                       EnableFunctionWrapper = true;
-                    else if (n == EnableChaosStateMachine.ArgStr)
+                    else if (n == EnableChaosStateMachine.ArgStr ||
+                             n == "csm" || n == "csmobf")
                       EnableChaosStateMachine = true;
-                    else if (n == EnableMBAObfuscation.ArgStr)
+                    else if (n == EnableMBAObfuscation.ArgStr || n == "mba" ||
+                             n == "mbaobf")
                       EnableMBAObfuscation = true;
-                    else if (n == EnableVectorObfuscation.ArgStr)
+                    else if (n == EnableVectorObfuscation.ArgStr ||
+                             n == "vobf" || n == "vec")
                       EnableVectorObfuscation = true;
-                    else if (n == EnableMaxObfuscation.ArgStr)
+                    else if (n == EnableMaxObfuscation.ArgStr ||
+                             n == "maxobf" || n == "max")
                       EnableMaxObfuscation = true;
-                    else if (n == EnableMedObfuscation.ArgStr)
+                    else if (n == EnableHighObfuscation.ArgStr ||
+                             n == "highobf" || n == "high")
+                      EnableHighObfuscation = true;
+                    else if (n == EnableMedObfuscation.ArgStr ||
+                             n == "medobf" || n == "med" || n == "mid")
                       EnableMedObfuscation = true;
+                    else if (n == EnableLowObfuscation.ArgStr ||
+                             n == "lowobf" || n == "low")
+                      EnableLowObfuscation = true;
                   }
                   MPM.addPass(ObfuscationPass());
                   return true;

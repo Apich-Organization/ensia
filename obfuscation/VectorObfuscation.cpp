@@ -244,13 +244,7 @@ static Value *extractLaneOpaque(IRBuilder<NoFolder> &IRB, Value *vec,
 
   Module *M = F->getParent();
   Triple triple(M->getTargetTriple());
-  const char *asmCode = "nop";
-  if (triple.getArch() == Triple::x86_64 || triple.getArch() == Triple::x86) {
-    asmCode = "xorb $$0, $0";
-  } else if (triple.getArch() == Triple::aarch64 ||
-             triple.getArch() == Triple::arm) {
-    asmCode = "prfm pldl1keep, $0";
-  }
+  std::string asmCode = getPolymorphicBarrierAsm(triple);
 
   FunctionType *AsmFTy = FunctionType::get(
       Type::getVoidTy(Ctx),
@@ -605,6 +599,8 @@ struct VectorObfuscation : public FunctionPass {
     }
 
     for (Instruction &I : instructions(F)) {
+      if (isSynthetic(&I))
+        continue;
       if (cryptoutils->get_range(100) >= currentProb)
         continue; // skip based on probability
 
@@ -710,7 +706,7 @@ struct VectorObfuscation : public FunctionPass {
 } // anonymous namespace
 
 char VectorObfuscation::ID = 0;
-INITIALIZE_PASS(VectorObfuscation, "vobf",
+INITIALIZE_PASS(VectorObfuscation, "vobfobf",
                 "Enable SIMD Vector-Space Obfuscation.", false, false)
 
 FunctionPass *llvm::createVectorObfuscationPass(bool flag) {

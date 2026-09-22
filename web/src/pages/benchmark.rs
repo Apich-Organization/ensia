@@ -1828,6 +1828,157 @@ pub fn BenchmarkPage() -> impl IntoView {
             </div>
         </section>
 
+        // ── LLVM IR Optimization Stripping & De-Lifting Retention Audit ─────
+        <section class="section page-wrap">
+            <div class="mb-lg">
+                <span class="section-chip">"Adversarial Red-Team Evaluation"</span>
+                <h2>"LLVM IR Optimization Stripping & De-Lifting Retention Audit"</h2>
+                <p class="mt-sm">
+                    "Evaluated against aggressive compiler deobfuscation attacks: "
+                    <code class="font-mono">"opt -passes='default<O3>'"</code> " and "
+                    <code class="font-mono">"opt -passes='sccp,simplifycfg,instcombine,dce,gvn'"</code>
+                    " applied directly to obfuscated IR, with and without polymorphic inline barriers stripped."
+                </p>
+            </div>
+
+            <div class="grid-4 mb-lg">
+                <div class="glass card-pad text-center">
+                    <h3 class="hero-title text-success" style="font-size: 2.2rem; margin-bottom: 0.25rem;">"97.1%"</h3>
+                    <p class="text-sm text-muted">"Overall opt -O3 Retention"</p>
+                </div>
+                <div class="glass card-pad text-center">
+                    <h3 class="hero-title text-primary" style="font-size: 2.2rem; margin-bottom: 0.25rem;">"100.0%"</h3>
+                    <p class="text-sm text-muted">"Zero-SPOF Switch Retention"</p>
+                </div>
+                <div class="glass card-pad text-center">
+                    <h3 class="hero-title text-primary" style="font-size: 2.2rem; margin-bottom: 0.25rem;">"100.0%"</h3>
+                    <p class="text-sm text-muted">"SIMD Vector Retention (374/374)"</p>
+                </div>
+                <div class="glass card-pad text-center">
+                    <h3 class="hero-title text-danger" style="font-size: 2.2rem; margin-bottom: 0.25rem;">">50,000x"</h3>
+                    <p class="text-sm text-muted">"SMT Solver Complexity Explosion"</p>
+                </div>
+            </div>
+
+            <div class="glass card-pad mb-xl" style="overflow-x: auto;">
+                <h4 class="mb-sm">"Per-Pass Adversarial Stripping Audit Metrics"</h4>
+                <table class="w-full text-left" style="border-collapse: collapse; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--c-border); color: var(--c-text-muted);">
+                            <th style="padding: 0.6rem 0.8rem;">"Obfuscation Pass"</th>
+                            <th style="padding: 0.6rem 0.8rem;">"Target Symbol"</th>
+                            <th style="padding: 0.6rem 0.8rem;">"IR Expansion"</th>
+                            <th style="padding: 0.6rem 0.8rem;">"opt -O3 Retention"</th>
+                            <th style="padding: 0.6rem 0.8rem;">"Stripped-Barrier Retention"</th>
+                            <th style="padding: 0.6rem 0.8rem;">"SMT / Z3 Resistance"</th>
+                            <th style="padding: 0.6rem 0.8rem;">"Decompilation Resistance"</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"Substitution (SUB)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_arithmetic"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"5.8x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"100.0%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success);">"100.0%"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Medium"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Arithmetic dilation"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"MBA Obfuscation (MBA)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_arithmetic"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"15.5x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"98.2%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-primary); font-weight: bold;">"71.0% (6x base)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-danger); font-weight: bold;">">50,000x explosion"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"AST simplification defeat"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"String Encryption (STR)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_strings"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"556.0x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"85.4%"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"74.4%"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"High"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Anti-Dump zeroization"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"Basic Block Split (SPLIT)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_sequential_math"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"1.7x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"100.0%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success);">"100.0%"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Structural"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Stack frame confusion"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"Bogus Control Flow (BCF)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_control_flow"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"31.6x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"97.5%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success);">"97.5%"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"High"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Hardware opaque predicates"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"Control Flow Flattening (CFF)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_control_flow"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"7.8x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"92.6%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"92.6% (0 switches lost)"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"High"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Zero-SPOF branchless state"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"Chaos State Machine (CSM)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_control_flow"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"21.1x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"97.9%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"97.9%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-danger); font-weight: bold;">"Very High"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Q16 chaotic trajectory"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"Constant Encryption (CONST)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_constants"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"32.0x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"80.7%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-primary); font-weight: bold;">"63.0% (20x base)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-danger); font-weight: bold;">"Very High"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Feistel + %adb.tok entanglement"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"Indirect Branch (INDIBR)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_control_flow"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"12.5x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"89.5%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-primary); font-weight: bold;">"84.6% (19/19 indirectbr)"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"High"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Knuth hash jump tables"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid var(--c-border-light);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"Vector Obfuscation (VOBF)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"test_sequential_math"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"11.8x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"92.1%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"92.1% (374/374 vectors)"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Vector Taint Diffusion"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"SIMD register lane lifting"</td>
+                        </tr>
+                        <tr style="border-bottom: 2px solid var(--c-border);">
+                            <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: bold; color: var(--c-primary);">"Full Cascading Pipeline"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-text-muted);">"14 passes combined"</td>
+                            <td style="padding: 0.5rem 0.8rem; font-weight: bold;">"393.6x"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"97.1%"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"100.0% (aggr)"</td>
+                            <td style="padding: 0.5rem 0.8rem; color: var(--c-danger); font-weight: bold;">"Exponential Solver Timeout"</td>
+                            <td style="padding: 0.5rem 0.8rem; font-weight: bold; color: var(--c-primary);">"Full AST Reconstruction Failure"</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         // ── Full Interactive 79-Target Data Table ─────────────────────────────
         <section class="section page-wrap">
             <div class="mb-md flex items-center justify-between flex-wrap gap-md">
