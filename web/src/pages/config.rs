@@ -333,6 +333,11 @@ fn BcfCard() -> impl IntoView {
                         get=Signal::derive(move || cfg.with(|c| c.bcf.create_func))
                         set=move |v| cfg.update(|c| c.bcf.create_func = v)
                     />
+                    <ToggleField
+                        label="Only junk ASM"
+                        get=Signal::derive(move || cfg.with(|c| c.bcf.only_junk_asm))
+                        set=move |v| cfg.update(|c| c.bcf.only_junk_asm = v)
+                    />
                 </div>
                 {move || cfg.with(|c| c.bcf.junk_asm).then(|| view! {
                     <div class="config-grid-2 mt-sm">

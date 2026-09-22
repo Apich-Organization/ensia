@@ -14,6 +14,7 @@ pub struct BcfCfg {
     pub junk_asm_max: u32,
     pub nested: bool,
     pub create_func: bool,
+    pub only_junk_asm: bool,
 }
 impl Default for BcfCfg {
     fn default() -> Self {
@@ -28,6 +29,7 @@ impl Default for BcfCfg {
             junk_asm_max: 4,
             nested: false,
             create_func: false,
+            only_junk_asm: false,
         }
     }
 }
@@ -484,6 +486,7 @@ impl TomlConfig {
                     junk_asm_max: 4,
                     nested: false,
                     create_func: false,
+                    only_junk_asm: false,
                 };
                 self.str_enc = StrEncCfg {
                     enabled: true,
@@ -583,6 +586,7 @@ impl TomlConfig {
                     junk_asm_max: 4,
                     nested: false,
                     create_func: false,
+                    only_junk_asm: false,
                 };
                 self.str_enc = StrEncCfg {
                     enabled: true,
@@ -682,6 +686,7 @@ impl TomlConfig {
                     junk_asm_max: 6,
                     nested: true,
                     create_func: true,
+                    only_junk_asm: false,
                 };
                 self.str_enc = StrEncCfg {
                     enabled: true,
@@ -781,6 +786,7 @@ impl TomlConfig {
                     junk_asm_max: 8,
                     nested: true,
                     create_func: true,
+                    only_junk_asm: false,
                 };
                 self.str_enc = StrEncCfg {
                     enabled: true,
@@ -1015,6 +1021,9 @@ impl TomlConfig {
             if self.bcf.create_func {
                 s.push_str("create_func = true\n");
             }
+            if self.bcf.only_junk_asm {
+                s.push_str("only_junk_asm = true\n");
+            }
         }
         s.push('\n');
 
@@ -1228,8 +1237,8 @@ impl TomlConfig {
         }
         s.push('\n');
 
-        // [passes.split_basic_blocks]
-        s.push_str("[passes.split_basic_blocks]\n");
+        // [passes.split_blocks]
+        s.push_str("[passes.split_blocks]\n");
         s.push_str(&format!("enabled = {}\n", self.split_blocks.enabled));
         if self.split_blocks.enabled {
             s.push_str(&format!(
@@ -1299,11 +1308,11 @@ impl TomlConfig {
                 pol.anti_class_dump_enabled,
             ));
             s.push_str(&opt_bool_line(
-                "passes.func_call_obf.enabled",
+                "passes.function_call_obfuscate.enabled",
                 pol.func_call_obf_enabled,
             ));
             s.push_str(&opt_bool_line(
-                "passes.split_basic_blocks.enabled",
+                "passes.split_blocks.enabled",
                 pol.split_blocks_enabled,
             ));
             // BCF sub-options

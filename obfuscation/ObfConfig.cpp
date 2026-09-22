@@ -817,62 +817,103 @@ static void parseAntiAcd(const toml::table &t, ObfAntiAcdConfig &c) {
     c.dummy_count = *v;
 }
 
-// Parse the [passes] table.
+// Helper to look up a subtable by checking multiple alias keys in order.
+static const toml::table *
+findPassTable(const toml::table &tbl,
+              std::initializer_list<const char *> keys) {
+  for (const char *k : keys) {
+    if (auto *t = tbl[k].as_table())
+      return t;
+  }
+  return nullptr;
+}
+
+// Parse the [passes] table (accepts both canonical names and common aliases).
 static void parsePasses(const toml::table &passes, ObfPassConfig &pc) {
-  if (auto *t = passes["bcf"].as_table())
+  if (auto *t = findPassTable(passes, {"bcf", "bogus_control_flow"}))
     parseBcf(*t, pc.bcf);
-  if (auto *t = passes["substitution"].as_table())
+  if (auto *t = findPassTable(passes, {"substitution", "sub"}))
     parseSub(*t, pc.sub);
-  if (auto *t = passes["mba"].as_table())
+  if (auto *t = findPassTable(passes, {"mba", "mba_obfuscation"}))
     parseMba(*t, pc.mba);
-  if (auto *t = passes["split_blocks"].as_table())
+  if (auto *t = findPassTable(passes,
+                              {"split_blocks", "split_basic_blocks", "split"}))
     parseSplit(*t, pc.split);
-  if (auto *t = passes["string_encryption"].as_table())
+  if (auto *t =
+          findPassTable(passes, {"string_encryption", "str_enc", "strcry"}))
     parseStrEnc(*t, pc.str_enc);
-  if (auto *t = passes["constant_encryption"].as_table())
+  if (auto *t = findPassTable(passes,
+                              {"constant_encryption", "const_enc", "constenc"}))
     parseConstEnc(*t, pc.const_enc);
-  if (auto *t = passes["vector_obfuscation"].as_table())
+  if (auto *t = findPassTable(passes,
+                              {"vector_obfuscation", "vec_obf", "vec", "vobf"}))
     parseVec(*t, pc.vec);
-  if (auto *t = passes["chaos_state_machine"].as_table())
+  if (auto *t = findPassTable(passes, {"chaos_state_machine", "csm", "csmobf"}))
     parseCsm(*t, pc.csm);
-  if (auto *t = passes["flattening"].as_table())
+  if (auto *t = findPassTable(passes, {"flattening", "cff", "fla"}))
     if (auto v = (*t)["enabled"].value<bool>())
       pc.flatten.enabled = *v;
-  if (auto *t = passes["indirect_branch"].as_table())
+  if (auto *t = findPassTable(
+          passes, {"indirect_branch", "indir_branch", "indibran", "indir"}))
     parseIndir(*t, pc.indir_branch);
-  if (auto *t = passes["function_wrapper"].as_table())
+  if (auto *t = findPassTable(
+          passes, {"function_wrapper", "func_wrap", "funcwra", "fw"}))
     parseFw(*t, pc.func_wrap);
-  if (auto *t = passes["function_call_obfuscate"].as_table())
+  if (auto *t = findPassTable(
+          passes, {"function_call_obfuscate", "func_call_obf", "fco"}))
     parseFco(*t, pc.fco);
-  if (auto *t = passes["anti_hooking"].as_table())
+  if (auto *t =
+          findPassTable(passes, {"anti_hooking", "anti_hook", "antihook"}))
     parseAntiHook(*t, pc.anti_hook);
-  if (auto *t = passes["anti_debugging"].as_table())
+  if (auto *t = findPassTable(
+          passes, {"anti_debugging", "anti_debug", "anti_dbg", "antidebug"}))
     parseAntiDbg(*t, pc.anti_dbg);
-  if (auto *t = passes["anti_class_dump"].as_table())
+  if (auto *t = findPassTable(passes,
+                              {"anti_class_dump", "anti_acd", "anticlassdump"}))
     parseAntiAcd(*t, pc.anti_class_dump);
 }
 
 // Parse one [[policy]] entry.
 static ObfPolicy parsePolicy(const toml::table &pt) {
   ObfPolicy pol;
-  if (auto v = pt["module"].value<std::string>()) {
-    pol.module_regex = *v;
+
+  std::optional<std::string> mod_str;
+  if (auto v = pt["module"].value<std::string>())
+    mod_str = *v;
+  else if (auto v = pt["module_regex"].value<std::string>())
+    mod_str = *v;
+
+  if (mod_str) {
+    pol.module_regex = *mod_str;
     try {
-      pol.compiled_module_regex.emplace(*v, std::regex::ECMAScript |
-                                                std::regex::optimize);
+      pol.compiled_module_regex.emplace(*mod_str, std::regex::ECMAScript |
+                                                      std::regex::optimize);
     } catch (const std::regex_error &) {
-      errs() << "[Ensia] invalid module regex in policy: " << *v << "\n";
+      errs() << "[Ensia] invalid module regex in policy: " << *mod_str << "\n";
     }
   }
-  if (auto v = pt["function"].value<std::string>()) {
-    pol.func_regex = *v;
+
+  std::optional<std::string> func_str;
+  if (auto v = pt["function"].value<std::string>())
+    func_str = *v;
+  else if (auto v = pt["function_regex"].value<std::string>())
+    func_str = *v;
+  else if (auto v = pt["func"].value<std::string>())
+    func_str = *v;
+  else if (auto v = pt["func_regex"].value<std::string>())
+    func_str = *v;
+
+  if (func_str) {
+    pol.func_regex = *func_str;
     try {
-      pol.compiled_func_regex.emplace(*v, std::regex::ECMAScript |
-                                              std::regex::optimize);
+      pol.compiled_func_regex.emplace(*func_str, std::regex::ECMAScript |
+                                                     std::regex::optimize);
     } catch (const std::regex_error &) {
-      errs() << "[Ensia] invalid function regex in policy: " << *v << "\n";
+      errs() << "[Ensia] invalid function regex in policy: " << *func_str
+             << "\n";
     }
   }
+
   if (auto v = pt["preset"].value<std::string>())
     pol.preset = *v;
 

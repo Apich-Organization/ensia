@@ -34,17 +34,17 @@ Traditional **VM-based obfuscators (Virtualizers)** encapsulate target logic wit
 
 | Pass ID | CLI Flag | Env Var | Description |
 | :--- | :--- | :--- | :--- |
-| **ANTIHOOK** | `-enable-antihook` | `ANTIHOOK=1` | Function prologue integrity scanning (E9 / 48 B8), AArch64/x86/Win inline detection, direct syscalls, and 3-tier anti-taint bidirectional I/O entanglement ($T_{env} / T_{exp}$). |
+| **ANTIHOOK** | `-enable-antihook` | `ANTIHOOK=1` | Function prologue integrity scanning (E9 / 48 B8), AArch64/x86/Win inline detection, direct syscalls, and 3-tier anti-taint bidirectional I/O entanglement (`T_env` / `T_exp`). |
 | **ACDOBF** | `-enable-acdobf` | `ACDOBF=1` | Objective-C & Swift metadata scrambling, Fisher-Yates method list shuffling, randomized selector hashing, and dummy selector injection. |
 | **FCO** | `-enable-fco` | `FCO=1` | Function Call Obfuscation: replaces direct calls with runtime `dlopen`/`dlsym` (POSIX) or `GetProcAddress` (Windows), completely eliminating external symbol imports from binary headers. |
 | **ADB** | `-enable-adb` | `ADB=1` | Zero-dependency debugger detection: `/proc/self/status` TracerPid, `PTRACE_TRACEME`, hardware debug registers (`DR0-DR7`), single-step trap flag (`EFLAGS.TF` with red-zone stack preservation), and immediate violent termination (`SYS_exit_group(137)` / inline hardware traps). |
-| **STRCRY** | `-enable-strcry` | `STRCRY=1` | Dual-layer Vernam OTP + Rijndael $GF(2^8)$ Galois Field cipher with unordered dynamic inlined decryption stubs and **Anti-Dump memory zeroization** at function return/resume. |
-| **CONSTENC**| `-enable-constenc`| `CONSTENC=1`| Two-phase constant encryption: Scheme A (Bivariate MBA $k$-share), Scheme B (4-round Feistel non-linear mixing), and Scheme C (Dynamic AntiDebug token `%adb.tok` entanglement with DominatorTree validation). |
+| **STRCRY** | `-enable-strcry` | `STRCRY=1` | Dual-layer Vernam OTP + Rijndael GF(2^8) Galois Field cipher with unordered dynamic inlined decryption stubs and **Anti-Dump memory zeroization** at function return/resume. |
+| **CONSTENC**| `-enable-constenc`| `CONSTENC=1`| Two-phase constant encryption: Scheme A (Bivariate MBA k-share), Scheme B (4-round Feistel non-linear mixing), and Scheme C (Dynamic AntiDebug token `%adb.tok` entanglement with DominatorTree validation). |
 | **SUBOBF** | `-enable-subobf` | `SUBOBF=1` | Instruction Substitution: replaces basic arithmetic and bitwise operations with complex algebraic and rotate-identity trees. |
-| **MBAOBF** | `-enable-mbaobf` | `MBAOBF=1` | Mixed Boolean-Arithmetic: transforms expressions into multivariate non-linear boolean-arithmetic over $\mathbb{Z}/2^n\mathbb{Z}$ with 42 built-in identities, Point-to-Point (BPP) dataflow tracking, and **polymorphic hardware barriers**. |
+| **MBAOBF** | `-enable-mbaobf` | `MBAOBF=1` | Mixed Boolean-Arithmetic: transforms expressions into multivariate non-linear boolean-arithmetic over ring Z/(2^n)Z with 42 built-in identities, Point-to-Point (BPP) dataflow tracking, and **polymorphic hardware barriers**. |
 | **SPLITOBF**| `-enable-splitobf`| `SPLITOBF=1`| Basic Block Splitting: slices blocks at random points, cutting MBA expressions across blocks, and injects inline-ASM stack pointer confusion. |
 | **BCFOBF** | `-enable-bcfobf` | `BCFOBF=1` | Bogus Control Flow: injects non-patchable hardware opaque predicates (CPUID SSE bit, RDTSC parity, CNTPCT_EL0, polymorphic barriers), dead-code loops, and entropy chains. |
-| **CSMOBF** | `-enable-csmobf` | `CSMOBF=1` | Chaos State Machine: transforms CFGs into a chaotic dynamical system governed by the quadratic logistic map ($x_{k+1} = \lfloor r \cdot x_k (1 - x_k) \rfloor$ in Q16 fixed-point arithmetic) with dynamic data-flow feedback (DFB) and optional 2-level nested dispatch. |
+| **CSMOBF** | `-enable-csmobf` | `CSMOBF=1` | Chaos State Machine: transforms CFGs into a chaotic dynamical system governed by the quadratic logistic map (`x_{k+1} = floor(r * x_k * (1 - x_k))` in Q16 fixed-point arithmetic) with dynamic data-flow feedback (DFB) and optional 2-level nested dispatch. |
 | **CFFOBF** | `-enable-cffobf` | `CFFOBF=1` | Control Flow Flattening: fallback flattening with **Branchless Algebraic State Transitions** (`mask = 0 - zext(cond)`, `diff = true ^ false`, `next = false ^ (mask & diff)`), eliminating volatile single points of failure. |
 | **VOBF** | `-enable-vobf` | `VOBF=1` | Vector Obfuscation: lifts scalar arithmetic and comparisons into 128/256/512-bit SIMD vector space with pseudo-random lane noise, `shufflevector` bijective permutations, and Vector Taint Diffusion. |
 | **INDIBRAN**| `-enable-indibran`| `INDIBRAN=1`| Indirect Branching: encrypts basic block jump targets via Knuth multiplicative golden-ratio hashing, runtime Newton-Raphson modular inverse decode, and encrypted jump table arrays. |
@@ -85,15 +85,30 @@ Ensia schedules passes to maximize cascading complexity. Each pass treats the ob
 ### 1. Branchless Algebraic State Transitions (Zero-SPOF CFF/CSM)
 Traditional CFF relies on `store volatile` on a switch state variable. Once an attacker strips `volatile`, compiler passes (`opt -O3`, `sccp`, `simplifycfg`) unflatten the switch instantly.
 Ensia implements pure branchless algebraic masking:
-$$\text{condExt} = \text{zext}_{i1 \to i32}(\text{cond}) \in \{0, 1\}$$
-$$\text{mask} = 0 - \text{condExt} \in \{0, \text{0xFFFFFFFF}\}$$
-$$\text{diff} = \text{caseTrue} \oplus \text{caseFalse}$$
-$$\text{nextState} = \text{caseFalse} \oplus (\text{mask} \ \& \ \text{diff})$$
-$$\text{opaqueState} = \text{insertOpaqueBarrier}(\text{nextState})$$
+
+```math
+\begin{aligned}
+\text{condExt}   &= \text{zext}_{i1 \to i32}(\text{cond}) \in \{0, 1\} \\
+\text{mask}      &= 0 - \text{condExt} \in \{0, \text{0xFFFFFFFF}\} \\
+\text{diff}      &= \text{caseTrue} \oplus \text{caseFalse} \\
+\text{nextState} &= \text{caseFalse} \oplus (\text{mask} \land \text{diff}) \\
+\text{opaqueState} &= \text{insertOpaqueBarrier}(\text{nextState})
+\end{aligned}
+```
+
+```c
+// Bitwise equivalent (Zero-SPOF branchless state transition in LLVM IR):
+uint32_t condExt     = (uint32_t)cond;                         // 0 or 1
+uint32_t mask        = 0 - condExt;                            // 0x00000000 or 0xFFFFFFFF
+uint32_t diff        = caseTrue ^ caseFalse;
+uint32_t nextState   = caseFalse ^ (mask & diff);              // branchless state select
+uint32_t opaqueState = insertOpaqueBarrier(nextState);         // polymorphic hardware barrier
+```
+
 Even with all `volatile` keywords maliciously stripped from the IR, `opt -O3` **fails to eliminate the dispatch switch** (100% switch retention).
 
 ### 2. Polymorphic Hardware Barriers
-The static `asm sideeffect "xorb $$0, $0"` signature has been replaced by a randomized 9-variant x86 instruction family (`orb`, `andb`, `addb`, `subb`, `rolb`, `rorb`, `incb/decb`, `notb/notb`) and 4 ARM64 pipeline barriers (`prfm pldl1keep`, `prfm pstl1keep`, `prfm pldl2keep`, `isb sy`, `dmb ishld`). Uniform signature and YARA rule detection is completely defeated.
+The static `asm sideeffect "xorb $0, $0"` signature has been replaced by a randomized 9-variant x86 instruction family (`orb`, `andb`, `addb`, `subb`, `rolb`, `rorb`, `incb/decb`, `notb/notb`) and 4 ARM64 pipeline barriers (`prfm pldl1keep`, `prfm pstl1keep`, `prfm pldl2keep`, `isb sy`, `dmb ishld`). Uniform signature and YARA rule detection is completely defeated.
 
 ### 3. 3-Tier Anti-Taint Engine
 - **Tier 1 (Global Identity LUT):** Dereferences bytes through indirect memory pointers (`BytePtr = GEP(LUT, BarrieredByte); load volatile`), severing register-level ALU dataflow edges.
@@ -130,23 +145,28 @@ Tested against aggressive deobfuscation pipelines (`opt -passes='default<O3>'` a
 ### 1. Clang C / C++ Integration
 
 ```bash
-# Build with modern pass plugin:
-clang -fpass-plugin=/path/to/libEnsia.so -O2 \
-  -mllvm -ensia \
-  -mllvm -ensia-preset=mid \
-  main.c -o main
+# 1. Automatic configuration discovery (loads ./ensia.toml if present in current directory):
+clang -fpass-plugin=/path/to/libEnsia.so -O2 main.c -o main
 
-# Use with fine-grained TOML configuration:
-clang -fpass-plugin=/path/to/libEnsia.so -O2 \
+# 2. Explicit configuration via environment variable:
+ENSIA_CONFIG=/path/to/ensia.toml \
+clang -fpass-plugin=/path/to/libEnsia.so -O2 main.c -o main
+
+# 3. Quick preset selection via environment variable:
+ENSIA_PRESET=mid \
+clang -fpass-plugin=/path/to/libEnsia.so -O2 main.c -o main
+
+# 4. Frontend plugin invocation with -mllvm option parsing:
+clang -Xclang -load -Xclang /path/to/libEnsia.so \
   -mllvm -ensia-config=ensia.toml \
-  main.c -o main
+  -O2 main.c -o main
 ```
 
 ### 2. Rust (`cargo` / `rustc`) Integration
 
 ```bash
-# Build binary crate with Ensia Rust plugin:
-ENSIA_PRESET=mid RUSTC_BOOTSTRAP=1 \
+# Build binary crate with Ensia Rust plugin (auto-discovers ./ensia.toml):
+ENSIA_CONFIG=ensia.toml RUSTC_BOOTSTRAP=1 \
 RUSTFLAGS="-Z llvm-plugins=/path/to/libEnsia_rust.so -C passes=ensia" \
 cargo build --release
 ```
@@ -166,50 +186,115 @@ Search order: `-mllvm -ensia-config=<path>` > `ENSIA_CONFIG=<path>` > `./ensia.t
 
 ```toml
 [global]
-preset = "mid"
-verbose = false
-trace = false
-demangle_names = true
+preset = "mid"            # "low" | "mid" (recommended) | "high" | "max" | "csm_vec"
+verbose = false           # Print transformation logs to stderr
+trace = false             # Emit step-by-step scheduler checkpoints
+demangle_names = true     # Demangle C++ / Rust function symbols in logs
 
+# ── 15 Configurable Passes (supports canonical names & short aliases) ──────────
 [passes.bcf]
+enabled = true
+probability = 60          # Block selection probability (0–100)
+iterations = 1           # BCF loop iterations (1–5)
+complexity = 4           # Opaque predicate depth (1–10)
+entropy_chain = true     # Chain hardware predicates (CPUID, RDTSC/CNTPCT)
+junk_asm = true          # Inject polymorphic hardware inline-ASM barriers
+junk_asm_min = 2
+junk_asm_max = 6
+
+[passes.constant_encryption]  # alias: [passes.const_enc]
+enabled = true
+iterations = 1
+share_count = 3          # Bivariate MBA additive split shares (2–8)
+feistel = true           # 4-round non-linear Feistel cipher network
+substitute_xor = true    # MBA expansion of recombination XORs
+force_value = ["^0x9E3779B9$", "^0xDEADBEEF$"]
+skip_value = ["^0x0$", "^0x1$"]
+
+[passes.string_encryption]    # alias: [passes.str_enc]
+enabled = true
+probability = 100
+force_content = [".*key.*", ".*secret.*", ".*token.*"]
+skip_content = ["^%[0-9]*[a-zA-Z]$", "^PASS$", "^FAIL$"]
+
+[passes.substitution]         # alias: [passes.sub]
 enabled = true
 probability = 60
 iterations = 1
-complexity = 4
-entropy_chain = true
-junk_asm = true
 
-[passes.const_enc]
+[passes.mba]
 enabled = true
-iterations = 1
-share_count = 3
-feistel = true
-substitute_xor = true
+probability = 50
+layers = 2
+heuristic = true         # Zero-noise identity verification
 
-[passes.csm]
+[passes.split_blocks]         # alias: [passes.split]
 enabled = true
-warmup = 128
-nested_dispatch = false
+splits = 3               # Slice points per basic block
+stack_confusion = true   # Push/pop or str/ldr stack desynchronization
 
-[passes.str_enc]
+[passes.chaos_state_machine]  # alias: [passes.csm]
 enabled = true
-probability = 100
+warmup = 128             # Q16 logistic map transient warmup iterations
+nested_dispatch = false  # Hierarchical 2-level cluster dispatch
+max_blocks = 5000
 
-[passes.anti_dbg]
+[passes.flattening]           # alias: [passes.cff]
+enabled = false          # Fallback CFF with branchless algebraic masking
+
+[passes.vector_obfuscation]   # alias: [passes.vec]
 enabled = true
-probability = 100
+probability = 40
+width = 128              # 128 (SSE/NEON), 256 (AVX2), 512 (AVX-512)
+shuffle = true           # Random bijective shufflevector permutations
+lift_comparisons = true
 
-[passes.anti_hook]
+[passes.indirect_branch]      # alias: [passes.indir]
 enabled = true
-direct_syscall = true
+use_stack = true
+enc_jump_target = true   # Knuth multiplicative modular inverse hashing
 
-# Granular per-module / per-function regex policy overrides:
+[passes.function_wrapper]     # alias: [passes.fw]
+enabled = false
+probability = 50
+times = 1
+
+[passes.function_call_obfuscate] # alias: [passes.fco]
+enabled = false
+flag = 0
+
+[passes.anti_hooking]         # alias: [passes.anti_hook]
+enabled = true
+inline_x86 = true        # E9 / 48 B8 prologue integrity scans
+inline_aarch64 = true    # 0x14000001 (B .+4) inline hook scans
+direct_syscall = true    # Direct kernel syscall bypass (svc #0 / syscall)
+antirebind = true        # Counter dynamic linker symbol rebinding
+
+[passes.anti_debugging]       # alias: [passes.anti_dbg]
+enabled = true
+probability = 80         # Hardware debug registers DR0-7, EFLAGS.TF single-step probes
+
+[passes.anti_class_dump]      # alias: [passes.anti_acd]
+enabled = false          # Objective-C / Swift metadata scrambling (macOS / iOS)
+
+# ── Granular per-module / per-function regex policy overrides ──────────────────
 [[policy]]
 module_regex = ".*crypto.*"
-function_regex = ".*(sign|verify|decrypt).*"
+function_regex = ".*(encrypt|decrypt|sign|verify).*"
 preset = "high"
-mba_layers = 3
-csm_nested = true
+passes.chaos_state_machine.nested_dispatch = true
+passes.constant_encryption.feistel = true
+passes.constant_encryption.share_count = 4
+passes.mba.layers = 3
+passes.anti_debugging.probability = 100
+passes.anti_hooking.direct_syscall = true
+
+[[policy]]
+module_regex = ".*"
+function_regex = "^(main|fast_path_.*)$"
+passes.bcf.enabled = false
+passes.chaos_state_machine.enabled = false
+passes.flattening.enabled = false
 ```
 
 ---
