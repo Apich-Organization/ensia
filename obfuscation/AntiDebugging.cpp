@@ -181,7 +181,9 @@ struct AntiDebugging : public ModulePass {
   }
 
   bool runOnModule(Module &M) override {
-    if (ProbRate > 100) {
+    auto ec = GObfConfig.resolve(M.getSourceFileName(), "");
+    uint32_t effProb = ec.anti_dbg.probability.value_or((uint32_t)ProbRate);
+    if (effProb > 100) {
       errs() << "AntiDebugging application function percentage "
                 "-adb_prob=x must be 0 < x <= 100";
       return false;
@@ -194,7 +196,7 @@ struct AntiDebugging : public ModulePass {
           errs() << "Running AntiDebugging On " << F.getName() << "\n";
         if (!this->initialized)
           initialize(M);
-        if (cryptoutils->get_range(100) <= ProbRate) {
+        if (cryptoutils->get_range(100) <= effProb) {
           runOnFunction(F);
           anyObf = true;
         }

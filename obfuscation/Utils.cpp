@@ -78,6 +78,10 @@ void manuallyLowerSwitches(Function *F) {
       switches.push_back(SI);
   }
 
+  if (!switches.empty()) {
+    fixStack(F);
+  }
+
   for (SwitchInst *SI : switches) {
     BasicBlock *switchBB = SI->getParent();
     Value *cond = SI->getCondition();

@@ -549,9 +549,11 @@ struct AntiClassDump : public ModulePass {
   }
 
   GlobalVariable *readPtrauth(GlobalVariable *GV) {
-    if (GV->getSection() == "llvm.ptrauth") {
+    if (!GV)
+      return nullptr;
+    if (GV->hasSection() && GV->getSection() == "llvm.ptrauth") {
       Value *V = GV->getInitializer()->getOperand(0);
-      return cast<GlobalVariable>(
+      return dyn_cast<GlobalVariable>(
           opaquepointers ? V : cast<ConstantExpr>(V)->getOperand(0));
     }
     return GV;
