@@ -44,13 +44,6 @@ The evaluation was conducted under strict academic double-blind-style independen
    - **Silent Dataflow Poisoning:** Detected debuggers/emulators do not merely terminate; they set `DbgToken`, which poisons subsequent functional computations (`adb.scaled = DbgToken * prime`), causing downstream logic to fail silently without an identifiable crash point.
    - **Cascading Violent Exit:** If explicit termination is triggered, Ensia unleashes a 6-stage cascading crash: `prctl` &rarr; `exit_group` &rarr; `SIGFPE` (division by zero) &rarr; `SIGSEGV` (`cli; hlt`) &rarr; stack pointer nullification &rarr; infinite loop.
 
-6. **Academic Bug Disclosures & Implementation Defects Identified**:
-   - Identified and patched **two critical crashes** in Ensia:
-     1. Null pointer dereference in `AntiClassDump.cpp` on Objective-C root classes without superclasses.
-     2. Broken LLVM IR SSA predecessor lists in `Utils.cpp:manuallyLowerSwitches` when lowering `SwitchInst` to BST branches, crashing `FastISel` and `DAGISel`.
-   - Identified a configuration evaluation bug in `AntiDebugging.cpp` where TOML probability was ignored.
-   - Discovered a fundamental LLVM AsmWriter quadratic complexity bottleneck (`SlotTracker::getLocalSlot`) when serializing large global arrays of `blockaddress` to text IR (`.ll`).
-
 ---
 
 ## Part 1: Pass-by-Pass Implementation & Correctness Verification
