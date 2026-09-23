@@ -114,6 +114,7 @@ void Flattening::flatten(Function *f) {
   if (isa<BranchInst>(insert->getTerminator()))
     br = cast<BranchInst>(insert->getTerminator());
 
+  BasicBlock *entrySucc = nullptr;
   if ((br && br->isConditional()) ||
       insert->getTerminator()->getNumSuccessors() > 1) {
     BasicBlock::iterator i = insert->end();
@@ -125,6 +126,9 @@ void Flattening::flatten(Function *f) {
 
     BasicBlock *tmpBB = insert->splitBasicBlock(i, "first");
     origBB.insert(origBB.begin(), tmpBB);
+    entrySucc = tmpBB;
+  } else if (br && br->isUnconditional()) {
+    entrySucc = br->getSuccessor(0);
   }
 
   // Remove jump
@@ -140,9 +144,19 @@ void Flattening::flatten(Function *f) {
   // Remove jump
   oldTerm->eraseFromParent();
 
+  unsigned initIdx = 0;
+  if (entrySucc) {
+    for (unsigned j = 0; j < origBB.size(); j++) {
+      if (origBB[j] == entrySucc) {
+        initIdx = j;
+        break;
+      }
+    }
+  }
+
   Value *initCase =
       ConstantInt::get(Type::getInt32Ty(f->getContext()),
-                       cryptoutils->scramble32(0, scrambling_key));
+                       cryptoutils->scramble32(initIdx, scrambling_key));
   IRBuilder<> IRBInit(insert);
   Value *opaqueInitCase = insertOpaqueBarrier(IRBInit, initCase);
   new StoreInst(opaqueInitCase, switchVar, /*isVolatile=*/true, insert);
@@ -221,9 +235,9 @@ void Flattening::flatten(Function *f) {
 
       if (!numCase) {
         if (succ == insert) {
-          numCase = cast<ConstantInt>(
-              ConstantInt::get(switchI->getCondition()->getType(),
-                               cryptoutils->scramble32(0, scrambling_key)));
+          numCase = cast<ConstantInt>(ConstantInt::get(
+              switchI->getCondition()->getType(),
+              cryptoutils->scramble32(initIdx, scrambling_key)));
         }
       }
 

@@ -155,10 +155,11 @@ static Value *buildNoiseVector(IRBuilder<NoFolder> &IRB, Value *realOp,
                                             : (elemTy->isFloatTy() ? 32 : 64);
   Value *vec = UndefValue::get(vecTy);
 
+  uint64_t randVal = cryptoutils->get_uint64_t();
+  if (elemBits < 64)
+    randVal &= (1ULL << elemBits) - 1ULL;
   Constant *randOffset =
-      elemTy->isIntegerTy()
-          ? ConstantInt::get(elemTy, cryptoutils->get_uint64_t())
-          : nullptr;
+      elemTy->isIntegerTy() ? ConstantInt::get(elemTy, randVal) : nullptr;
 
   for (unsigned i = 0; i < lanes; i++) {
     Value *elem = realOp;
@@ -222,47 +223,21 @@ static Value *extractLaneOpaque(IRBuilder<NoFolder> &IRB, Value *vec,
                                 unsigned extractLane, Type *elemTy) {
   LLVMContext &Ctx = vec->getContext();
   if (elemTy->isIntegerTy(1)) {
-    // For i1 vectors, zext to i8 vector first, extract byte, then compare != 0
+    // For i1 vectors, zext to i32 vector first, extract 32-bit lane, then
+    // compare != 0
     auto *FVT = cast<FixedVectorType>(vec->getType());
     unsigned lanes = FVT->getNumElements();
-    Type *i8VecTy = FixedVectorType::get(Type::getInt8Ty(Ctx), lanes);
-    Value *v8 = IRB.CreateZExt(vec, i8VecTy, "vobf.zext");
-    Value *byteVal =
-        extractLaneOpaque(IRB, v8, extractLane, Type::getInt8Ty(Ctx));
-    return IRB.CreateICmpNE(byteVal, ConstantInt::get(Type::getInt8Ty(Ctx), 0),
+    Type *i32VecTy = FixedVectorType::get(Type::getInt32Ty(Ctx), lanes);
+    Value *v32 = IRB.CreateZExt(vec, i32VecTy, "vobf.zext");
+    Value *intVal =
+        extractLaneOpaque(IRB, v32, extractLane, Type::getInt32Ty(Ctx));
+    return IRB.CreateICmpNE(intVal, ConstantInt::get(Type::getInt32Ty(Ctx), 0),
                             "vobf.cmp.res");
   }
 
-  BasicBlock *BB = IRB.GetInsertBlock();
-  Function *F = BB->getParent();
-  BasicBlock &Entry = F->getEntryBlock();
-  IRBuilder<> EntryIRB(&Entry, Entry.getFirstInsertionPt());
-  AllocaInst *slot =
-      EntryIRB.CreateAlloca(vec->getType(), nullptr, "vobf.slot");
-
-  IRB.CreateStore(vec, slot);
-
-  Module *M = F->getParent();
-  Triple triple(M->getTargetTriple());
-  std::string asmCode = getPolymorphicBarrierAsm(triple);
-
-  FunctionType *AsmFTy = FunctionType::get(
-      Type::getVoidTy(Ctx),
-      {PointerType::get(Ctx, 0), PointerType::get(Ctx, 0)}, false);
-  InlineAsm *IA = InlineAsm::get(AsmFTy, asmCode,
-                                 "=*m,*m,~{memory},~{dirflag},~{fpsr},~{flags}",
-                                 /*hasSideEffects=*/true);
-  CallInst *CI = IRB.CreateCall(AsmFTy, IA, {slot, slot});
-  CI->addParamAttr(0,
-                   Attribute::get(Ctx, Attribute::ElementType, vec->getType()));
-  CI->addParamAttr(1,
-                   Attribute::get(Ctx, Attribute::ElementType, vec->getType()));
-
-  Value *elemPtr = IRB.CreateConstGEP2_32(vec->getType(), slot, 0, extractLane,
-                                          "vobf.lane.ptr");
-  LoadInst *ld = IRB.CreateLoad(elemTy, elemPtr, "vobf.lane.val");
-  ld->setVolatile(true);
-  return ld;
+  Value *barVec = insertOpaqueBarrier(IRB, vec);
+  Value *elem = IRB.CreateExtractElement(barVec, extractLane, "vobf.lane.val");
+  return elem;
 }
 
 // ─── Lift a scalar BinaryOperator to vector lane K ───────────────────────────
@@ -278,8 +253,9 @@ static bool liftBinOpToVector(BinaryOperator *bo, unsigned totalBits,
   unsigned elemBits = 0;
   if (scalarTy->isIntegerTy()) {
     elemBits = scalarTy->getIntegerBitWidth();
-    // Only standard integer widths that map cleanly to SIMD element types
-    if (elemBits != 8 && elemBits != 16 && elemBits != 32 && elemBits != 64)
+    // Only standard integer widths that map cleanly to SIMD element types (>=
+    // 16 bits)
+    if (elemBits != 16 && elemBits != 32 && elemBits != 64)
       return false;
   } else if (scalarTy->isFloatTy()) {
     elemBits = 32;
@@ -362,7 +338,7 @@ static bool liftICmpToVector(ICmpInst *ici, unsigned totalBits,
   if (!scalarTy->isIntegerTy())
     return false;
   unsigned elemBits = scalarTy->getIntegerBitWidth();
-  if (elemBits != 8 && elemBits != 16 && elemBits != 32 && elemBits != 64)
+  if (elemBits != 16 && elemBits != 32 && elemBits != 64)
     return false;
 
   unsigned lanes = lanesFor(elemBits, totalBits);
@@ -437,7 +413,7 @@ static bool liftSelectToVector(SelectInst *sel, unsigned totalBits,
   unsigned elemBits = scalarTy->isIntegerTy()
                           ? scalarTy->getIntegerBitWidth()
                           : (scalarTy->isFloatTy() ? 32 : 64);
-  if (elemBits != 8 && elemBits != 16 && elemBits != 32 && elemBits != 64)
+  if (elemBits != 16 && elemBits != 32 && elemBits != 64)
     return false;
 
   unsigned lanes = lanesFor(elemBits, totalBits);
@@ -477,9 +453,9 @@ static bool liftCastToVector(CastInst *ci, unsigned totalBits, bool doShuffle) {
 
   unsigned srcBits = srcTy->getIntegerBitWidth();
   unsigned dstBits = dstTy->getIntegerBitWidth();
-  if (srcBits != 8 && srcBits != 16 && srcBits != 32 && srcBits != 64)
+  if (srcBits != 16 && srcBits != 32 && srcBits != 64)
     return false;
-  if (dstBits != 8 && dstBits != 16 && dstBits != 32 && dstBits != 64)
+  if (dstBits != 16 && dstBits != 32 && dstBits != 64)
     return false;
 
   unsigned op = ci->getOpcode();

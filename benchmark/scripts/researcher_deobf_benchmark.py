@@ -28,8 +28,11 @@ import argparse
 import os
 import sys
 import time
-import claripy
 import angr
+try:
+    import claripy
+except ImportError:
+    from angr import claripy
 
 def run_deobf_benchmark(algos, timeout=10.0):
     print("=" * 120)

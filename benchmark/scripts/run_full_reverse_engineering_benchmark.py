@@ -34,7 +34,10 @@ logging.getLogger("cle").setLevel(logging.CRITICAL)
 
 try:
     import angr
-    import claripy
+    try:
+        import claripy
+    except ImportError:
+        from angr import claripy
 except ImportError:
     print("[!] Error: angr or claripy is not installed in the python environment.")
     sys.exit(1)

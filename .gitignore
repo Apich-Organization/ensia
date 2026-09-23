@@ -109,6 +109,7 @@ benchmark/scripts/test_angr2.py
 benchmark/scripts/test_angr_fork.py
 benchmark/scripts/test_bcf_fork
 benchmark/scripts/test_bcf_fork.c
+test/eval_harness/*.md
 
 # Large LLVM releases & python caches
 LLVM-*

@@ -533,18 +533,55 @@ GlobalVariable *getOrCreateOpaqueSink(Module *M) {
 }
 
 std::string getPolymorphicBarrierAsm(const Triple &triple) {
-  if (triple.getArch() == Triple::x86_64 || triple.getArch() == Triple::x86) {
-    static const char *x86Barriers[] = {
-        "xorb $$0, $0", "orb $$0, $0",        "andb $$-1, $0",
-        "addb $$0, $0", "subb $$0, $0",       "rolb $$0, $0",
-        "rorb $$0, $0", "notb $0\n\tnotb $0", "incb $0\n\tdecb $0"};
-    unsigned idx =
-        cryptoutils->get_range(sizeof(x86Barriers) / sizeof(x86Barriers[0]));
-    return x86Barriers[idx];
+  if (triple.getArch() == Triple::x86_64) {
+    // Dynamic runtime contextual barriers derived from stack canary,
+    // thread-local storage (FS segment), stack alignment masks, and register
+    // state. Zero static "$$0" or "$$-1" literals that pattern scanners look
+    // for!
+    static const char *x86_64Barriers[] = {
+        // 1. Stack canary (FS:0x28) dynamic self-cancellation: x ^ c ^ c == x
+        "movzbl %fs:0x28, %eax; xorb %al, $0; movzbl %fs:0x28, %eax; xorb %al, "
+        "$0",
+        // 2. Stack canary dynamic add/sub self-cancellation: x + c - c == x
+        "movzbl %fs:0x28, %eax; addb %al, $0; movzbl %fs:0x28, %eax; subb %al, "
+        "$0",
+        // 3. Dynamic stack pointer alignment mask (%rsp is 16-byte aligned at
+        // function call, %rsp & 15 == 0)
+        "movq %rsp, %rax; andb $$15, %al; addb %al, $0; subb %al, $0",
+        // 4. Thread Control Block self-cancellation (%fs:0x00 is self pointer
+        // in glibc)
+        "movzbl %fs:0x0, %eax; xorb %al, $0; movzbl %fs:0x0, %eax; xorb %al, "
+        "$0",
+        // 5. Dynamic stack canary inversion self-cancellation: x ^ ~c ^ ~c == x
+        "movzbl %fs:0x28, %eax; notb %al; xorb %al, $0; xorb %al, $0",
+        // 6. Stack canary rotate self-cancellation
+        "movzbl %fs:0x28, %eax; andb $$7, %al; movb %al, %cl; rolb %cl, $0; "
+        "rorb %cl, $0"};
+    unsigned idx = cryptoutils->get_range(sizeof(x86_64Barriers) /
+                                          sizeof(x86_64Barriers[0]));
+    return x86_64Barriers[idx];
+  } else if (triple.getArch() == Triple::x86) {
+    // 32-bit x86: GS segment is TLS base (%gs:0x14 is stack canary in 32-bit
+    // glibc)
+    static const char *x86_32Barriers[] = {
+        "movzbl %gs:0x14, %eax; xorb %al, $0; movzbl %gs:0x14, %eax; xorb %al, "
+        "$0",
+        "movl %esp, %eax; andb $$15, %al; addb %al, $0; subb %al, $0",
+        "movzbl %gs:0x14, %eax; addb %al, $0; movzbl %gs:0x14, %eax; subb %al, "
+        "$0"};
+    unsigned idx = cryptoutils->get_range(sizeof(x86_32Barriers) /
+                                          sizeof(x86_32Barriers[0]));
+    return x86_32Barriers[idx];
   } else if (triple.isAArch64() || triple.getArch() == Triple::arm) {
-    static const char *armBarriers[] = {"prfm pldl1keep, $0",
-                                        "prfm pstl1keep, $0", "dmb ishld",
-                                        "isb", "prfm pldl2keep, $0"};
+    // AArch64: TPIDR_EL0 (Thread ID register) dynamic contextual barrier on
+    // memory slot $0
+    static const char *armBarriers[] = {
+        "ldrb w16, $0; mrs x17, tpidr_el0; eor w16, w16, w17; eor w16, w16, "
+        "w17; strb w16, $0",
+        "ldrb w16, $0; mrs x17, tpidr_el0; add w16, w16, w17; sub w16, w16, "
+        "w17; strb w16, $0",
+        "prfm pldl1keep, $0; dmb ishld; isb",
+        "prfm pstl1keep, $0; dmb ish; isb"};
     unsigned idx =
         cryptoutils->get_range(sizeof(armBarriers) / sizeof(armBarriers[0]));
     return armBarriers[idx];
@@ -569,35 +606,25 @@ static Value *insertOpaqueBarrierImpl(BuilderTy &IRB, Value *V) {
   Module *M = F->getParent();
   LLVMContext &Ctx = V->getContext();
   BasicBlock &Entry = F->getEntryBlock();
-  AllocaInst *slot = nullptr;
-  for (Instruction &I : Entry) {
-    if (AllocaInst *AI = dyn_cast<AllocaInst>(&I)) {
-      if (AI->getAllocatedType() == T && !AI->getName().contains("reg2mem") &&
-          (AI->hasMetadata("ensia.barrier.slot") ||
-           AI->getName().starts_with("barrier.slot."))) {
-        slot = AI;
-        break;
-      }
-    }
-  }
-  if (!slot) {
-    std::string slotName =
-        "barrier.slot." + std::to_string(T->getPrimitiveSizeInBits());
-    IRBuilder<> EntryIRB(&Entry, Entry.getFirstInsertionPt());
-    slot = EntryIRB.CreateAlloca(T, nullptr, slotName);
-    slot->setMetadata("ensia.barrier.slot", MDNode::get(Ctx, {}));
-  }
+  IRBuilder<> EntryIRB(&Entry, Entry.getFirstInsertionPt());
+  AllocaInst *slot = EntryIRB.CreateAlloca(T, nullptr, "barrier.slot");
+  slot->setMetadata("ensia.barrier.slot", MDNode::get(Ctx, {}));
 
   IRB.CreateStore(V, slot);
 
   Triple triple(M->getTargetTriple());
   std::string asmCode = getPolymorphicBarrierAsm(triple);
+  std::string clobbers = "=*m,*m,~{memory},~{dirflag},~{fpsr},~{flags}";
+  if (triple.getArch() == Triple::x86_64 || triple.getArch() == Triple::x86) {
+    clobbers = "=*m,*m,~{rax},~{rcx},~{dirflag},~{fpsr},~{flags},~{memory}";
+  } else if (triple.isAArch64() || triple.getArch() == Triple::arm) {
+    clobbers = "=*m,*m,~{x16},~{x17},~{cc},~{memory}";
+  }
 
   FunctionType *AsmFTy = FunctionType::get(
       Type::getVoidTy(Ctx),
       {PointerType::get(Ctx, 0), PointerType::get(Ctx, 0)}, false);
-  InlineAsm *IA = InlineAsm::get(AsmFTy, asmCode,
-                                 "=*m,*m,~{memory},~{dirflag},~{fpsr},~{flags}",
+  InlineAsm *IA = InlineAsm::get(AsmFTy, asmCode, clobbers,
                                  /*hasSideEffects=*/true);
   CallInst *CI = IRB.CreateCall(AsmFTy, IA, {slot, slot});
   CI->addParamAttr(0, Attribute::get(Ctx, Attribute::ElementType, T));
@@ -740,15 +767,15 @@ std::string getViolentExitAsm(const Triple &triple) {
       s += "jmpq *%r15\n\t";
     }
 
-    // Chaos Layer: Q16 logistic-map infinite loop
-    s += "movq $$" + std::to_string(chaosSeed) + ", %r14\n\t";
+    // Chaos Layer: Q32 logistic-map infinite loop
+    s += "movabsq $$" + std::to_string(chaosSeed | 0x10001ULL) + ", %r14\n\t";
     s += "91:\n\t";
+    s += "movabsq $$0x100000000, %rcx\n\t";
+    s += "subq %r14, %rcx\n\t";
     s += "movq %r14, %rax\n\t";
-    s += "movq $$0x10000, %rcx\n\t";
-    s += "subq %rax, %rcx\n\t";
     s += "mulq %rcx\n\t";
+    s += "shrq $$32, %rax\n\t";
     s += "shlq $$2, %rax\n\t";
-    s += "shrq $$16, %rax\n\t";
     s += "movq %rax, %r14\n\t";
     s += "jmp 91b\n\t";
     s += "92:\n\tjmp 92b\n\t";
@@ -843,14 +870,19 @@ std::string getViolentExitAsm(const Triple &triple) {
          ", lsl #48\n\t";
     s += "br x15\n\t";
 
-    // Chaos loop
-    s += "mov x14, #" + std::to_string(chaosSeed) + "\n\t";
+    // Chaos Layer: Q32 logistic-map infinite loop
+    s += "movz x14, #" + std::to_string((chaosSeed | 0x10001ULL) & 0xFFFF) +
+         "\n\t";
+    s += "movk x14, #" +
+         std::to_string(((chaosSeed | 0x10001ULL) >> 16) & 0xFFFF) +
+         ", lsl #16\n\t";
     s += "91:\n\t";
-    s += "mov x0, #65536\n\t";
+    s += "mov x0, #1\n\t";
+    s += "lsl x0, x0, #32\n\t";
     s += "sub x0, x0, x14\n\t";
     s += "mul x0, x14, x0\n\t";
+    s += "lsr x0, x0, #32\n\t";
     s += "lsl x0, x0, #2\n\t";
-    s += "lsr x0, x0, #16\n\t";
     s += "mov x14, x0\n\t";
     s += "b 91b\n\t";
     s += "92:\n\tb 92b\n\t";
@@ -876,7 +908,7 @@ void insertViolentExit(IRBuilder<> &IRB, const Triple &triple) {
     InlineAsm *IA = InlineAsm::get(
         VoidFTy, asmStr,
         "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x14},~{x15},~{x16},~{"
-        "dirflag},~{fpsr},~{flags}",
+        "cc},~{memory}",
         /*hasSideEffects=*/true, false);
     IRB.CreateCall(IA);
     IRB.CreateUnreachable();
@@ -1266,7 +1298,7 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
     InlineAsm *IA =
         InlineAsm::get(DbgFTy, s,
                        "=r,~{x0},~{x1},~{x2},~{x3},~{x8},~{x9},~{x10},~{x11},~{"
-                       "x12},~{x13},~{x14},~{x16},~{dirflag},~{fpsr},~{flags}",
+                       "x12},~{x13},~{x14},~{x16},~{cc},~{memory}",
                        true, false);
     CallInst *CI = CallInst::Create(DbgFTy, IA, {}, "adb.tok", InsertPt);
 

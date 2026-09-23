@@ -1,0 +1,5 @@
+# Empty configuration for isolated pass verification
+[global]
+preset = "none"
+verbose = false
+trace = false

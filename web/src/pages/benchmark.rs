@@ -1936,7 +1936,7 @@ pub fn BenchmarkPage() -> impl IntoView {
                             <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"97.9%"</td>
                             <td style="padding: 0.5rem 0.8rem; color: var(--c-success); font-weight: bold;">"97.9%"</td>
                             <td style="padding: 0.5rem 0.8rem; color: var(--c-danger); font-weight: bold;">"Very High"</td>
-                            <td style="padding: 0.5rem 0.8rem;">"Q16 chaotic trajectory"</td>
+                            <td style="padding: 0.5rem 0.8rem;">"Q32 chaotic trajectory & attractor basins"</td>
                         </tr>
                         <tr style="border-bottom: 1px solid var(--c-border-light);">
                             <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">"Constant Encryption (CONST)"</td>

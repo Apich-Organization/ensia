@@ -17,8 +17,6 @@
 ################################################################################
 
 cmake_minimum_required(VERSION 3.16)
-project(ensia_benchmark C)
-
 # --------------------------------------------------------------------------
 # Compiler selection — prefer clang for obfuscation compatibility
 # --------------------------------------------------------------------------
@@ -28,6 +26,9 @@ if(NOT DEFINED CMAKE_C_COMPILER)
         set(CMAKE_C_COMPILER ${CLANG})
     endif()
 endif()
+
+project(ensia_benchmark C)
+
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -42,6 +43,8 @@ set_property(CACHE OBFUSCATION_MODE PROPERTY STRINGS
 
 set(ENSIA_PLUGIN "${CMAKE_SOURCE_DIR}/../../build/obfuscation/libEnsia.so"
     CACHE FILEPATH "Path to Ensia obfuscator plugin (.so)")
+set(ENSIA_EMPTY_CONFIG "${CMAKE_SOURCE_DIR}/../../test/harness/empty.toml"
+    CACHE FILEPATH "Path to Ensia empty config (.toml)")
 
 message(STATUS "=== Ensia Benchmark Test Suite ===")
 message(STATUS "Obfuscation mode : ${OBFUSCATION_MODE}")
@@ -124,8 +127,9 @@ elseif(OBFUSCATION_MODE STREQUAL "csm_only")
     endif()
     set(OBF_FLAGS
         "SHELL:-fpass-plugin=${ENSIA_PLUGIN}"
+        "SHELL:-Xclang -load -Xclang ${ENSIA_PLUGIN}"
         "SHELL:-mllvm -ensia"
-        "SHELL:-mllvm -ensia-preset=none"
+        "SHELL:-mllvm -ensia-config=${ENSIA_EMPTY_CONFIG}"
         "SHELL:-mllvm -enable-csmobf"
         "SHELL:-mllvm -csm_warmup=64"
         "SHELL:-mllvm -csm_maxblocks=5000"
@@ -137,8 +141,9 @@ elseif(OBFUSCATION_MODE STREQUAL "vec_only")
     endif()
     set(OBF_FLAGS
         "SHELL:-fpass-plugin=${ENSIA_PLUGIN}"
+        "SHELL:-Xclang -load -Xclang ${ENSIA_PLUGIN}"
         "SHELL:-mllvm -ensia"
-        "SHELL:-mllvm -ensia-preset=none"
+        "SHELL:-mllvm -ensia-config=${ENSIA_EMPTY_CONFIG}"
         "SHELL:-mllvm -enable-vobf"
         "SHELL:-mllvm -vec_prob=80"
         "SHELL:-mllvm -vec_width=256"
@@ -152,8 +157,9 @@ elseif(OBFUSCATION_MODE STREQUAL "csm_vec")
     endif()
     set(OBF_FLAGS
         "SHELL:-fpass-plugin=${ENSIA_PLUGIN}"
+        "SHELL:-Xclang -load -Xclang ${ENSIA_PLUGIN}"
         "SHELL:-mllvm -ensia"
-        "SHELL:-mllvm -ensia-preset=none"
+        "SHELL:-mllvm -ensia-config=${ENSIA_EMPTY_CONFIG}"
         "SHELL:-mllvm -enable-csmobf"
         "SHELL:-mllvm -csm_warmup=64"
         "SHELL:-mllvm -csm_maxblocks=5000"
@@ -170,8 +176,9 @@ elseif(OBFUSCATION_MODE STREQUAL "bench_max" OR OBFUSCATION_MODE STREQUAL "max")
     endif()
     set(OBF_FLAGS
         "SHELL:-fpass-plugin=${ENSIA_PLUGIN}"
+        "SHELL:-Xclang -load -Xclang ${ENSIA_PLUGIN}"
         "SHELL:-mllvm -ensia"
-        "SHELL:-mllvm -ensia-preset=none"
+        "SHELL:-mllvm -ensia-config=${ENSIA_EMPTY_CONFIG}"
         "SHELL:-mllvm -enable-cffobf"
         "SHELL:-mllvm -enable-bcfobf"
         "SHELL:-mllvm -bcf_prob=40"

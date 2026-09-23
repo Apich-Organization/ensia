@@ -1148,8 +1148,7 @@ struct Obfuscation : public ModulePass {
     for (Function &F : M) {
       if (F.isDeclaration())
         continue;
-      F.addFnAttr(Attribute::OptimizeNone);
-      F.addFnAttr(Attribute::NoInline);
+      turnOffOptimization(&F);
     }
 
     auto endTime = std::chrono::steady_clock::now();

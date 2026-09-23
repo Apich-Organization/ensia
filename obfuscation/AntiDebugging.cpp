@@ -342,10 +342,10 @@ struct AntiDebugging : public ModulePass {
         vm += "b.lo 2f\n\t";
         vm += makeDarwinAA64Abort();
         vm += "2:\n\t";
-        InlineAsm *vmIA = InlineAsm::get(VoidFTy, vm,
-                                         "~{x0},~{x12},~{x13},~{x14},~{x15},~{"
-                                         "x16},~{dirflag},~{fpsr},~{flags}",
-                                         true, false);
+        InlineAsm *vmIA = InlineAsm::get(
+            VoidFTy, vm,
+            "~{x0},~{x12},~{x13},~{x14},~{x15},~{x16},~{cc},~{memory}", true,
+            false);
         CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
                          lastTerm);
       }
@@ -377,8 +377,7 @@ struct AntiDebugging : public ModulePass {
       adbasm += "sub x9, x9, #" + std::to_string(ji) + "\n\t";
       InlineAsm *IA = InlineAsm::get(
           VoidFTy, adbasm,
-          "~{x0},~{x1},~{x2},~{x3},~{x9},~{x16},~{dirflag},~{fpsr},~{flags}",
-          true, false);
+          "~{x0},~{x1},~{x2},~{x3},~{x9},~{x16},~{cc},~{memory}", true, false);
       CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
                        lastTerm);
 
@@ -583,11 +582,11 @@ struct AntiDebugging : public ModulePass {
         vm += "b.lo 2f\n\t";
         vm += makeAA64Abort();
         vm += "2:\n\t";
-        InlineAsm *vmIA =
-            InlineAsm::get(VoidFTy, vm,
-                           "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x12},~{x13},~"
-                           "{x14},~{x15},~{dirflag},~{fpsr},~{flags}",
-                           true, false);
+        InlineAsm *vmIA = InlineAsm::get(
+            VoidFTy, vm,
+            "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x12},~{x13},~{x14},~{x15},"
+            "~{cc},~{memory}",
+            true, false);
         CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
                          lastTerm);
       }
@@ -616,7 +615,7 @@ struct AntiDebugging : public ModulePass {
       InlineAsm *IA = InlineAsm::get(
           VoidFTy, adbasm,
           "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x10},~{x11},~{x12},~{"
-          "x14},~{x15},~{dirflag},~{fpsr},~{flags}",
+          "x14},~{x15},~{cc},~{memory}",
           true, false);
       CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
                        lastTerm);
@@ -781,7 +780,7 @@ struct AntiDebugging : public ModulePass {
         sasm += GetPlatformAbort(triple);
         sasm += "1:\n\t";
         constraints = "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x11},~{x12},~{x13}"
-                      ",~{x14},~{x15},~{x16},~{dirflag},~{fpsr},~{flags}";
+                      ",~{x14},~{x15},~{x16},~{cc},~{memory}";
       }
 
       if (!sasm.empty()) {

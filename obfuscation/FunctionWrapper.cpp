@@ -202,12 +202,13 @@ struct FunctionWrapper : public ModulePass {
     // Emit the real call via bit-rotated indirect pointer table / XOR-scrambled
     // ptr
     uint64_t ptrMask = cryptoutils->get_uint64_t();
+    Constant *maskC64 =
+        ConstantInt::get(Type::getInt64Ty(M.getContext()), ptrMask);
     Value *calleeInt = IRB.CreatePtrToInt(
         calledFunction, Type::getInt64Ty(M.getContext()), "fw.ptri");
-    Value *maskC64 =
-        ConstantInt::get(Type::getInt64Ty(M.getContext()), ptrMask);
     Value *scrambled = IRB.CreateXor(calleeInt, maskC64, "fw.scram");
-    Value *unscram = IRB.CreateXor(scrambled, maskC64, "fw.unscram");
+    Value *barScrambled = insertOpaqueBarrier(IRB, scrambled);
+    Value *unscram = IRB.CreateXor(barScrambled, maskC64, "fw.unscram");
     Value *calleePtr = IRB.CreateIntToPtr(
         unscram, PointerType::getUnqual(M.getContext()), "fw.fnptr");
     Value *retval = IRB.CreateCall(ft, calleePtr, ArrayRef<Value *>(callArgs));

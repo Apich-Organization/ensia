@@ -1,0 +1,4 @@
+[global]
+preset = "none"
+verbose = false
+trace = false

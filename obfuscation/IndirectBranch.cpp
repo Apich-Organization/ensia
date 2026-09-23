@@ -457,10 +457,10 @@ struct IndirectBranch : public FunctionPass {
     for (size_t i = blocks.size() - 1; i > 0; i--)
       std::swap(blocks[i], blocks[cryptoutils->get_range(i + 1)]);
 
-    Function::iterator fi = F.begin();
+    BasicBlock *prev = &F.getEntryBlock();
     for (BasicBlock *block : blocks) {
-      fi++;
-      block->moveAfter(&*(fi));
+      block->moveAfter(prev);
+      prev = block;
     }
   }
 };

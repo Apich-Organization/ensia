@@ -95,9 +95,9 @@ static void injectStackConfusion(BasicBlock *BB, Function *F) {
        << "sub x10, x10, #" << k2 << "\n\t";
     FunctionType *AsmFTy =
         FunctionType::get(Type::getVoidTy(BB->getContext()), false);
-    InlineAsm *IA = InlineAsm::get(AsmFTy, OS.str(),
-                                   "~{x9},~{x10},~{dirflag},~{fpsr},~{flags}",
-                                   /*hasSideEffects=*/true, InlineAsm::AD_ATT);
+    InlineAsm *IA =
+        InlineAsm::get(AsmFTy, OS.str(), "~{x9},~{x10},~{cc},~{memory}",
+                       /*hasSideEffects=*/true);
     CallInst::Create(AsmFTy, IA, {}, "", insertPt);
     turnOffOptimization(F);
   }
@@ -208,11 +208,43 @@ struct SplitBasicBlock : public FunctionPass {
             break;
         }
 
+        BasicBlock *prevBB = curr_bb_offset;
         BasicBlock *newBB = curr_bb_offset->splitBasicBlock(
             curr_bb_it, curr_bb_offset->getName() + ".split");
         curr_bb_offset = newBB;
         if (cryptoutils->get_range(2) == 0)
           injectStackConfusion(newBB, F);
+
+        // Mandatory chaining: replace unconditional branch in prevBB with an
+        // opaque predicate to prevent LLVM's simplifycfg from collapsing the
+        // split blocks back together.
+        Instruction *term = prevBB->getTerminator();
+        if (term && isa<BranchInst>(term) &&
+            cast<BranchInst>(term)->isUnconditional()) {
+          IRBuilder<> IRB(term);
+          Type *I32Ty = Type::getInt32Ty(F->getContext());
+          // Invariant: ((x * (x + 1)) & 1) == 0 for all integers x
+          // Wrapped through insertOpaqueBarrier so LLVM cannot fold it at
+          // compile time!
+          Value *seed =
+              ConstantInt::get(I32Ty, cryptoutils->get_uint32_t() | 1);
+          Value *opqSeed = insertOpaqueBarrier(IRB, seed);
+          Value *seedPlus1 = IRB.CreateAdd(opqSeed, ConstantInt::get(I32Ty, 1));
+          Value *prod = IRB.CreateMul(opqSeed, seedPlus1);
+          Value *parity =
+              IRB.CreateAnd(prod, ConstantInt::get(I32Ty, 1), "split.parity");
+          Value *isZero = IRB.CreateICmpEQ(parity, ConstantInt::get(I32Ty, 0),
+                                           "split.opq.cond");
+
+          // Create bogus cold target block branching back to newBB
+          BasicBlock *bogusBB = BasicBlock::Create(
+              F->getContext(), prevBB->getName() + ".bogus", F);
+          IRBuilder<> BogusIRB(bogusBB);
+          BogusIRB.CreateBr(newBB);
+
+          term->eraseFromParent();
+          BranchInst::Create(newBB, bogusBB, isZero, prevBB);
+        }
       }
     }
   }

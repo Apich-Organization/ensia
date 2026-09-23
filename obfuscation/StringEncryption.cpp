@@ -517,19 +517,21 @@ struct StringEncryption : public ModulePass {
           EncryptedConst, "EncryptedString", nullptr, GV->getThreadLocalMode(),
           GV->getType()->getAddressSpace());
       genedgv.emplace_back(EncryptedRawGV);
+      GlobalValue::ThreadLocalMode tlsMode =
+          M->getTargetTriple().empty() ? GlobalValue::NotThreadLocal
+                                       : GlobalValue::GeneralDynamicTLSModel;
       GlobalVariable *DecryptSpaceGV;
       if (rust_string) {
         ConstantAggregate *CA = cast<ConstantAggregate>(GV->getInitializer());
         CA->setOperand(0, DummyConst);
-        DecryptSpaceGV = new GlobalVariable(
-            *M, GV->getValueType(), false, GV->getLinkage(), CA,
-            "DecryptSpaceRust", nullptr, GV->getThreadLocalMode(),
-            GV->getType()->getAddressSpace());
+        DecryptSpaceGV =
+            new GlobalVariable(*M, GV->getValueType(), false, GV->getLinkage(),
+                               CA, "DecryptSpaceRust", nullptr, tlsMode,
+                               GV->getType()->getAddressSpace());
       } else {
         DecryptSpaceGV = new GlobalVariable(
             *M, DummyConst->getType(), false, GV->getLinkage(), DummyConst,
-            "DecryptSpace", nullptr, GV->getThreadLocalMode(),
-            GV->getType()->getAddressSpace());
+            "DecryptSpace", nullptr, tlsMode, GV->getType()->getAddressSpace());
       }
       genedgv.emplace_back(DecryptSpaceGV);
       // For the i8 Vernam-GF8 path, record the k2inv vector (full layout)
@@ -751,6 +753,29 @@ struct StringEncryption : public ModulePass {
         }
         if (returnedGVs.empty()) {
           StoreInst *resetSI = IRBRet.CreateStore(
+              ConstantInt::get(Type::getInt32Ty(Func->getContext()), 0),
+              StatusGV);
+          resetSI->setAlignment(Align(4));
+          resetSI->setAtomic(AtomicOrdering::Release);
+        }
+      }
+      if (!returnedGVs.empty()) {
+        // Ephemeral zeroization on re-entry: wipe previously returned strings
+        // upon re-entry to strictly eliminate the permanent static plaintext
+        // retention window
+        BasicBlock &entryBB = Func->getEntryBlock();
+        Instruction *firstPt = &*entryBB.getFirstNonPHIOrDbgOrLifetime();
+        if (firstPt) {
+          IRBuilder<> EntryIRB(firstPt);
+          for (GlobalVariable *decGV : returnedGVs) {
+            uint64_t sz = DL.getTypeAllocSize(decGV->getValueType());
+            if (sz > 0) {
+              EntryIRB.CreateMemSet(decGV, EntryIRB.getInt8(0), sz,
+                                    MaybeAlign(1),
+                                    /*isVolatile=*/true);
+            }
+          }
+          StoreInst *resetSI = EntryIRB.CreateStore(
               ConstantInt::get(Type::getInt32Ty(Func->getContext()), 0),
               StatusGV);
           resetSI->setAlignment(Align(4));
@@ -1022,6 +1047,9 @@ struct StringEncryption : public ModulePass {
         StoreInst *stDec = IRB.CreateStore(decoded, DecGEP);
         stDec->setVolatile(true);
       }
+    }
+    for (Instruction &I : *B) {
+      tagSynthetic(&I);
     }
     IRB.CreateBr(C);
   } // End of HandleDecryptionBlock

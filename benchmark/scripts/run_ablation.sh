@@ -83,6 +83,7 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
         cmake_args=(
             -S "${TESTS_DIR}"
             -B "${build_dir}"
+            "-DCMAKE_C_COMPILER=clang"
             "-DOBFUSCATION_MODE=${mode}"
             "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
         )
@@ -138,12 +139,13 @@ if [[ $SKIP_ANGR -eq 0 ]]; then
         [[ -d "$build_dir" ]] || { log_warn "Build dir not found: $build_dir, skipping"; continue; }
 
         angr_output="${RESULTS_DIR}/angr_${mode}.csv"
-        log_info "  Running angr for mode '${mode}'..."
+        log_info "  Running angr for mode '${mode}' with ${JOBS} workers..."
 
         python3 "${SCRIPT_DIR}/run_angr_analysis.py" \
             --build-dir "${build_dir}" \
             --mode "${mode}" \
             --timeout "${ANGR_TIMEOUT}" \
+            --jobs "${JOBS}" \
             --output "${angr_output}" \
             --skip-size-only \
             && log_ok "  angr results: ${angr_output}" \

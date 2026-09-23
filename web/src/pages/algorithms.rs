@@ -272,13 +272,14 @@ fn CsmSection() -> impl IntoView {
         </div>
 
         <div class="glass card-pad">
-            <p class="algo-section-title">"Q16 fixed-point IR recurrence & Data-Flow Feedback (DFB)"</p>
-            <MathBlock formula=r"$$x_{n+1} = \lfloor r \cdot x_n \cdot (1 - x_n) \rfloor \oplus \text{DFB}(\text{args}, \text{BBs}), \quad r \approx 3.9999,\; x_n \in Q_{16}$$" />
+            <p class="algo-section-title">"Q32 fixed-point IR recurrence, Multi-Step Attractor Basins & DFB"</p>
+            <MathBlock formula=r"$$x_{n+1} = \lfloor \mu \cdot x_n \cdot (1 - x_n) \rfloor \oplus \text{DFB}(\text{args}, \text{BBs}), \quad \mu \approx 3.999999999,\; x_n \in Q_{32}$$" />
             <p class="text-sm mt-sm">
-                "The logistic map is evaluated entirely in Q16 fixed-point integer arithmetic
-                 inside LLVM IR without using floating-point types. Furthermore, CSM couples
-                 state transitions directly with function input arguments and intermediate
-                 basic block computations: "
+                "The logistic map is evaluated entirely in full Q32 fixed-point integer arithmetic ($2^{32}$ state space)
+                 inside LLVM IR without using floating-point types, extending cycle lengths beyond 50,000 steps and
+                 rendering precomputed lookup tables (requiring ≥16 GB) completely infeasible. Furthermore, state transitions
+                 replace 1-step linear cancellations with multi-step cellular automata attractor diffusion and modular inverse
+                 decoding, coupled directly with function input arguments and intermediate basic block computations: "
                 <code class="font-mono">"DFB_new = (DFB_old * 33) ^ val"</code>
                 ". Without concrete runtime execution arguments, static symbolic solvers
                  (like Z3, angr, or KLEE) cannot compute the next state algebraically."
@@ -506,10 +507,10 @@ fn MbaSection() -> impl IntoView {
                 <strong>"OR \u{00D7}7"</strong>
                 ", "
                 <strong>"MUL \u{00D7}5"</strong>
-                " — 42 variants total. To eliminate signature detection, Ensia embeds
-                 a 9-variant polymorphic hardware barrier family on x86 (orb, andb, addb, subb, rolb, rorb, incb/decb, notb/notb)
-                 and 4 ARM64 pipeline/cache barriers (prfm, isb, dmb). This eliminates the old xorb $0, $0 signature,
-                 reducing YARA pattern detection to below 10%."
+                " — 42 variants total. To eliminate signature detection and defeat blackbox I/O synthesis (Syntia model), Ensia embeds
+                 stateful contextual barriers derived from dynamic runtime state (stack canary %fs:0x28, stack alignment %rsp & 15,
+                 TLS self-pointers, and ARM64 tpidr_el0), coupled with context-dependent affine polynomial noise
+                 P(a, b) * (ctx ^ K) resolving through an opaque global context variable."
             </p>
         </div>
 
@@ -857,10 +858,10 @@ fn SplitBlocksSection() -> impl IntoView {
         <div class="algo-header">
             <h2>"\u{2702} Basic Block Splitting"</h2>
             <p>
-                "Splits basic blocks at randomly chosen insertion points by
-                 inserting unconditional jump instructions. This multiplies the
-                 basic block count, inflating the CFG and increasing the cost
-                 of automated analysis tools that scale with block count."
+                "Splits basic blocks at randomly chosen insertion points, enforced by
+                 mandatory opaque predicate chaining and bogus target loops. This prevents
+                 standard compiler optimizers (LLVM simplifycfg) from collapsing split blocks
+                 while slicing multivariate MBA expression chains across block boundaries."
             </p>
         </div>
 
@@ -872,15 +873,18 @@ fn SplitBlocksSection() -> impl IntoView {
         </div>
 
         <div class="glass card-pad">
-            <p class="algo-section-title">"Splitting model + inline-ASM stack confusion"</p>
-            <MathBlock formula=r"$$B \xrightarrow{\text{split at }k} B_1 \xrightarrow{\texttt{jmp}} B_2, \quad k \sim \mathcal{U}[1, |B|-1]$$" />
+            <p class="algo-section-title">"Splitting model + mandatory opaque chaining + stack confusion"</p>
+            <MathBlock formula=r"$$B \xrightarrow{\text{split at }k} B_1 \xrightarrow{\text{opaque cond}} B_2 \quad\text{with}\quad B_{\text{bogus}} \to B_2, \quad k \sim \mathcal{U}[1, |B|-1]$$" />
             <p class="text-sm mt-sm">
                 "A block "
                 <em>"B"</em>
                 " is split at a uniform-random position "
                 <em>"k"</em>
-                " into two blocks connected by an unconditional branch.
-                 On "
+                " into two blocks. Instead of an unconditional jump, Ensia binds every split boundary to a
+                 provably opaque predicate "
+                <code class="font-mono">"((seed * (seed + 1)) & 1) == 0"</code>
+                " shielded by stateful barriers. A cold bogus target block loops back to the destination, ensuring
+                 CFG restructuring survives LLVM -O3 passes. On "
                 <strong>"x86_64 and AArch64"</strong>
                 " targets, the splitting point also injects a stack-confusion
                  inline ASM sequence: a paired "

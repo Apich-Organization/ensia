@@ -27,8 +27,8 @@ namespace llvm {
 FunctionPass *createChaosStateMachinePass(bool flag);
 void initializeChaosStateMachinePass(PassRegistry &Registry);
 
-// Logistic-map step in Q16 fixed-point (compile-time helper).
-// Returns next chaos value in [0, 65535]. Safe: avoids fixed points.
+// Logistic-map step in Q32 fixed-point (compile-time helper).
+// Returns next chaos value in [1, 2^32 - 1]. Safe: avoids fixed points.
 uint32_t chaosMapStep(uint32_t x);
 
 } // namespace llvm

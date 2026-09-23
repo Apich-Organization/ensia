@@ -57,9 +57,13 @@ static Value *buildHardwareTruePredicate(Module &M, IRBuilder<> &IRB) {
   if (targetIsX86(M)) {
     // CPUID leaf 1: EDX bit 25 = SSE support — always set on x86_64/modern x86
     FunctionType *AsmTy = FunctionType::get(I32Ty, {}, false);
-    const char *asmCode = "mov $$1, %eax\n\tcpuid";
+    const char *asmCode =
+        targetIsX86_64(M)
+            ? "pushq %rbx\n\tmovl $$1, %eax\n\tcpuid\n\tpopq %rbx"
+            : "pushl %ebx\n\tmovl $$1, %eax\n\tcpuid\n\tpopl %ebx";
     const char *asmConstraints =
-        "={dx},~{eax},~{ebx},~{ecx},~{dirflag},~{fpsr},~{flags}";
+        targetIsX86_64(M) ? "={edx},~{rax},~{rcx},~{dirflag},~{fpsr},~{flags}"
+                          : "={edx},~{eax},~{ecx},~{dirflag},~{fpsr},~{flags}";
     InlineAsm *cpuidAsm =
         InlineAsm::get(AsmTy, asmCode, asmConstraints,
                        /*hasSideEffects=*/true, InlineAsm::AD_ATT);
@@ -71,9 +75,8 @@ static Value *buildHardwareTruePredicate(Module &M, IRBuilder<> &IRB) {
   } else if (targetIsAArch64(M)) {
     // Read virtual counter — always non-zero after the first clock cycle
     FunctionType *AsmTy = FunctionType::get(I64Ty, {}, false);
-    InlineAsm *mrsAsm = InlineAsm::get(
-        AsmTy, "mrs $0, cntvct_el0", "=r,~{dirflag},~{fpsr},~{flags}",
-        /*hasSideEffects=*/true, InlineAsm::AD_ATT);
+    InlineAsm *mrsAsm = InlineAsm::get(AsmTy, "mrs $0, cntvct_el0", "=r,~{cc}",
+                                       /*hasSideEffects=*/true);
     Value *tsc = IRB.CreateCall(AsmTy, mrsAsm, {}, "bcf.mrs.tsc");
     // (tsc | 1) is always non-zero
     Value *orOne = IRB.CreateOr(tsc, ConstantInt::get(I64Ty, 1), "bcf.tsc.or1");
@@ -93,13 +96,14 @@ static Value *buildTSCNoisePredicate(Module &M, IRBuilder<> &IRB) {
 
   Type *I64Ty = Type::getInt64Ty(Ctx);
   FunctionType *AsmTy = FunctionType::get(I64Ty, {}, false);
+  const char *asmCode = targetIsX86_64(M)
+                            ? "rdtsc\n\tshlq $$32, %rdx\n\torq %rdx, %rax"
+                            : "rdtsc";
+  const char *asmConstraints = targetIsX86_64(M)
+                                   ? "={rax},~{rdx},~{dirflag},~{fpsr},~{flags}"
+                                   : "=A,~{dirflag},~{fpsr},~{flags}";
   InlineAsm *rdtscAsm =
-      InlineAsm::get(AsmTy,
-                     "rdtsc\n\t"
-                     "shl $$32, %rdx\n\t"
-                     "or %rax, %rdx\n\t"
-                     "mov %rdx, $0",
-                     "=r,~{rax},~{rdx},~{dirflag},~{fpsr},~{flags}",
+      InlineAsm::get(AsmTy, asmCode, asmConstraints,
                      /*hasSideEffects=*/true, InlineAsm::AD_ATT);
   Value *tsc = IRB.CreateCall(AsmTy, rdtscAsm, {}, "bcf.rdtsc");
   Value *orOne = IRB.CreateOr(tsc, ConstantInt::get(I64Ty, 1LL), "bcf.tsc.or");
@@ -116,9 +120,13 @@ static Value *buildEntropyChainPredicate(Module &M, IRBuilder<> &IRB,
   if (targetIsX86(M)) {
     // Tier 1: CPUID — EDX bit 25 = SSE (always 1 on x86_64)
     FunctionType *CpuidTy = FunctionType::get(I32Ty, {}, false);
-    const char *asmCode = "mov $$1, %eax\n\tcpuid";
+    const char *asmCode =
+        targetIsX86_64(M)
+            ? "pushq %rbx\n\tmovl $$1, %eax\n\tcpuid\n\tpopq %rbx"
+            : "pushl %ebx\n\tmovl $$1, %eax\n\tcpuid\n\tpopl %ebx";
     const char *asmConstraints =
-        "={dx},~{eax},~{ebx},~{ecx},~{dirflag},~{fpsr},~{flags}";
+        targetIsX86_64(M) ? "={edx},~{rax},~{rcx},~{dirflag},~{fpsr},~{flags}"
+                          : "={edx},~{eax},~{ecx},~{dirflag},~{fpsr},~{flags}";
     InlineAsm *cpuidIA = InlineAsm::get(CpuidTy, asmCode, asmConstraints, true,
                                         InlineAsm::AD_ATT);
     Value *edx = IRB.CreateCall(CpuidTy, cpuidIA, {}, "bcf.ec.edx");
@@ -128,14 +136,14 @@ static Value *buildEntropyChainPredicate(Module &M, IRBuilder<> &IRB,
 
     // Tier 2: RDTSC — (rdtsc | 1) != 0
     FunctionType *RdtscTy = FunctionType::get(I64Ty, {}, false);
-    InlineAsm *rdtscIA =
-        InlineAsm::get(RdtscTy,
-                       "rdtsc\n\t"
-                       "shl $$32, %rdx\n\t"
-                       "or %rax, %rdx\n\t"
-                       "mov %rdx, $0",
-                       "=r,~{rax},~{rdx},~{dirflag},~{fpsr},~{flags}", true,
-                       InlineAsm::AD_ATT);
+    const char *rdtscCode = targetIsX86_64(M)
+                                ? "rdtsc\n\tshlq $$32, %rdx\n\torq %rdx, %rax"
+                                : "rdtsc";
+    const char *rdtscConstraints =
+        targetIsX86_64(M) ? "={rax},~{rdx},~{dirflag},~{fpsr},~{flags}"
+                          : "=A,~{dirflag},~{fpsr},~{flags}";
+    InlineAsm *rdtscIA = InlineAsm::get(RdtscTy, rdtscCode, rdtscConstraints,
+                                        true, InlineAsm::AD_ATT);
     Value *tsc = IRB.CreateCall(RdtscTy, rdtscIA, {}, "bcf.ec.tsc");
     Value *or1 = IRB.CreateOr(tsc, ConstantInt::get(I64Ty, 1LL));
     Value *t2 = IRB.CreateICmpNE(or1, ConstantInt::get(I64Ty, 0), "bcf.ec.t2");
@@ -144,9 +152,8 @@ static Value *buildEntropyChainPredicate(Module &M, IRBuilder<> &IRB,
   } else if (targetIsAArch64(M)) {
     // Tier 1+2 combined: cntvct_el0 | 1 != 0 (virtual timer, always ticking)
     FunctionType *MrsTy = FunctionType::get(I64Ty, {}, false);
-    InlineAsm *mrsIA = InlineAsm::get(MrsTy, "mrs $0, cntvct_el0",
-                                      "=r,~{dirflag},~{fpsr},~{flags}", true,
-                                      InlineAsm::AD_ATT);
+    InlineAsm *mrsIA =
+        InlineAsm::get(MrsTy, "mrs $0, cntvct_el0", "=r,~{cc}", true);
     Value *tsc = IRB.CreateCall(MrsTy, mrsIA, {}, "bcf.ec.mrs");
     Value *or1 = IRB.CreateOr(tsc, ConstantInt::get(I64Ty, 1LL));
     Value *t1 = IRB.CreateICmpNE(or1, ConstantInt::get(I64Ty, 0), "bcf.ec.t1");
@@ -493,6 +500,11 @@ struct BogusControlFlow : public FunctionPass {
 
     // In junkBB1: perform synthetic arithmetic before jumping, sink with
     // volatile store
+    BasicBlock &Entry = F.getEntryBlock();
+    IRBuilder<> EntryIRB(&Entry, Entry.getFirstInsertionPt());
+    AllocaInst *sink1 = EntryIRB.CreateAlloca(I32Ty, nullptr, "bcf.exp1.sink");
+    AllocaInst *sink2 = EntryIRB.CreateAlloca(I32Ty, nullptr, "bcf.exp2.sink");
+
     IRBuilder<> IRB1(junkBB1);
     uint32_t r1 = cryptoutils->get_uint32_t();
     Value *val1 =
@@ -500,7 +512,6 @@ struct BogusControlFlow : public FunctionPass {
                        ConstantInt::get(I32Ty, 0x1337), "bcf.exp1.val");
     Value *xor1 = IRB1.CreateXor(val1, ConstantInt::get(I32Ty, 0x55AA55AA),
                                  "bcf.exp1.xor");
-    AllocaInst *sink1 = IRB1.CreateAlloca(I32Ty, nullptr, "bcf.exp1.sink");
     IRB1.CreateStore(xor1, sink1, /*isVolatile=*/true);
     InlineAsm *IA1 = InlineAsm::get(
         FunctionType::get(Type::getVoidTy(Ctx), false), "nop", "", true, false);
@@ -515,7 +526,6 @@ struct BogusControlFlow : public FunctionPass {
                                  ConstantInt::get(I32Ty, 0x42), "bcf.exp2.val");
     Value *mul2 =
         IRB2.CreateMul(val2, ConstantInt::get(I32Ty, 33), "bcf.exp2.mul");
-    AllocaInst *sink2 = IRB2.CreateAlloca(I32Ty, nullptr, "bcf.exp2.sink");
     IRB2.CreateStore(mul2, sink2, /*isVolatile=*/true);
     InlineAsm *IA2 =
         InlineAsm::get(FunctionType::get(Type::getVoidTy(Ctx), false),
@@ -576,7 +586,6 @@ struct BogusControlFlow : public FunctionPass {
           ConstantInt::get(Type::getInt32Ty(F.getContext()), 0));
     }
 
-    cond = insertOpaqueBarrier(IRB, cond);
     IRB.CreateCondBr(cond, junkBB1, junkBB2);
     turnOffOptimization(basicBlock->getParent());
   }
@@ -1075,9 +1084,12 @@ struct BogusControlFlow : public FunctionPass {
             break;
         }
       }
+      Function *F = basicBlock->getParent();
+      BasicBlock &Entry = F->getEntryBlock();
+      IRBuilder<> EntryIRB(&Entry, Entry.getFirstInsertionPt());
       for (Value *V : valsToSink) {
         AllocaInst *sinkSlot =
-            new AllocaInst(V->getType(), 0, "bcf.sink.slot", sinkInsertPt);
+            EntryIRB.CreateAlloca(V->getType(), nullptr, "bcf.sink.slot");
         new StoreInst(V, sinkSlot, /*isVolatile=*/true, sinkInsertPt);
       }
     }
@@ -1250,7 +1262,6 @@ struct BogusControlFlow : public FunctionPass {
         Last = IRBReal->CreateCall(opFunction);
       } else {
         Value *swPred = IRBReal->CreateICmp(pred, Last, RealRHS);
-        swPred = insertOpaqueBarrier(*IRBReal, swPred);
         bool doEntropyChain =
             BCFEntropyChainTemp &&
             (ObfuscationMaxMode || cryptoutils->get_range(2) == 0);

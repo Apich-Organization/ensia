@@ -45,88 +45,140 @@ static cl::opt<bool>
                  cl::desc("[MBA] Enable heuristic zero-term noise injection"));
 static thread_local bool MBAHeuristicTemp = true;
 
-// ─── zero-term generator ─────────────────────────────────────────────────────
+// ─── context-dependent zero-term generator ───────────────────────────────────
 //
-// Returns an IR Value that always evaluates to 0 over Z/2^n Z.
-// `kind` selects which formula; calling code randomises it.
+// Introduces runtime contextual zero terms derived from @__ensia_mba_ctx and
+// non-linear affine polynomial noise terms. These terms evaluate to zero ONLY
+// when evaluated against the runtime secret context, preventing black-box I/O
+// oracle synthesis (Syntia/Arybo) and SMT simplification.
+
+static std::pair<GlobalVariable *, uint64_t> getOrCreateMBACtx(Module *M) {
+  if (!M)
+    return {nullptr, 0};
+  GlobalVariable *GV = M->getGlobalVariable("__ensia_mba_ctx", true);
+  if (GV) {
+    if (ConstantInt *CI = dyn_cast_or_null<ConstantInt>(GV->getInitializer()))
+      return {GV, CI->getZExtValue()};
+  }
+  uint64_t secretK = cryptoutils->get_uint64_t();
+  if (secretK == 0)
+    secretK = 0x5a17e9b3c4f2d801ULL;
+  Type *I64Ty = Type::getInt64Ty(M->getContext());
+  GV = new GlobalVariable(*M, I64Ty, /*isConstant=*/false,
+                          GlobalValue::InternalLinkage,
+                          ConstantInt::get(I64Ty, secretK), "__ensia_mba_ctx");
+  return {GV, secretK};
+}
+
+static Value *buildContextZero(IRBuilder<NoFolder> &IRB, Type *T, Module *M) {
+  if (!M || !T->isIntegerTy())
+    return ConstantInt::get(T, 0);
+  auto [ctxGV, secretK] = getOrCreateMBACtx(M);
+  if (!ctxGV)
+    return ConstantInt::get(T, 0);
+  LLVMContext &Ctx = M->getContext();
+  Value *loadedCtx =
+      IRB.CreateLoad(Type::getInt64Ty(Ctx), ctxGV, "mba.ctx.val");
+  Value *barCtx = insertOpaqueBarrier(IRB, loadedCtx);
+  Value *ctxDiff = IRB.CreateXor(
+      barCtx, ConstantInt::get(Type::getInt64Ty(Ctx), secretK), "mba.ctx.diff");
+  return IRB.CreateZExtOrTrunc(ctxDiff, T, "mba.ctx.zero");
+}
 
 static Value *buildZeroTerm(IRBuilder<NoFolder> &IRB, Value *a, Value *b,
-                            unsigned kind) {
+                            unsigned kind, Value *ctxZero) {
   Type *T = a->getType();
+  if (!T->isIntegerTy())
+    return ConstantInt::get(T, 0);
+  unsigned width = T->getIntegerBitWidth();
   Constant *one = ConstantInt::get(T, 1);
   Constant *two = ConstantInt::get(T, 2);
 
   switch (kind & 7) {
-  case 0: { // ((a * (a - 1)) & 1) == 0  (consecutive integer parity)
-    Value *opA = insertOpaqueBarrier(IRB, a);
-    Value *aminus1 = IRB.CreateSub(opA, one);
-    Value *mul = IRB.CreateMul(a, aminus1);
-    return IRB.CreateAnd(mul, one, "mba.poly.zero0");
+  case 0: { // Dynamic context-dependent affine polynomial term:
+            // P(a, b) * ctxZero == 0 at runtime, but non-zero when sampled
+            // in isolation by black-box synthesizers (Syntia/Arybo)
+    Value *p1 = IRB.CreateMul(a, ConstantInt::get(T, 0x1337 | 1));
+    Value *p2 = IRB.CreateMul(b, ConstantInt::get(T, 0x5a17 | 1));
+    Value *poly =
+        IRB.CreateAdd(IRB.CreateAdd(p1, p2), ConstantInt::get(T, 0x7f4a));
+    return IRB.CreateMul(poly, ctxZero, "mba.ctx.poly0");
   }
-  case 1: { // ((b * (b + 1)) & 1) == 0  (consecutive integer parity)
-    Value *opB = insertOpaqueBarrier(IRB, b);
-    Value *bplus1 = IRB.CreateAdd(opB, one);
-    Value *mul = IRB.CreateMul(b, bplus1);
-    return IRB.CreateAnd(mul, one, "mba.poly.zero1");
+  case 1: { // Quadratic residue identity: for all x in Z, (x^2 & 2) == 0.
+            // Combined with context zero to resist SMT bitmask elimination.
+    if (width >= 2) {
+      Value *sq = IRB.CreateMul(a, a);
+      Value *quadZero = IRB.CreateAnd(sq, two, "mba.quad.zero");
+      Value *quadMix = IRB.CreateOr(quadZero, ctxZero);
+      Value *noisePoly = IRB.CreateAdd(b, ConstantInt::get(T, 0x3b));
+      return IRB.CreateMul(noisePoly, quadMix, "mba.poly.zero1");
+    }
+    Value *aminus1 = IRB.CreateSub(a, one);
+    return IRB.CreateAnd(IRB.CreateMul(a, aminus1), one, "mba.poly.zero1");
   }
-  case 2: { // ((a*a + a) & 1) == 0  (quadratic parity)
-    Value *opA = insertOpaqueBarrier(IRB, a);
-    Value *a2 = IRB.CreateMul(a, opA);
-    Value *sum = IRB.CreateAdd(a2, a);
-    return IRB.CreateAnd(sum, one, "mba.poly.zero2");
+  case 2: { // Non-linear bivariate polynomial coupled with dynamic context:
+            // (a^2 + b^2 + 0x101) * ctxZero
+    Value *a2 = IRB.CreateMul(a, a);
+    Value *b2 = IRB.CreateMul(b, b);
+    Value *sum2 =
+        IRB.CreateAdd(IRB.CreateAdd(a2, b2), ConstantInt::get(T, 0x101));
+    return IRB.CreateMul(sum2, ctxZero, "mba.poly.zero2");
   }
-  case 3: { // ((b*b - b) & 1) == 0  (quadratic parity)
-    Value *opB = insertOpaqueBarrier(IRB, b);
-    Value *b2 = IRB.CreateMul(b, opB);
-    Value *sub = IRB.CreateSub(b2, b);
-    return IRB.CreateAnd(sub, one, "mba.poly.zero3");
+  case 3: { // Consecutive integer parity coupled with context zero:
+            // ((a * (a + 1)) & 1) ^ ctxZero
+    Value *aplus1 = IRB.CreateAdd(a, one);
+    Value *mul = IRB.CreateMul(a, aplus1);
+    Value *par = IRB.CreateAnd(mul, one);
+    return IRB.CreateXor(par, ctxZero, "mba.poly.zero3");
   }
-  case 4: { // (((a ^ b) * ((a ^ b) + 1)) & 1) == 0
+  case 4: { // (((a ^ b) * ((a ^ b) + 1)) & 1) | ctxZero
     Value *x = IRB.CreateXor(a, b);
-    Value *opX = insertOpaqueBarrier(IRB, x);
-    Value *xplus1 = IRB.CreateAdd(opX, one);
+    Value *xplus1 = IRB.CreateAdd(x, one);
     Value *mul = IRB.CreateMul(x, xplus1);
-    return IRB.CreateAnd(mul, one, "mba.poly.zero4");
+    Value *par = IRB.CreateAnd(mul, one);
+    return IRB.CreateOr(par, ctxZero, "mba.poly.zero4");
   }
-  case 5: { // (((a + b) * ((a + b) - 1)) & 1) == 0
-    Value *s = IRB.CreateAdd(a, b);
-    Value *opS = insertOpaqueBarrier(IRB, s);
-    Value *sminus1 = IRB.CreateSub(opS, one);
-    Value *mul = IRB.CreateMul(s, sminus1);
-    return IRB.CreateAnd(mul, one, "mba.poly.zero5");
-  }
-  case 6: { // ((a * (a + 1) * (a + 2)) & 1) == 0 (product of 3 integers)
-    Value *opA = insertOpaqueBarrier(IRB, a);
-    Value *ap1 = IRB.CreateAdd(opA, one);
-    Value *ap2 = IRB.CreateAdd(opA, two);
-    Value *m1 = IRB.CreateMul(a, ap1);
-    Value *m2 = IRB.CreateMul(m1, ap2);
-    return IRB.CreateAnd(m2, one, "mba.poly.zero6");
-  }
-  default: { // ((a * a * a - a) & 1) == 0 (cubic parity)
-    Value *opA = insertOpaqueBarrier(IRB, a);
-    Value *a2 = IRB.CreateMul(a, opA);
+  case 5: { // Modulo 3 cubic residue: (a^3 - a) is always a multiple of 6.
+            // Scaled by dynamic context zero to generate high-degree noise.
+    Value *a2 = IRB.CreateMul(a, a);
     Value *a3 = IRB.CreateMul(a2, a);
-    Value *sub = IRB.CreateSub(a3, opA);
-    return IRB.CreateAnd(sub, one, "mba.poly.zero7");
+    Value *sub = IRB.CreateSub(a3, a);
+    return IRB.CreateMul(sub, ctxZero, "mba.poly.zero5");
+  }
+  case 6: { // Affine cross-product noise: (2*a*b + 1) * ctxZero
+    Value *ab = IRB.CreateMul(a, b);
+    Value *ab2 = IRB.CreateMul(ab, two);
+    Value *affine = IRB.CreateAdd(ab2, one);
+    return IRB.CreateMul(affine, ctxZero, "mba.poly.zero6");
+  }
+  default: { // Quadratic parity + context zero:
+    Value *b2 = IRB.CreateMul(b, b);
+    Value *sub = IRB.CreateSub(b2, b);
+    Value *par = IRB.CreateAnd(sub, one);
+    return IRB.CreateOr(par, ctxZero, "mba.poly.zero7");
   }
   }
 }
 
 // Inject k random noise terms (r_i * zero_i) into `base`.
 // Each noise term is r_i * z_i where r_i is a fresh random constant and
-// z_i is a zero expression.  Net arithmetic effect: base + 0 + 0 + ... = base.
+// z_i is a context-dependent zero expression. Net arithmetic effect: base + 0 =
+// base.
 static Value *injectNoise(IRBuilder<NoFolder> &IRB, Value *base, Value *a,
                           Value *b, unsigned k) {
   Type *T = base->getType();
   Value *result = base;
   BasicBlock *BB = IRB.GetInsertBlock();
   BasicBlock::iterator IP = IRB.GetInsertPoint();
+  Function *F = BB ? BB->getParent() : nullptr;
+  Module *M = F ? F->getParent() : nullptr;
+
+  // Compute context zero ONCE for this noise injection site to avoid register
+  // allocator explosion
+  Value *ctxZero = buildContextZero(IRB, T, M);
 
   // Find up to 8 live integers before IP (including args and entry block)
   SmallVector<Value *, 8> liveVars;
-  Function *F =
-      IRB.GetInsertBlock() ? IRB.GetInsertBlock()->getParent() : nullptr;
   if (F) {
     for (Argument &Arg : F->args()) {
       if (Arg.getType() == T)
@@ -152,43 +204,40 @@ static Value *injectNoise(IRBuilder<NoFolder> &IRB, Value *base, Value *a,
 
   for (unsigned i = 0; i < k; i++) {
     Constant *r = ConstantInt::get(T, cryptoutils->get_uint64_t());
-    Value *z = buildZeroTerm(IRB, a, b, cryptoutils->get_range(8));
+    Value *z = buildZeroTerm(IRB, a, b, cryptoutils->get_range(8), ctxZero);
 
-    // Always mix in a live variable opaque predicate if available, to strongly
-    // tie data-flow
+    // Always mix in a live variable opaque predicate if available, strongly
+    // tying data-flow to runtime state
     if (!liveVars.empty()) {
       Value *L = liveVars[cryptoutils->get_range(liveVars.size())];
       Value *opZero;
       switch (cryptoutils->get_range(4)) {
-      case 0: { // (L * (L - 1)) & 1 == 0  (non-linear algebraic)
-        Value *barL = insertOpaqueBarrier(IRB, L);
-        Value *Lminus1 = IRB.CreateSub(barL, ConstantInt::get(T, 1));
+      case 0: { // (L * (L - 1)) & 1 == 0
+        Value *Lminus1 = IRB.CreateSub(L, ConstantInt::get(T, 1));
         Value *mul = IRB.CreateMul(L, Lminus1);
         opZero = IRB.CreateAnd(mul, ConstantInt::get(T, 1), "mba.op.zero1");
         break;
       }
-      case 1: { // (L * (L + 1)) & 1 == 0  (non-linear algebraic)
-        Value *barL = insertOpaqueBarrier(IRB, L);
-        Value *Lplus1 = IRB.CreateAdd(barL, ConstantInt::get(T, 1));
+      case 1: { // (L * (L + 1)) & 1 == 0
+        Value *Lplus1 = IRB.CreateAdd(L, ConstantInt::get(T, 1));
         Value *mul = IRB.CreateMul(L, Lplus1);
         opZero = IRB.CreateAnd(mul, ConstantInt::get(T, 1), "mba.op.zero2");
         break;
       }
-      case 2: { // (L * L + L) & 1 == 0  (quadratic parity)
-        Value *barL = insertOpaqueBarrier(IRB, L);
-        Value *L2 = IRB.CreateMul(L, barL);
+      case 2: { // (L * L + L) & 1 == 0
+        Value *L2 = IRB.CreateMul(L, L);
         Value *sum = IRB.CreateAdd(L2, L);
         opZero = IRB.CreateAnd(sum, ConstantInt::get(T, 1), "mba.op.zero3");
         break;
       }
-      default: { // (L * L - L) & 1 == 0  (quadratic parity)
-        Value *barL = insertOpaqueBarrier(IRB, L);
-        Value *L2 = IRB.CreateMul(L, barL);
+      default: { // (L * L - L) & 1 == 0
+        Value *L2 = IRB.CreateMul(L, L);
         Value *sub = IRB.CreateSub(L2, L);
         opZero = IRB.CreateAnd(sub, ConstantInt::get(T, 1), "mba.op.zero4");
         break;
       }
       }
+      opZero = IRB.CreateOr(opZero, ctxZero);
       z = IRB.CreateOr(z, opZero);
     }
 
@@ -226,7 +275,10 @@ void mbaAddRandLinear(BinaryOperator *bo) {
   Value *barSum1 = insertOpaqueBarrier(IRB, sum1);
   Value *sum2 = IRB.CreateAdd(barSum1, twora);
   Value *sum3 = IRB.CreateAdd(sum2, tworb);
-  bo->replaceAllUsesWith(IRB.CreateSub(sum3, twoR));
+  Value *res = IRB.CreateSub(sum3, twoR);
+  if (MBAHeuristicTemp && res)
+    res = injectNoise(IRB, res, a, b, 1 + cryptoutils->get_range(2));
+  bo->replaceAllUsesWith(res);
 }
 
 void mbaAdd(BinaryOperator *bo) {
@@ -711,6 +763,10 @@ void mbaBivariateNonlinear(BinaryOperator *bo) {
   // Combines non-linear product terms (a*b), bitwise terms (a^b, a&b), and
   // zero-product terms Example for ADD: a + b = (a ^ b) + 2*(a & b) + (a ^
   // a)*b^2
+  Function *F = bo->getFunction();
+  Module *M = F ? F->getParent() : nullptr;
+  Value *ctxZero = buildContextZero(IRB, T, M);
+
   Value *res = nullptr;
   switch (bo->getOpcode()) {
   case Instruction::Add: {
@@ -719,8 +775,10 @@ void mbaBivariateNonlinear(BinaryOperator *bo) {
     Value *twoAnd = IRB.CreateMul(andAB, ConstantInt::get(T, 2));
     Value *base = IRB.CreateAdd(xorAB, twoAnd);
 
-    // Injected non-linear zero term: (a ^ a) * b^2 with opaque barrier
-    Value *zeroTerm = IRB.CreateXor(a, insertOpaqueBarrier(IRB, a));
+    // Injected non-linear zero term: ((a ^ a) | ctxZero) * b^2 with opaque
+    // barrier
+    Value *zeroTerm =
+        IRB.CreateOr(IRB.CreateXor(a, insertOpaqueBarrier(IRB, a)), ctxZero);
     Value *b2 = IRB.CreateMul(b, b);
     Value *nlNoise = IRB.CreateMul(zeroTerm, b2);
     res = IRB.CreateAdd(base, nlNoise);
@@ -733,9 +791,10 @@ void mbaBivariateNonlinear(BinaryOperator *bo) {
     Value *twoAnd = IRB.CreateMul(andNB, ConstantInt::get(T, 2));
     Value *base = IRB.CreateAdd(subAB, twoAnd);
 
-    // Injected non-linear zero term: (b & ~b) * a^3 with opaque barrier
-    Value *zeroTerm =
-        IRB.CreateAnd(b, IRB.CreateNot(insertOpaqueBarrier(IRB, b)));
+    // Injected non-linear zero term: ((b & ~b) | ctxZero) * a^3 with opaque
+    // barrier
+    Value *zeroTerm = IRB.CreateOr(
+        IRB.CreateAnd(b, IRB.CreateNot(insertOpaqueBarrier(IRB, b))), ctxZero);
     Value *a3 = IRB.CreateMul(IRB.CreateMul(a, a), a);
     Value *nlNoise = IRB.CreateMul(zeroTerm, a3);
     res = IRB.CreateAdd(base, nlNoise);

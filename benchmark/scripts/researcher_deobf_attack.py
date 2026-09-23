@@ -21,8 +21,11 @@ import logging
 import os
 import sys
 import time
-import claripy
 import angr
+try:
+    import claripy
+except ImportError:
+    from angr import claripy
 
 # Suppress verbose angr logging
 logging.getLogger("angr").setLevel(logging.CRITICAL)

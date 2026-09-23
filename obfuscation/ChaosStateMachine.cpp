@@ -54,23 +54,95 @@ static cl::opt<uint32_t> ChaosMaxBlocks(
 // matching
 static uint32_t CSM_FALLBACK_ZERO = 0;
 static uint32_t CSM_FALLBACK_RESULT = 0;
+static uint32_t CSM_ATTRACTOR_M1 = 0;
+static uint32_t CSM_ATTRACTOR_M1_INV = 0;
+static uint32_t CSM_ATTRACTOR_C1 = 0;
+static uint32_t CSM_ATTRACTOR_K1 = 0;
+static uint32_t CSM_ATTRACTOR_K2 = 0;
+
+static uint32_t modInverse32(uint32_t a) {
+  uint32_t inv = a;
+  for (int i = 0; i < 5; i++)
+    inv *= 2u - a * inv;
+  return inv;
+}
 
 static void initCSMConstants() {
   if (CSM_FALLBACK_ZERO == 0) {
-    CSM_FALLBACK_ZERO = (cryptoutils->get_uint16_t() | 0x1000u);
-    CSM_FALLBACK_RESULT = (cryptoutils->get_uint16_t() | 0xC000u);
+    CSM_FALLBACK_ZERO = (cryptoutils->get_uint32_t() | 0x10000000u);
+    CSM_FALLBACK_RESULT = (cryptoutils->get_uint32_t() | 0xC0000000u);
+    CSM_ATTRACTOR_M1 =
+        cryptoutils->get_uint32_t() | 1u; // odd for modular inverse
+    CSM_ATTRACTOR_M1_INV = modInverse32(CSM_ATTRACTOR_M1);
+    CSM_ATTRACTOR_C1 = cryptoutils->get_uint32_t() | 0x1010101u;
+    CSM_ATTRACTOR_K1 = cryptoutils->get_uint32_t();
+    CSM_ATTRACTOR_K2 = cryptoutils->get_uint32_t();
   }
 }
 
+// Q32 fixed-point chaos map step: state space expanded from 2^16 to 2^32,
+// preventing small-domain lookup table generation and symbolic bitvector
+// simplification.
 uint32_t llvm::chaosMapStep(uint32_t x) {
   initCSMConstants();
-  uint64_t xc = (uint64_t)(x & 0xFFFFu);
+  uint64_t xc = (uint64_t)x;
   if (xc == 0)
-    xc = CSM_FALLBACK_ZERO; // avoid absorbing fixed point at 0
-  uint64_t inv = 65536ULL - xc;
-  uint64_t prod = xc * inv;                           // Q32
-  uint32_t nxt = (uint32_t)((prod * 65533ULL) >> 30); // Q16 result
+    xc = (uint64_t)CSM_FALLBACK_ZERO; // avoid absorbing fixed point at 0
+  uint64_t inv = (1ULL << 32) - xc;
+  uint64_t prod = xc * inv; // Q64
+  uint64_t p32 = prod >> 32;
+  uint32_t nxt = (uint32_t)((p32 * 4294967291ULL) >> 30);
   return nxt ? nxt : CSM_FALLBACK_RESULT; // avoid fixed point at 0 in result
+}
+
+// Discrete cellular automaton / non-linear bit diffusion over attractor basin
+static uint32_t diffuseState(uint32_t s) {
+  uint32_t rot = (s << 11) | (s >> 21);
+  return (rot ^ (s * 0x9e3779b9u)) + 0x7f4a7c15u;
+}
+
+static Value *buildDiffuseIR(IRBuilder<NoFolder> &IRB, Value *s,
+                             LLVMContext &Ctx) {
+  Type *I32Ty = Type::getInt32Ty(Ctx);
+  Value *shl = IRB.CreateShl(s, ConstantInt::get(I32Ty, 11));
+  Value *lshr = IRB.CreateLShr(s, ConstantInt::get(I32Ty, 21));
+  Value *rot = IRB.CreateOr(shl, lshr, "csm.diff.rot");
+  Value *mul =
+      IRB.CreateMul(s, ConstantInt::get(I32Ty, 0x9e3779b9u), "csm.diff.mul");
+  Value *xorVal = IRB.CreateXor(rot, mul, "csm.diff.xor");
+  return IRB.CreateAdd(xorVal, ConstantInt::get(I32Ty, 0x7f4a7c15u),
+                       "csm.diff.val");
+}
+
+// Multi-step invertible attractor basin encoding: transforms target case into
+// encoded state. Requires executing multiple non-linear iterations to decode.
+static uint32_t encodeAttractor(uint32_t target) {
+  initCSMConstants();
+  uint32_t x1 = ((target << 7) | (target >> 25)) ^ CSM_ATTRACTOR_K1;
+  uint32_t x2 = (x1 * CSM_ATTRACTOR_M1) + CSM_ATTRACTOR_C1;
+  uint32_t x3 = ((x2 << 13) | (x2 >> 19)) ^ CSM_ATTRACTOR_K2;
+  return x3;
+}
+
+static Value *buildDecodeAttractorIR(IRBuilder<NoFolder> &IRB, Value *x3,
+                                     LLVMContext &Ctx) {
+  initCSMConstants();
+  Type *I32Ty = Type::getInt32Ty(Ctx);
+  Value *unK2 = IRB.CreateXor(x3, ConstantInt::get(I32Ty, CSM_ATTRACTOR_K2),
+                              "csm.dec.unk2");
+  Value *lshr13 = IRB.CreateLShr(unK2, ConstantInt::get(I32Ty, 13));
+  Value *shl19 = IRB.CreateShl(unK2, ConstantInt::get(I32Ty, 19));
+  Value *x2 = IRB.CreateOr(lshr13, shl19, "csm.dec.x2");
+  Value *subC1 = IRB.CreateSub(x2, ConstantInt::get(I32Ty, CSM_ATTRACTOR_C1),
+                               "csm.dec.subc1");
+  Value *x1 = IRB.CreateMul(
+      subC1, ConstantInt::get(I32Ty, CSM_ATTRACTOR_M1_INV), "csm.dec.x1");
+  Value *unK1 = IRB.CreateXor(x1, ConstantInt::get(I32Ty, CSM_ATTRACTOR_K1),
+                              "csm.dec.unk1");
+  Value *lshr7 = IRB.CreateLShr(unK1, ConstantInt::get(I32Ty, 7));
+  Value *shl25 = IRB.CreateShl(unK1, ConstantInt::get(I32Ty, 25));
+  Value *target = IRB.CreateOr(lshr7, shl25, "csm.dec.target");
+  return target;
 }
 
 // Build a warmup + unique chaos sequence of length `len`.
@@ -78,7 +150,7 @@ uint32_t llvm::chaosMapStep(uint32_t x) {
 static SmallVector<uint32_t, 32>
 buildChaosSequence(uint32_t seed, unsigned len, uint32_t warmupOverride = 0) {
   // Warm up to escape the initial transient of the logistic map
-  uint32_t x = (seed != 0) ? seed : (cryptoutils->get_uint16_t() | 0x4000u);
+  uint32_t x = (seed != 0) ? seed : (cryptoutils->get_uint32_t() | 0x40000000u);
   uint32_t warmupSteps =
       warmupOverride ? warmupOverride : (uint32_t)ChaosWarmup;
   for (uint32_t i = 0; i < warmupSteps; i++)
@@ -98,7 +170,7 @@ buildChaosSequence(uint32_t seed, unsigned len, uint32_t warmupOverride = 0) {
     } else {
       stuck_counter++;
       if (stuck_counter > 5) {
-        x ^= cryptoutils->get_uint16_t();
+        x ^= cryptoutils->get_uint32_t();
         stuck_counter = 0;
       }
     }
@@ -106,7 +178,8 @@ buildChaosSequence(uint32_t seed, unsigned len, uint32_t warmupOverride = 0) {
   return seq;
 }
 
-// ─── Runtime IR: logistic map state transition ───────────────────────────────
+// ─── Runtime IR: logistic map state transition in Q32
+// ─────────────────────────
 
 static Value *buildLogisticIR(IRBuilder<NoFolder> &IRB, Value *state,
                               LLVMContext &Ctx) {
@@ -115,19 +188,22 @@ static Value *buildLogisticIR(IRBuilder<NoFolder> &IRB, Value *state,
   Type *I32Ty = Type::getInt32Ty(Ctx);
 
   Value *s64 = IRB.CreateZExt(state, I64Ty, "csm.s64");
-  Value *xc_raw =
-      IRB.CreateAnd(s64, ConstantInt::get(I64Ty, 0xFFFF), "csm.xc_raw");
-  Value *xcIsZero = IRB.CreateICmpEQ(xc_raw, ConstantInt::get(I64Ty, 0));
+  Value *s64_bar = insertOpaqueBarrier(IRB, s64);
+  Value *isZero = IRB.CreateICmpEQ(s64_bar, ConstantInt::get(I64Ty, 0));
   Value *xc = IRB.CreateSelect(
-      xcIsZero, ConstantInt::get(I64Ty, CSM_FALLBACK_ZERO), xc_raw, "csm.xc");
-  Value *inv = IRB.CreateSub(ConstantInt::get(I64Ty, 65536), xc, "csm.inv");
+      isZero, ConstantInt::get(I64Ty, (uint64_t)CSM_FALLBACK_ZERO), s64_bar,
+      "csm.xc");
+  Value *inv =
+      IRB.CreateSub(ConstantInt::get(I64Ty, 1ULL << 32), xc, "csm.inv");
   Value *prod = IRB.CreateMul(xc, inv, "csm.prod");
-  Value *sc = IRB.CreateMul(prod, ConstantInt::get(I64Ty, 65533), "csm.sc");
+  Value *p32 = IRB.CreateLShr(prod, ConstantInt::get(I64Ty, 32), "csm.p32");
+  Value *sc =
+      IRB.CreateMul(p32, ConstantInt::get(I64Ty, 4294967291ULL), "csm.sc");
   Value *nxt64 = IRB.CreateLShr(sc, ConstantInt::get(I64Ty, 30), "csm.nxt64");
   Value *nxt32 = IRB.CreateTrunc(nxt64, I32Ty, "csm.nxt32");
-  Value *isZero = IRB.CreateICmpEQ(nxt32, ConstantInt::get(I32Ty, 0));
+  Value *nxtZero = IRB.CreateICmpEQ(nxt32, ConstantInt::get(I32Ty, 0));
   Value *guard =
-      IRB.CreateSelect(isZero, ConstantInt::get(I32Ty, CSM_FALLBACK_RESULT),
+      IRB.CreateSelect(nxtZero, ConstantInt::get(I32Ty, CSM_FALLBACK_RESULT),
                        nxt32, "csm.guarded");
   return guard;
 }
@@ -153,12 +229,14 @@ static Value *computeDataFeedback(IRBuilder<NoFolder> &IRB, Function *F,
   }
 
   if (BB) {
-    SmallVector<Instruction *, 32> targets;
+    SmallVector<Instruction *, 8> targets;
     for (Instruction &I : *BB) {
-      if (I.getName().starts_with("csm."))
+      if (isSynthetic(&I) || I.getName().starts_with("csm."))
         continue;
       if (I.getType()->isIntegerTy() && !isa<PHINode>(&I)) {
         targets.push_back(&I);
+        if (targets.size() >= 4)
+          break;
       }
     }
     for (Instruction *I : targets) {
@@ -256,6 +334,7 @@ struct ChaosStateMachine : public FunctionPass {
     BasicBlock *entryBB = &*fi;
 
     // If entry ends with a conditional, split it so the state alloca sits alone
+    BasicBlock *entrySucc = nullptr;
     {
       BranchInst *br = dyn_cast<BranchInst>(entryBB->getTerminator());
       if (br && br->isConditional()) {
@@ -266,6 +345,9 @@ struct ChaosStateMachine : public FunctionPass {
         BasicBlock *splitBB =
             entryBB->splitBasicBlock(splitPt, "csm.entry.split");
         origBBs.insert(origBBs.begin(), splitBB);
+        entrySucc = splitBB;
+      } else if (br && br->isUnconditional()) {
+        entrySucc = br->getSuccessor(0);
       }
     }
 
@@ -279,10 +361,10 @@ struct ChaosStateMachine : public FunctionPass {
     uint32_t feistelK = cryptoutils->get_uint32_t();
     uint32_t initDfbSeed = cryptoutils->get_uint32_t();
 
-    // Precompute: for each block i, L_i = chaosMapStep(caseVals[i])
-    SmallVector<uint32_t, 32> logisticNext(numBBs);
+    // Precompute: for each block i, expected next diffused state
+    SmallVector<uint32_t, 32> nextExpected(numBBs);
     for (unsigned i = 0; i < numBBs; i++)
-      logisticNext[i] = chaosMapStep(caseVals[i]);
+      nextExpected[i] = diffuseState(chaosMapStep(caseVals[i]));
 
     // ── Phase 4: state alloca & initial store
     // ─────────────────────────────────
@@ -293,13 +375,24 @@ struct ChaosStateMachine : public FunctionPass {
     Instruction *oldTerm = entryBB->getTerminator();
     AllocaInst *stateAlloca =
         new AllocaInst(I32Ty, DL.getAllocaAddrSpace(), "csm.state", oldTerm);
-    // Store the feistel-masked initial case (block 0)
+    // Find initial target block index corresponding to entrySucc
+    unsigned initIdx = 0;
+    if (entrySucc) {
+      for (unsigned j = 0; j < origBBs.size(); j++) {
+        if (origBBs[j] == entrySucc) {
+          initIdx = j;
+          break;
+        }
+      }
+    }
+    // Store the attractor-encoded and feistel-masked initial case
     IRBuilder<NoFolder> IRBEntry(oldTerm);
     Value *dataFeedbackEntry = computeDataFeedback(IRBEntry, F, initDfbSeed);
     Value *maskValEntry = IRBEntry.CreateXor(ConstantInt::get(I32Ty, feistelK),
                                              dataFeedbackEntry, "csm.initmask");
-    Value *initValMasked = IRBEntry.CreateXor(
-        ConstantInt::get(I32Ty, caseVals[0]), maskValEntry, "csm.initstate");
+    uint32_t initEnc = encodeAttractor(caseVals[initIdx]);
+    Value *initValMasked = IRBEntry.CreateXor(ConstantInt::get(I32Ty, initEnc),
+                                              maskValEntry, "csm.initstate");
     Value *opaqueInit = insertOpaqueBarrier(IRBEntry, initValMasked);
     IRBEntry.CreateStore(opaqueInit, stateAlloca);
     oldTerm->eraseFromParent();
@@ -327,7 +420,9 @@ struct ChaosStateMachine : public FunctionPass {
     Value *rawState = IRBLoop.CreateLoad(I32Ty, stateAlloca, "csm.raw");
     Value *maskValLoop = IRBLoop.CreateXor(ConstantInt::get(I32Ty, feistelK),
                                            dfbPhiLoopEntry, "csm.loopmask");
-    Value *chaosState = IRBLoop.CreateXor(rawState, maskValLoop, "csm.decoded");
+    Value *demasked = IRBLoop.CreateXor(rawState, maskValLoop, "csm.demasked");
+    Value *barDemasked = insertOpaqueBarrier(IRBLoop, demasked);
+    Value *chaosState = buildDecodeAttractorIR(IRBLoop, barDemasked, Ctx);
 
     SwitchInst *switchI =
         SwitchInst::Create(chaosState, swDefault, numBBs, loopEntry);
@@ -365,7 +460,7 @@ struct ChaosStateMachine : public FunctionPass {
           if (origBBs[j] == succ)
             return (int)j;
         if (succ == entryBB)
-          return 0;
+          return (int)initIdx;
         return -1;
       };
 
@@ -384,10 +479,18 @@ struct ChaosStateMachine : public FunctionPass {
         int j = getSuccIdx(succ);
         if (j >= 0) {
           uint32_t targetCase = caseVals[j];
-          uint32_t corr = logisticNext[i] ^ targetCase;
-          Value *nextRaw = buildLogisticIR(IRB, stateDemasked, Ctx);
-          Value *nextDecoded =
-              IRB.CreateXor(nextRaw, ConstantInt::get(I32Ty, corr), "csm.next");
+          uint32_t targetEnc = encodeAttractor(targetCase);
+          uint32_t delta1 = cryptoutils->get_uint32_t();
+          uint32_t vAdd = nextExpected[i] + delta1;
+          uint32_t delta2 = vAdd ^ targetEnc;
+
+          Value *nextLog = buildLogisticIR(IRB, stateDemasked, Ctx);
+          Value *nextRaw = buildDiffuseIR(IRB, nextLog, Ctx);
+          Value *barNext = insertOpaqueBarrier(IRB, nextRaw);
+          Value *nextVAdd = IRB.CreateAdd(
+              barNext, ConstantInt::get(I32Ty, delta1), "csm.vadd");
+          Value *nextDecoded = IRB.CreateXor(
+              nextVAdd, ConstantInt::get(I32Ty, delta2), "csm.next");
           Value *nextMasked =
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
           Value *opaqueNext = insertOpaqueBarrier(IRB, nextMasked);
@@ -410,21 +513,28 @@ struct ChaosStateMachine : public FunctionPass {
         int jF = getSuccIdx(succFalse);
 
         if (jT >= 0 && jF >= 0) {
-          uint32_t caseT = caseVals[jT];
-          uint32_t caseF = caseVals[jF];
-          uint32_t corrT = logisticNext[i] ^ caseT;
-          uint32_t corrF = logisticNext[i] ^ caseF;
+          uint32_t targetEncT = encodeAttractor(caseVals[jT]);
+          uint32_t targetEncF = encodeAttractor(caseVals[jF]);
+          uint32_t delta1 = cryptoutils->get_uint32_t();
+          uint32_t vAdd = nextExpected[i] + delta1;
+          uint32_t delta2T = vAdd ^ targetEncT;
+          uint32_t delta2F = vAdd ^ targetEncF;
 
-          Value *nextRaw = buildLogisticIR(IRB, stateDemasked, Ctx);
-          // Branchless algebraic mask computation instead of naked SelectInst
+          Value *nextLog = buildLogisticIR(IRB, stateDemasked, Ctx);
+          Value *nextRaw = buildDiffuseIR(IRB, nextLog, Ctx);
+          Value *barNext = insertOpaqueBarrier(IRB, nextRaw);
+          Value *nextVAdd = IRB.CreateAdd(
+              barNext, ConstantInt::get(I32Ty, delta1), "csm.vadd");
+
+          // Branchless selection between delta2T and delta2F
           Value *condExt = IRB.CreateZExt(cond, I32Ty, "csm.c.ext");
           Value *mask =
               IRB.CreateSub(ConstantInt::get(I32Ty, 0), condExt, "csm.c.mask");
-          Value *diff = ConstantInt::get(I32Ty, corrT ^ corrF);
+          Value *diff = ConstantInt::get(I32Ty, delta2T ^ delta2F);
           Value *maskedDiff = IRB.CreateAnd(mask, diff, "csm.c.diff");
-          Value *corrVal = IRB.CreateXor(ConstantInt::get(I32Ty, corrF),
-                                         maskedDiff, "csm.c.corr");
-          Value *nextDecoded = IRB.CreateXor(nextRaw, corrVal, "csm.next");
+          Value *delta2Val = IRB.CreateXor(ConstantInt::get(I32Ty, delta2F),
+                                           maskedDiff, "csm.c.delta2");
+          Value *nextDecoded = IRB.CreateXor(nextVAdd, delta2Val, "csm.next");
           Value *nextMasked =
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
           Value *opaqueNext = insertOpaqueBarrier(IRB, nextMasked);
@@ -433,11 +543,18 @@ struct ChaosStateMachine : public FunctionPass {
           loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(loopEnd, BB);
         } else if (jT >= 0 && jF < 0) {
-          uint32_t caseT = caseVals[jT];
-          uint32_t corrT = logisticNext[i] ^ caseT;
-          Value *nextRaw = buildLogisticIR(IRB, stateDemasked, Ctx);
+          uint32_t targetEncT = encodeAttractor(caseVals[jT]);
+          uint32_t delta1 = cryptoutils->get_uint32_t();
+          uint32_t vAdd = nextExpected[i] + delta1;
+          uint32_t delta2T = vAdd ^ targetEncT;
+
+          Value *nextLog = buildLogisticIR(IRB, stateDemasked, Ctx);
+          Value *nextRaw = buildDiffuseIR(IRB, nextLog, Ctx);
+          Value *barNext = insertOpaqueBarrier(IRB, nextRaw);
+          Value *nextVAdd = IRB.CreateAdd(
+              barNext, ConstantInt::get(I32Ty, delta1), "csm.vadd");
           Value *nextDecoded = IRB.CreateXor(
-              nextRaw, ConstantInt::get(I32Ty, corrT), "csm.next");
+              nextVAdd, ConstantInt::get(I32Ty, delta2T), "csm.next");
           Value *nextMasked =
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
           Value *opaqueNext = insertOpaqueBarrier(IRB, nextMasked);
@@ -446,11 +563,18 @@ struct ChaosStateMachine : public FunctionPass {
           loopEndIncoming.push_back({BB, dataFeedbackBB});
           BranchInst::Create(loopEnd, succFalse, cond, BB);
         } else if (jT < 0 && jF >= 0) {
-          uint32_t caseF = caseVals[jF];
-          uint32_t corrF = logisticNext[i] ^ caseF;
-          Value *nextRaw = buildLogisticIR(IRB, stateDemasked, Ctx);
+          uint32_t targetEncF = encodeAttractor(caseVals[jF]);
+          uint32_t delta1 = cryptoutils->get_uint32_t();
+          uint32_t vAdd = nextExpected[i] + delta1;
+          uint32_t delta2F = vAdd ^ targetEncF;
+
+          Value *nextLog = buildLogisticIR(IRB, stateDemasked, Ctx);
+          Value *nextRaw = buildDiffuseIR(IRB, nextLog, Ctx);
+          Value *barNext = insertOpaqueBarrier(IRB, nextRaw);
+          Value *nextVAdd = IRB.CreateAdd(
+              barNext, ConstantInt::get(I32Ty, delta1), "csm.vadd");
           Value *nextDecoded = IRB.CreateXor(
-              nextRaw, ConstantInt::get(I32Ty, corrF), "csm.next");
+              nextVAdd, ConstantInt::get(I32Ty, delta2F), "csm.next");
           Value *nextMasked =
               IRB.CreateXor(nextDecoded, maskValBB, "csm.masked");
           Value *opaqueNext = insertOpaqueBarrier(IRB, nextMasked);
