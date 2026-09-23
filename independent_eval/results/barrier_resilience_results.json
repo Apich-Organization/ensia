@@ -1,0 +1,446 @@
+[
+  {
+    "id": "SUBOBF",
+    "description": "Instruction Substitution",
+    "workload": "target_crypto.c",
+    "original": {
+      "instructions": 561,
+      "basic_blocks": 0,
+      "branches": 12,
+      "volatile_loads": 0,
+      "volatile_stores": 34,
+      "alloca_count": 35,
+      "barriers": 34
+    },
+    "respecting_barriers_O3": {
+      "instructions": 500,
+      "basic_blocks": 0,
+      "branches": 13,
+      "volatile_loads": 0,
+      "volatile_stores": 34,
+      "alloca_count": 35,
+      "barriers": 34
+    },
+    "stripped_barriers_O3": {
+      "instructions": 273,
+      "basic_blocks": 0,
+      "branches": 13,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "instruction_retention_respect_pct": 89.1,
+    "instruction_retention_stripped_pct": 48.7,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": 40.4
+  },
+  {
+    "id": "MBAOBF",
+    "description": "Mixed Boolean-Arithmetic",
+    "workload": "target_crypto.c",
+    "original": {
+      "instructions": 1442,
+      "basic_blocks": 0,
+      "branches": 12,
+      "volatile_loads": 0,
+      "volatile_stores": 65,
+      "alloca_count": 66,
+      "barriers": 65
+    },
+    "respecting_barriers_O3": {
+      "instructions": 1212,
+      "basic_blocks": 0,
+      "branches": 13,
+      "volatile_loads": 0,
+      "volatile_stores": 65,
+      "alloca_count": 66,
+      "barriers": 65
+    },
+    "stripped_barriers_O3": {
+      "instructions": 473,
+      "basic_blocks": 0,
+      "branches": 13,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "instruction_retention_respect_pct": 84.0,
+    "instruction_retention_stripped_pct": 32.8,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": 51.2
+  },
+  {
+    "id": "SPLITOBF",
+    "description": "Basic Block Splitting",
+    "workload": "target_control_flow.c",
+    "original": {
+      "instructions": 926,
+      "basic_blocks": 0,
+      "branches": 137,
+      "volatile_loads": 0,
+      "volatile_stores": 49,
+      "alloca_count": 50,
+      "barriers": 49
+    },
+    "respecting_barriers_O3": {
+      "instructions": 485,
+      "basic_blocks": 0,
+      "branches": 37,
+      "volatile_loads": 0,
+      "volatile_stores": 49,
+      "alloca_count": 50,
+      "barriers": 49
+    },
+    "stripped_barriers_O3": {
+      "instructions": 266,
+      "basic_blocks": 0,
+      "branches": 38,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "instruction_retention_respect_pct": 52.4,
+    "instruction_retention_stripped_pct": 28.7,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": 23.7
+  },
+  {
+    "id": "BCFOBF",
+    "description": "Bogus Control Flow",
+    "workload": "target_control_flow.c",
+    "original": {
+      "instructions": 1800,
+      "basic_blocks": 0,
+      "branches": 147,
+      "volatile_loads": 72,
+      "volatile_stores": 146,
+      "alloca_count": 147,
+      "barriers": 72
+    },
+    "respecting_barriers_O3": {
+      "instructions": 1238,
+      "basic_blocks": 0,
+      "branches": 104,
+      "volatile_loads": 86,
+      "volatile_stores": 139,
+      "alloca_count": 122,
+      "barriers": 86
+    },
+    "stripped_barriers_O3": {
+      "instructions": 413,
+      "basic_blocks": 0,
+      "branches": 87,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "instruction_retention_respect_pct": 68.8,
+    "instruction_retention_stripped_pct": 22.9,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": 45.9
+  },
+  {
+    "id": "CFFOBF",
+    "description": "Control Flow Flattening",
+    "workload": "target_control_flow.c",
+    "original": {
+      "instructions": 837,
+      "basic_blocks": 0,
+      "branches": 90,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 61,
+      "barriers": 0
+    },
+    "respecting_barriers_O3": {
+      "instructions": 243,
+      "basic_blocks": 1,
+      "branches": 41,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "stripped_barriers_O3": {
+      "instructions": 243,
+      "basic_blocks": 1,
+      "branches": 41,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "instruction_retention_respect_pct": 29.0,
+    "instruction_retention_stripped_pct": 29.0,
+    "bb_retention_respect_pct": 100.0,
+    "bb_retention_stripped_pct": 100.0,
+    "barrier_protection_gap_pct": 0.0
+  },
+  {
+    "id": "CSMOBF",
+    "description": "Chaos State Machine",
+    "workload": "target_control_flow.c",
+    "original": {
+      "instructions": 837,
+      "basic_blocks": 0,
+      "branches": 90,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 61,
+      "barriers": 0
+    },
+    "respecting_barriers_O3": {
+      "instructions": 243,
+      "basic_blocks": 1,
+      "branches": 41,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "stripped_barriers_O3": {
+      "instructions": 243,
+      "basic_blocks": 1,
+      "branches": 41,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "instruction_retention_respect_pct": 29.0,
+    "instruction_retention_stripped_pct": 29.0,
+    "bb_retention_respect_pct": 100.0,
+    "bb_retention_stripped_pct": 100.0,
+    "barrier_protection_gap_pct": 0.0
+  },
+  {
+    "id": "VOBF",
+    "description": "Vector Obfuscation",
+    "workload": "target_crypto.c",
+    "original": {
+      "instructions": 832,
+      "basic_blocks": 0,
+      "branches": 12,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 30,
+      "barriers": 29
+    },
+    "respecting_barriers_O3": {
+      "instructions": 632,
+      "basic_blocks": 0,
+      "branches": 13,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 30,
+      "barriers": 29
+    },
+    "stripped_barriers_O3": {
+      "instructions": 225,
+      "basic_blocks": 0,
+      "branches": 13,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "instruction_retention_respect_pct": 76.0,
+    "instruction_retention_stripped_pct": 27.0,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": 49.0
+  },
+  {
+    "id": "CONSTENC",
+    "description": "Constant Encryption",
+    "workload": "target_crypto.c",
+    "original": {
+      "instructions": 1771,
+      "basic_blocks": 0,
+      "branches": 12,
+      "volatile_loads": 106,
+      "volatile_stores": 94,
+      "alloca_count": 95,
+      "barriers": 94
+    },
+    "respecting_barriers_O3": {
+      "instructions": 1362,
+      "basic_blocks": 0,
+      "branches": 13,
+      "volatile_loads": 106,
+      "volatile_stores": 94,
+      "alloca_count": 95,
+      "barriers": 94
+    },
+    "stripped_barriers_O3": {
+      "instructions": 851,
+      "basic_blocks": 0,
+      "branches": 13,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "barriers": 0
+    },
+    "instruction_retention_respect_pct": 76.9,
+    "instruction_retention_stripped_pct": 48.1,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": 28.8
+  },
+  {
+    "id": "ACDOBF",
+    "description": "Anti-Class-Dump (ObjC metadata)",
+    "workload": "target_objc.m",
+    "original": {
+      "instructions": 260,
+      "basic_blocks": 0,
+      "branches": 1,
+      "volatile_loads": 0,
+      "volatile_stores": 8,
+      "alloca_count": 10,
+      "barriers": 7
+    },
+    "respecting_barriers_O3": {
+      "instructions": 122,
+      "basic_blocks": 0,
+      "branches": 1,
+      "volatile_loads": 0,
+      "volatile_stores": 8,
+      "alloca_count": 10,
+      "barriers": 7
+    },
+    "stripped_barriers_O3": {
+      "instructions": 78,
+      "basic_blocks": 0,
+      "branches": 1,
+      "volatile_loads": 0,
+      "volatile_stores": 0,
+      "alloca_count": 3,
+      "barriers": 0
+    },
+    "instruction_retention_respect_pct": 46.9,
+    "instruction_retention_stripped_pct": 30.0,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": 16.9
+  },
+  {
+    "id": "PRESET_LOW",
+    "description": "Preset Low",
+    "workload": "target_crackme.c",
+    "original": {
+      "instructions": 160639,
+      "basic_blocks": 0,
+      "branches": 167,
+      "volatile_loads": 1165,
+      "volatile_stores": 3352,
+      "alloca_count": 8918,
+      "barriers": 8377
+    },
+    "respecting_barriers_O3": {
+      "instructions": 84047,
+      "basic_blocks": 0,
+      "branches": 165,
+      "volatile_loads": 1165,
+      "volatile_stores": 3317,
+      "alloca_count": 8490,
+      "barriers": 8377
+    },
+    "stripped_barriers_O3": {
+      "instructions": 160639,
+      "basic_blocks": 0,
+      "branches": 167,
+      "volatile_loads": 1165,
+      "volatile_stores": 3352,
+      "alloca_count": 8918,
+      "barriers": 8377
+    },
+    "instruction_retention_respect_pct": 52.3,
+    "instruction_retention_stripped_pct": 100.0,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": -47.7
+  },
+  {
+    "id": "PRESET_MID",
+    "description": "Preset Mid",
+    "workload": "target_crackme.c",
+    "original": {
+      "instructions": 125280,
+      "basic_blocks": 0,
+      "branches": 156,
+      "volatile_loads": 1204,
+      "volatile_stores": 3662,
+      "alloca_count": 8300,
+      "barriers": 7678
+    },
+    "respecting_barriers_O3": {
+      "instructions": 76525,
+      "basic_blocks": 0,
+      "branches": 203,
+      "volatile_loads": 1184,
+      "volatile_stores": 3580,
+      "alloca_count": 7802,
+      "barriers": 7678
+    },
+    "stripped_barriers_O3": {
+      "instructions": 125280,
+      "basic_blocks": 0,
+      "branches": 156,
+      "volatile_loads": 1204,
+      "volatile_stores": 3662,
+      "alloca_count": 8300,
+      "barriers": 7678
+    },
+    "instruction_retention_respect_pct": 61.1,
+    "instruction_retention_stripped_pct": 100.0,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": -38.9
+  },
+  {
+    "id": "PRESET_HIGH",
+    "description": "Preset High",
+    "workload": "target_crackme.c",
+    "original": {
+      "instructions": 154959,
+      "basic_blocks": 0,
+      "branches": 152,
+      "volatile_loads": 1376,
+      "volatile_stores": 3946,
+      "alloca_count": 11354,
+      "barriers": 9571
+    },
+    "respecting_barriers_O3": {
+      "instructions": 91556,
+      "basic_blocks": 0,
+      "branches": 223,
+      "volatile_loads": 1376,
+      "volatile_stores": 3887,
+      "alloca_count": 9733,
+      "barriers": 9572
+    },
+    "stripped_barriers_O3": {
+      "instructions": 154959,
+      "basic_blocks": 0,
+      "branches": 152,
+      "volatile_loads": 1376,
+      "volatile_stores": 3946,
+      "alloca_count": 11354,
+      "barriers": 9571
+    },
+    "instruction_retention_respect_pct": 59.1,
+    "instruction_retention_stripped_pct": 100.0,
+    "bb_retention_respect_pct": 0.0,
+    "bb_retention_stripped_pct": 0.0,
+    "barrier_protection_gap_pct": -40.9
+  }
+]

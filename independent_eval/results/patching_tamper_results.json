@@ -1,0 +1,19 @@
+{
+  "adb": {
+    "pass": "ADB",
+    "has_ptrace_syscall": true,
+    "has_rdtsc_timing": true,
+    "has_prctl_dumpable": true,
+    "silent_entanglement_present": false,
+    "analysis": "Static signature visible (syscall 0x65, 0x9d, rdtsc). If patched cleanly to return 0, silent entanglement evaluates to identity (XOR 0). However, if an emulator or tracer causes DbgToken!=0 without crashing immediately, silent entanglement systematically corrupts downstream register arithmetic."
+  },
+  "bcf": {
+    "pass": "BCFOBF",
+    "hardware_predicates": {
+      "cpuid": true,
+      "rdtsc": false,
+      "opaque_sink": false
+    },
+    "analysis": "BCF employs hardware-dependent dynamic opaque predicates (CPUID feature bit checks & RDTSC parity) chained with polymorphic memory barriers. Pure static SMT solvers cannot evaluate hardware register state at compile-time without concrete architecture assumptions."
+  }
+}

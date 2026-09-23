@@ -1,0 +1,602 @@
+[
+  {
+    "id": "BASELINE",
+    "description": "Unobfuscated Baseline",
+    "workload": "target_crypto.c",
+    "compile_success": true,
+    "compile_time_s": 0.0869,
+    "binary_size_bytes": 12696,
+    "execution_status": "SUCCESS",
+    "stdout": "CRYPTO_HASH: 0x281f163553d849ba",
+    "ir_analysis": {
+      "instruction_count": 218,
+      "basic_block_count": 12,
+      "vector_ops_count": 0,
+      "barriers_count": 0,
+      "volatile_stores": 0,
+      "alloca_count": 1,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Clean baseline IR"
+    },
+    "asm_analysis": {
+      "total_lines": 373,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 0,
+      "indirect_jumps": 0,
+      "branchless_logic": 2
+    }
+  },
+  {
+    "id": "SUBOBF",
+    "description": "Instruction Substitution",
+    "workload": "target_crypto.c",
+    "compile_success": true,
+    "compile_time_s": 0.0804,
+    "binary_size_bytes": 16832,
+    "execution_status": "SUCCESS",
+    "stdout": "CRYPTO_HASH: 0x281f163553d849ba",
+    "ir_analysis": {
+      "instruction_count": 661,
+      "basic_block_count": 12,
+      "vector_ops_count": 0,
+      "barriers_count": 92,
+      "volatile_stores": 50,
+      "alloca_count": 51,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Arithmetic substitutions with 480 synthetic markers and 92 barriers"
+    },
+    "asm_analysis": {
+      "total_lines": 977,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 18,
+      "indirect_jumps": 0,
+      "branchless_logic": 2
+    }
+  },
+  {
+    "id": "MBAOBF",
+    "description": "Mixed Boolean-Arithmetic",
+    "workload": "target_crypto.c",
+    "compile_success": true,
+    "compile_time_s": 0.0673,
+    "binary_size_bytes": 20992,
+    "execution_status": "SUCCESS",
+    "stdout": "CRYPTO_HASH: 0x281f163553d849ba",
+    "ir_analysis": {
+      "instruction_count": 1354,
+      "basic_block_count": 12,
+      "vector_ops_count": 0,
+      "barriers_count": 105,
+      "volatile_stores": 57,
+      "alloca_count": 58,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "MBA context global/polynomial noise found, barriers: 105"
+    },
+    "asm_analysis": {
+      "total_lines": 2155,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 24,
+      "indirect_jumps": 0,
+      "branchless_logic": 2
+    }
+  },
+  {
+    "id": "SPLITOBF",
+    "description": "Basic Block Splitting",
+    "workload": "target_control_flow.c",
+    "compile_success": true,
+    "compile_time_s": 0.062,
+    "binary_size_bytes": 20840,
+    "execution_status": "SUCCESS",
+    "stdout": "CFG_TRANSITIONS: 14, PAYLOAD: 5, ERR: 3",
+    "ir_analysis": {
+      "instruction_count": 953,
+      "basic_block_count": 179,
+      "vector_ops_count": 1,
+      "barriers_count": 121,
+      "volatile_stores": 64,
+      "alloca_count": 65,
+      "switch_count": 9,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Basic block splitting: 179 BBs with opaque predicate chaining"
+    },
+    "asm_analysis": {
+      "total_lines": 2013,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 16,
+      "indirect_jumps": 3,
+      "branchless_logic": 33
+    }
+  },
+  {
+    "id": "BCFOBF",
+    "description": "Bogus Control Flow",
+    "workload": "target_control_flow.c",
+    "compile_success": true,
+    "compile_time_s": 0.0666,
+    "binary_size_bytes": 21176,
+    "execution_status": "SUCCESS",
+    "stdout": "CFG_TRANSITIONS: 14, PAYLOAD: 5, ERR: 3",
+    "ir_analysis": {
+      "instruction_count": 1450,
+      "basic_block_count": 165,
+      "vector_ops_count": 1,
+      "barriers_count": 122,
+      "volatile_stores": 130,
+      "alloca_count": 131,
+      "switch_count": 9,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "BCF hardware opaque predicates & bogus control loops detected (165 BBs)"
+    },
+    "asm_analysis": {
+      "total_lines": 2692,
+      "vector_instructions": 0,
+      "hardware_probes": 14,
+      "fs_canary_barriers": 6,
+      "indirect_jumps": 3,
+      "branchless_logic": 78
+    }
+  },
+  {
+    "id": "CSMOBF",
+    "description": "Chaos State Machine",
+    "workload": "target_control_flow.c",
+    "compile_success": true,
+    "compile_time_s": 0.0574,
+    "binary_size_bytes": 16696,
+    "execution_status": "SUCCESS",
+    "stdout": "CFG_TRANSITIONS: 14, PAYLOAD: 5, ERR: 3",
+    "ir_analysis": {
+      "instruction_count": 744,
+      "basic_block_count": 93,
+      "vector_ops_count": 1,
+      "barriers_count": 0,
+      "volatile_stores": 0,
+      "alloca_count": 61,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Chaos state machine logistic-map quadratic CFF detected (93 BBs, 61 allocas)"
+    },
+    "asm_analysis": {
+      "total_lines": 885,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 0,
+      "indirect_jumps": 0,
+      "branchless_logic": 20
+    }
+  },
+  {
+    "id": "CFFOBF",
+    "description": "Control Flow Flattening",
+    "workload": "target_control_flow.c",
+    "compile_success": true,
+    "compile_time_s": 0.0671,
+    "binary_size_bytes": 16696,
+    "execution_status": "SUCCESS",
+    "stdout": "CFG_TRANSITIONS: 14, PAYLOAD: 5, ERR: 3",
+    "ir_analysis": {
+      "instruction_count": 744,
+      "basic_block_count": 93,
+      "vector_ops_count": 1,
+      "barriers_count": 0,
+      "volatile_stores": 0,
+      "alloca_count": 61,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Flattening switch dispatch with branchless algebraic state transitions (93 BBs, 61 allocas)"
+    },
+    "asm_analysis": {
+      "total_lines": 885,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 0,
+      "indirect_jumps": 0,
+      "branchless_logic": 20
+    }
+  },
+  {
+    "id": "VOBF",
+    "description": "Vector Obfuscation",
+    "workload": "target_crypto.c",
+    "compile_success": true,
+    "compile_time_s": 0.0708,
+    "binary_size_bytes": 16792,
+    "execution_status": "SUCCESS",
+    "stdout": "CRYPTO_HASH: 0x281f163553d849ba",
+    "ir_analysis": {
+      "instruction_count": 845,
+      "basic_block_count": 12,
+      "vector_ops_count": 469,
+      "barriers_count": 55,
+      "volatile_stores": 0,
+      "alloca_count": 30,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Vector SIMD lifting: 469 vector ops with shufflevector"
+    },
+    "asm_analysis": {
+      "total_lines": 1600,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 16,
+      "indirect_jumps": 0,
+      "branchless_logic": 4
+    }
+  },
+  {
+    "id": "STRCRY",
+    "description": "String Encryption + AntiDump",
+    "workload": "target_data_strings.c",
+    "compile_success": true,
+    "compile_time_s": 0.0878,
+    "binary_size_bytes": 58280,
+    "execution_status": "EXIT_1",
+    "stdout": "=== ENSIA SECURE SECURITY GATEWAY v2.4 ===\nACCESS_DENIED_VIOLATION_LOGGED",
+    "ir_analysis": {
+      "instruction_count": 12217,
+      "basic_block_count": 16,
+      "vector_ops_count": 1,
+      "barriers_count": 466,
+      "volatile_stores": 504,
+      "alloca_count": 254,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Vernam-GF(2^8) Galois Field inlined decryption stubs and AntiDump volatile zeroizer found"
+    },
+    "asm_analysis": {
+      "total_lines": 15397,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 82,
+      "indirect_jumps": 0,
+      "branchless_logic": 0
+    }
+  },
+  {
+    "id": "CONSTENC",
+    "description": "Constant Encryption (Feistel/k-share)",
+    "workload": "target_crypto.c",
+    "compile_success": true,
+    "compile_time_s": 0.0696,
+    "binary_size_bytes": 25568,
+    "execution_status": "SUCCESS",
+    "stdout": "CRYPTO_HASH: 0x281f163553d849ba",
+    "ir_analysis": {
+      "instruction_count": 1759,
+      "basic_block_count": 12,
+      "vector_ops_count": 0,
+      "barriers_count": 167,
+      "volatile_stores": 94,
+      "alloca_count": 95,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Constant encryption k-share / Feistel network detected"
+    },
+    "asm_analysis": {
+      "total_lines": 3001,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 28,
+      "indirect_jumps": 0,
+      "branchless_logic": 2
+    }
+  },
+  {
+    "id": "INDIBRAN",
+    "description": "Indirect Branching",
+    "workload": "target_control_flow.c",
+    "compile_success": true,
+    "compile_time_s": 0.2422,
+    "binary_size_bytes": 44216,
+    "execution_status": "SUCCESS",
+    "stdout": "CFG_TRANSITIONS: 14, PAYLOAD: 5, ERR: 3",
+    "ir_analysis": {
+      "instruction_count": 4767,
+      "basic_block_count": 93,
+      "vector_ops_count": 1,
+      "barriers_count": 710,
+      "volatile_stores": 390,
+      "alloca_count": 601,
+      "switch_count": 0,
+      "indirectbr_count": 90,
+      "pass_applied": true,
+      "application_evidence": "Indirect branching with 90 indirectbr jump targets"
+    },
+    "asm_analysis": {
+      "total_lines": 7026,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 124,
+      "indirect_jumps": 90,
+      "branchless_logic": 76
+    }
+  },
+  {
+    "id": "FUNCWRA",
+    "description": "Function Wrapper",
+    "workload": "target_calls_system.c",
+    "compile_success": true,
+    "compile_time_s": 0.0513,
+    "binary_size_bytes": 13472,
+    "execution_status": "SUCCESS",
+    "stdout": "SYSTEM_TEST_VAL: 26106",
+    "ir_analysis": {
+      "instruction_count": 321,
+      "basic_block_count": 12,
+      "vector_ops_count": 0,
+      "barriers_count": 27,
+      "volatile_stores": 30,
+      "alloca_count": 46,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Function wrapper proxy trampolines: 14 wrappers"
+    },
+    "asm_analysis": {
+      "total_lines": 744,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 8,
+      "indirect_jumps": 0,
+      "branchless_logic": 0
+    }
+  },
+  {
+    "id": "FCO",
+    "description": "Function Call Obfuscation (dlopen/dlsym)",
+    "workload": "target_calls_system.c",
+    "compile_success": true,
+    "compile_time_s": 0.0566,
+    "binary_size_bytes": 12736,
+    "execution_status": "SUCCESS",
+    "stdout": "SYSTEM_TEST_VAL: 26106",
+    "ir_analysis": {
+      "instruction_count": 119,
+      "basic_block_count": 12,
+      "vector_ops_count": 0,
+      "barriers_count": 0,
+      "volatile_stores": 0,
+      "alloca_count": 0,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Function Call Obfuscation active: calls replaced with runtime dlopen/dlsym"
+    },
+    "asm_analysis": {
+      "total_lines": 295,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 0,
+      "indirect_jumps": 0,
+      "branchless_logic": 0
+    }
+  },
+  {
+    "id": "ADB",
+    "description": "Anti-Debugging (ptrace/rdtsc/TF)",
+    "workload": "target_calls_system.c",
+    "compile_success": true,
+    "compile_time_s": 0.0602,
+    "binary_size_bytes": 17056,
+    "execution_status": "SUCCESS",
+    "stdout": "SYSTEM_TEST_VAL: 26106",
+    "ir_analysis": {
+      "instruction_count": 1923,
+      "basic_block_count": 22,
+      "vector_ops_count": 120,
+      "barriers_count": 129,
+      "volatile_stores": 56,
+      "alloca_count": 68,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Anti-Debugging active: ptrace TRACEME, dumpable prctl, rdtsc watchdog injected"
+    },
+    "asm_analysis": {
+      "total_lines": 2061,
+      "vector_instructions": 0,
+      "hardware_probes": 66,
+      "fs_canary_barriers": 26,
+      "indirect_jumps": 13,
+      "branchless_logic": 0
+    }
+  },
+  {
+    "id": "ANTIHOOK",
+    "description": "Anti-Hooking (prologue integrity)",
+    "workload": "target_calls_system.c",
+    "compile_success": true,
+    "compile_time_s": 0.0571,
+    "binary_size_bytes": 21280,
+    "execution_status": "SUCCESS",
+    "stdout": "SYSTEM_TEST_VAL: 26106",
+    "ir_analysis": {
+      "instruction_count": 2238,
+      "basic_block_count": 68,
+      "vector_ops_count": 120,
+      "barriers_count": 124,
+      "volatile_stores": 56,
+      "alloca_count": 68,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "Anti-Hooking active: prologue integrity scanning injected"
+    },
+    "asm_analysis": {
+      "total_lines": 2664,
+      "vector_instructions": 0,
+      "hardware_probes": 72,
+      "fs_canary_barriers": 26,
+      "indirect_jumps": 20,
+      "branchless_logic": 88
+    }
+  },
+  {
+    "id": "ACDOBF",
+    "description": "Anti-Class-Dump (ObjC metadata)",
+    "workload": "target_objc.m",
+    "compile_success": true,
+    "compile_time_s": 0.0391,
+    "binary_size_bytes": 0,
+    "execution_status": "CROSS_COMPILED_IR_VERIFIED",
+    "stdout": "",
+    "ir_analysis": {
+      "instruction_count": 258,
+      "basic_block_count": 2,
+      "vector_ops_count": 0,
+      "barriers_count": 14,
+      "volatile_stores": 8,
+      "alloca_count": 10,
+      "switch_count": 0,
+      "indirectbr_count": 0,
+      "pass_applied": true,
+      "application_evidence": "AntiClassDump active: class_replaceMethod & sel_registerName dynamic registration; runtime anti-hooking guard & violent exit on Frida/breakpoints; 14 memory barriers & volatile sinks"
+    },
+    "asm_analysis": {
+      "total_lines": 541,
+      "vector_instructions": 0,
+      "hardware_probes": 0,
+      "fs_canary_barriers": 0,
+      "indirect_jumps": 0,
+      "branchless_logic": 0
+    }
+  },
+  {
+    "id": "PRESET_LOW",
+    "description": "Low Preset (Sub+MBA+Split+BCF+Str+Const)",
+    "workload": "target_crypto.c",
+    "compile_success": true,
+    "compile_time_s": 56.4791,
+    "binary_size_bytes": 2677824,
+    "execution_status": "SUCCESS",
+    "stdout": "CRYPTO_HASH: 0x281f163553d849ba",
+    "ir_analysis": {
+      "instruction_count": 436773,
+      "basic_block_count": 1603,
+      "vector_ops_count": 168062,
+      "barriers_count": 49734,
+      "volatile_stores": 12430,
+      "alloca_count": 30800,
+      "switch_count": 0,
+      "indirectbr_count": 1446,
+      "pass_applied": true,
+      "application_evidence": "Preset active: expanded to 436773 instructions, 1603 BBs, 49734 barriers"
+    },
+    "asm_analysis": {
+      "total_lines": 494438,
+      "vector_instructions": 0,
+      "hardware_probes": 548,
+      "fs_canary_barriers": 8315,
+      "indirect_jumps": 1352,
+      "branchless_logic": 1543
+    }
+  },
+  {
+    "id": "PRESET_MID",
+    "description": "Mid Preset (Production standard)",
+    "workload": "target_crypto.c",
+    "compile_success": true,
+    "compile_time_s": 33.5338,
+    "binary_size_bytes": 2460224,
+    "execution_status": "SUCCESS",
+    "stdout": "CRYPTO_HASH: 0x281f163553d849ba",
+    "ir_analysis": {
+      "instruction_count": 327843,
+      "basic_block_count": 1499,
+      "vector_ops_count": 129734,
+      "barriers_count": 45149,
+      "volatile_stores": 11915,
+      "alloca_count": 28890,
+      "switch_count": 1,
+      "indirectbr_count": 1343,
+      "pass_applied": true,
+      "application_evidence": "Preset active: expanded to 327843 instructions, 1499 BBs, 45149 barriers"
+    },
+    "asm_analysis": {
+      "total_lines": 448087,
+      "vector_instructions": 0,
+      "hardware_probes": 590,
+      "fs_canary_barriers": 7235,
+      "indirect_jumps": 1447,
+      "branchless_logic": 1478
+    }
+  },
+  {
+    "id": "PRESET_HIGH",
+    "description": "High Preset (CSM+Feistel+AntiAnalysis)",
+    "workload": "target_control_flow.c",
+    "compile_success": true,
+    "compile_time_s": 17.9855,
+    "binary_size_bytes": 673256,
+    "execution_status": "SUCCESS",
+    "stdout": "CFG_TRANSITIONS: 14, PAYLOAD: 5, ERR: 3",
+    "ir_analysis": {
+      "instruction_count": 127528,
+      "basic_block_count": 723,
+      "vector_ops_count": 35609,
+      "barriers_count": 12958,
+      "volatile_stores": 4284,
+      "alloca_count": 9160,
+      "switch_count": 7,
+      "indirectbr_count": 493,
+      "pass_applied": true,
+      "application_evidence": "Preset active: expanded to 127528 instructions, 723 BBs, 12958 barriers"
+    },
+    "asm_analysis": {
+      "total_lines": 177714,
+      "vector_instructions": 0,
+      "hardware_probes": 304,
+      "fs_canary_barriers": 2884,
+      "indirect_jumps": 619,
+      "branchless_logic": 725
+    }
+  },
+  {
+    "id": "PRESET_MAX",
+    "description": "Max Preset (Full Extreme Cascade)",
+    "workload": "target_crackme.c",
+    "compile_success": true,
+    "compile_time_s": 933.869,
+    "binary_size_bytes": 2772440,
+    "execution_status": "SUCCESS",
+    "stdout": "KEY_VALID: SUCCESS!",
+    "ir_analysis": {
+      "instruction_count": 450542,
+      "basic_block_count": 9676,
+      "vector_ops_count": 14413,
+      "barriers_count": 69270,
+      "volatile_stores": 43018,
+      "alloca_count": 55392,
+      "switch_count": 449,
+      "indirectbr_count": 8629,
+      "pass_applied": true,
+      "application_evidence": "Preset active: expanded to 450542 instructions, 9676 BBs, 69270 barriers"
+    },
+    "asm_analysis": {
+      "total_lines": 835824,
+      "vector_instructions": 0,
+      "hardware_probes": 61,
+      "fs_canary_barriers": 15458,
+      "indirect_jumps": 9735,
+      "branchless_logic": 3277
+    }
+  }
+]

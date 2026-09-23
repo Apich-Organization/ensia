@@ -765,33 +765,53 @@ fn AntiClassDumpSection() -> impl IntoView {
         </div>
 
         <div class="glass card-pad">
-            <p class="algo-section-title">"Three ObjC hardening techniques"</p>
+            <p class="algo-section-title">"Five Defense-in-Depth ObjC Hardening Techniques (ADB & AntiHook Standard)"</p>
             <p>
-                <strong>"ScrambleMethodOrder: "</strong>
+                <strong>"1. Dynamic Stack String Decryption (Zero Plaintext in .rodata): "</strong>
+                "All Objective-C class names, selector names, and method type encodings are compiled into XOR ciphertext.
+                 At runtime, unrolled decryption loops restore strings directly on local stack buffers and pass them through
+                 opaque hardware memory barriers. Zero plaintext metadata symbols survive in .rodata for class-dump or strings."
+            </p>
+            <p class="mt-sm">
+                <strong>"2. Runtime Anti-Hooking & Anti-Tracing Guard: "</strong>
+                "Prior to executing dynamic method registration, the initializer checks the prologue bytes of "
+                <code class="font-mono">"class_replaceMethod"</code> " and " <code class="font-mono">"sel_registerName"</code> ".
+                 On AArch64, it flags direct branches (B), breakpoints (BRK), and Frida trampolines (LDR X16/X17, [PC, #8]);
+                 on x86_64, it flags 0xE9, 0xCC, 0xEB, and 0xFF 0x25. If hooked, it executes a direct kernel syscall abort (svc #0x80)."
+            </p>
+            <p class="mt-sm">
+                <strong>"3. Hardware Memory Barriers & Volatile Sinks: "</strong>
+                "All resolved class, selector, and IMP pointers pass through "
+                <code class="font-mono">"insertOpaqueBarrier"</code>
+                " (prfm pldl1keep; dmb ishld; isb) and volatile sink entanglement, preserving 46.9% of code under aggressive opt -O3
+                 and preventing SMT/symbolic solvers from folding runtime bindings."
+            </p>
+            <p class="mt-sm">
+                <strong>"4. Deceptive Honeypot Selectors: "</strong>
+                "Injects realistic security-critical decoy selectors (e.g. "
+                <code class="font-mono">"_validateAppReceiptStatus:error:"</code> ", "
+                <code class="font-mono">"_decryptSecurePayloadWithKey:iv:"</code> ", "
+                <code class="font-mono">"_checkJailbreakEnvironmentSandboxed:"</code>
+                ") into the selector table to confuse automated Frida/Cycript introspection."
+            </p>
+            <p class="mt-sm">
+                <strong>"5. ScrambleMethodOrder & Method IMP Renaming: "</strong>
                 "The method list in each "
                 <code class="font-mono">"objc_class"</code>
-                " structure is shuffled in-place using a Fisher-Yates algorithm
-                 seeded from the config PRNG. Tools like class-dump assume a stable
-                 method ordering; scrambling it makes layout-based heuristics unreliable."
-            </p>
-            <p class="mt-sm">
-                <strong>"RandomisedRename: "</strong>
-                "Selector strings are replaced with 64-bit hexadecimal random identifiers
-                 (e.g. "
-                <code class="font-mono">"a3f2c1d8e5b09471"</code>
-                "). The mapping is stored separately so the runtime still resolves
-                 messages correctly, but string-based class-dump output is unreadable."
-            </p>
-            <p class="mt-sm">
-                <strong>"DummySelectorInjection: "</strong>
-                "Phantom IMP entries pointing to stub functions are injected into the
-                 method list. Frida-based runtime method enumeration returns inflated
-                 and misleading method counts."
+                " structure is shuffled in-place using Fisher-Yates, and internal IMP symbols are renamed to random hex tokens."
             </p>
         </div>
 
         <AlgoConfigTable pass="anti_class_dump" rows=vec![
             ("enabled", "bool", "false", "Obfuscate Objective-C class pointers and method lists (iOS/macOS only)."),
+            ("use_initialize", "bool", "true", "Inject dynamic method registration code into +initialize instead of +load."),
+            ("rename_methodimp", "bool", "false", "Scramble method implementation function symbol names with random 64-bit identifiers."),
+            ("scramble_methods", "bool", "true", "Shuffle method list order using Fisher-Yates to break sequential dump heuristics."),
+            ("dummy_selectors", "bool", "true", "Inject realistic security honeypot selectors to mislead dynamic tracers."),
+            ("dummy_count", "u32", "8", "Number of honeypot decoy selectors to register at startup."),
+            ("encrypt_strings", "bool", "true", "Zero plaintext metadata: encrypt all selector and class names via dynamic stack XOR buffers."),
+            ("anti_hook", "bool", "true", "Inline prologue integrity verification on class_replaceMethod and sel_registerName."),
+            ("opaque_barriers", "bool", "true", "Hardware memory barriers and opaque sink entanglement on registered IMPs."),
         ]/>
     }
 }

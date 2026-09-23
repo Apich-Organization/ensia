@@ -152,6 +152,9 @@ struct ObfAntiAcdConfig {
   std::optional<bool> scramble_methods;
   std::optional<bool> dummy_selectors;
   std::optional<uint32_t> dummy_count;
+  std::optional<bool> encrypt_strings;
+  std::optional<bool> anti_hook;
+  std::optional<bool> opaque_barriers;
 };
 
 // All passes collected

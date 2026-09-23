@@ -110,6 +110,8 @@ benchmark/scripts/test_angr_fork.py
 benchmark/scripts/test_bcf_fork
 benchmark/scripts/test_bcf_fork.c
 test/eval_harness/*.md
+**/*.patch
+**/*.diff
 
 # Large LLVM releases & python caches
 LLVM-*
@@ -119,5 +121,10 @@ __pycache__/
 # Intermediate LLVM IR and ASM dumps
 *.ll
 *.s
+independent_eval/results/*.bin
+independent_eval/results/*.tmp
+independent_eval/test_probe/*.bin
+independent_eval/test_probe/*_bin
+independent_eval/workloads/*.bin
 
 

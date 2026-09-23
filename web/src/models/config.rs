@@ -271,6 +271,9 @@ pub struct AntiAcdCfg {
     pub scramble_methods: bool,
     pub dummy_selectors: bool,
     pub dummy_count: u32,
+    pub encrypt_strings: bool,
+    pub anti_hook: bool,
+    pub opaque_barriers: bool,
 }
 impl Default for AntiAcdCfg {
     fn default() -> Self {
@@ -281,6 +284,9 @@ impl Default for AntiAcdCfg {
             scramble_methods: true,
             dummy_selectors: false,
             dummy_count: 8,
+            encrypt_strings: true,
+            anti_hook: true,
+            opaque_barriers: true,
         }
     }
 }
@@ -561,6 +567,9 @@ impl TomlConfig {
                     scramble_methods: true,
                     dummy_selectors: false,
                     dummy_count: 8,
+                    encrypt_strings: true,
+                    anti_hook: true,
+                    opaque_barriers: true,
                 };
                 self.func_call_obf = FuncCallObfCfg {
                     enabled: false,
@@ -661,6 +670,9 @@ impl TomlConfig {
                     scramble_methods: true,
                     dummy_selectors: false,
                     dummy_count: 8,
+                    encrypt_strings: true,
+                    anti_hook: true,
+                    opaque_barriers: true,
                 };
                 self.func_call_obf = FuncCallObfCfg {
                     enabled: false,
@@ -761,6 +773,9 @@ impl TomlConfig {
                     scramble_methods: true,
                     dummy_selectors: true,
                     dummy_count: 8,
+                    encrypt_strings: true,
+                    anti_hook: true,
+                    opaque_barriers: true,
                 };
                 self.func_call_obf = FuncCallObfCfg {
                     enabled: true,
@@ -861,6 +876,9 @@ impl TomlConfig {
                     scramble_methods: true,
                     dummy_selectors: true,
                     dummy_count: 16,
+                    encrypt_strings: true,
+                    anti_hook: true,
+                    opaque_barriers: true,
                 };
                 self.func_call_obf = FuncCallObfCfg {
                     enabled: true,
@@ -1217,6 +1235,15 @@ impl TomlConfig {
                     "dummy_count = {}\n",
                     self.anti_class_dump.dummy_count
                 ));
+            }
+            if self.anti_class_dump.encrypt_strings {
+                s.push_str("encrypt_strings = true\n");
+            }
+            if self.anti_hooking.objc_runtime || self.anti_class_dump.anti_hook {
+                s.push_str("anti_hook = true\n");
+            }
+            if self.anti_class_dump.opaque_barriers {
+                s.push_str("opaque_barriers = true\n");
             }
         }
         s.push('\n');

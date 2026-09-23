@@ -263,6 +263,9 @@ static ObfPassConfig makeHighPreset() {
   c.anti_class_dump.scramble_methods = true;
   c.anti_class_dump.dummy_selectors = true;
   c.anti_class_dump.dummy_count = 8;
+  c.anti_class_dump.encrypt_strings = true;
+  c.anti_class_dump.anti_hook = true;
+  c.anti_class_dump.opaque_barriers = true;
 
   return c;
 }
@@ -360,6 +363,9 @@ static ObfPassConfig makeMaxPreset() {
   c.anti_class_dump.scramble_methods = true;
   c.anti_class_dump.dummy_selectors = true;
   c.anti_class_dump.dummy_count = 16;
+  c.anti_class_dump.encrypt_strings = true;
+  c.anti_class_dump.anti_hook = true;
+  c.anti_class_dump.opaque_barriers = true;
 
   return c;
 }
@@ -451,19 +457,23 @@ void ObfGlobalConfig::merge(ObfPassConfig &dst, const ObfPassConfig &src){
     // FCO
     MERGE_OPT(fco.enabled) MERGE_OPT(fco.flag) MERGE_OPT(fco.symbol_config_path)
     // Anti-*
-    MERGE_OPT(anti_hook.enabled) MERGE_OPT(anti_hook.inline_aarch64)
-        MERGE_OPT(anti_hook.inline_x86) MERGE_OPT(anti_hook.inline_win)
-            MERGE_OPT(anti_hook.objc_runtime) MERGE_OPT(anti_hook.antirebind)
-                MERGE_OPT(anti_hook.direct_syscall)
+    MERGE_OPT(anti_hook.enabled) MERGE_OPT(anti_hook.inline_aarch64) MERGE_OPT(
+        anti_hook.inline_x86) MERGE_OPT(anti_hook.inline_win)
+        MERGE_OPT(anti_hook.objc_runtime) MERGE_OPT(anti_hook.antirebind)
+            MERGE_OPT(anti_hook.direct_syscall)
 
-                    MERGE_OPT(anti_dbg.enabled) MERGE_OPT(anti_dbg.probability)
+                MERGE_OPT(anti_dbg.enabled) MERGE_OPT(anti_dbg.probability)
 
-                        MERGE_OPT(anti_class_dump.enabled)
-                            MERGE_OPT(anti_class_dump.use_initialize) MERGE_OPT(
-                                anti_class_dump.rename_methodimp)
-                                MERGE_OPT(anti_class_dump.scramble_methods)
-                                    MERGE_OPT(anti_class_dump.dummy_selectors)
-                                        MERGE_OPT(anti_class_dump.dummy_count)}
+                    MERGE_OPT(anti_class_dump.enabled) MERGE_OPT(
+                        anti_class_dump.use_initialize)
+                        MERGE_OPT(anti_class_dump.rename_methodimp) MERGE_OPT(
+                            anti_class_dump.scramble_methods)
+                            MERGE_OPT(anti_class_dump.dummy_selectors)
+                                MERGE_OPT(anti_class_dump.dummy_count)
+                                    MERGE_OPT(anti_class_dump.encrypt_strings)
+                                        MERGE_OPT(anti_class_dump.anti_hook)
+                                            MERGE_OPT(anti_class_dump
+                                                          .opaque_barriers)}
 
 #undef MERGE_OPT
 #undef MERGE_VEC
@@ -815,6 +825,12 @@ static void parseAntiAcd(const toml::table &t, ObfAntiAcdConfig &c) {
     c.dummy_selectors = *v;
   if (auto v = tomlU32(t["dummy_count"]))
     c.dummy_count = *v;
+  if (auto v = t["encrypt_strings"].value<bool>())
+    c.encrypt_strings = *v;
+  if (auto v = t["anti_hook"].value<bool>())
+    c.anti_hook = *v;
+  if (auto v = t["opaque_barriers"].value<bool>())
+    c.opaque_barriers = *v;
 }
 
 // Helper to look up a subtable by checking multiple alias keys in order.

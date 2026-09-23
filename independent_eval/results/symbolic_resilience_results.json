@@ -1,0 +1,228 @@
+[
+  {
+    "id": "BASELINE",
+    "description": "Unobfuscated Baseline",
+    "standard_angr": {
+      "status": "SOLVED",
+      "time_sec": 0.88,
+      "states_explored": 19,
+      "peak_active_states": 3,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 0.88,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    }
+  },
+  {
+    "id": "SUBOBF",
+    "description": "Instruction Substitution",
+    "standard_angr": {
+      "status": "SOLVED",
+      "time_sec": 0.73,
+      "states_explored": 22,
+      "peak_active_states": 3,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 0.73,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    }
+  },
+  {
+    "id": "MBAOBF",
+    "description": "Mixed Boolean-Arithmetic",
+    "standard_angr": {
+      "status": "SOLVED",
+      "time_sec": 1.80,
+      "states_explored": 23,
+      "peak_active_states": 2,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 1.80,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    }
+  },
+  {
+    "id": "BCFOBF",
+    "description": "Bogus Control Flow",
+    "standard_angr": {
+      "status": "SOLVED",
+      "time_sec": 0.63,
+      "states_explored": 33,
+      "peak_active_states": 3,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 0.63,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    }
+  },
+  {
+    "id": "CFFOBF",
+    "description": "Control Flow Flattening",
+    "standard_angr": {
+      "status": "SOLVED",
+      "time_sec": 1.05,
+      "states_explored": 92,
+      "peak_active_states": 4,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 1.05,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    }
+  },
+  {
+    "id": "CSMOBF",
+    "description": "Chaos State Machine",
+    "standard_angr": {
+      "status": "SOLVED",
+      "time_sec": 2.24,
+      "states_explored": 92,
+      "peak_active_states": 4,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 2.24,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    }
+  },
+  {
+    "id": "VOBF",
+    "description": "Vector Obfuscation",
+    "standard_angr": {
+      "status": "SOLVED",
+      "time_sec": 0.47,
+      "states_explored": 20,
+      "peak_active_states": 3,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 0.47,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    }
+  },
+  {
+    "id": "CONSTENC",
+    "description": "Constant Encryption (Feistel / Dynamic SBox)",
+    "standard_angr": {
+      "status": "EXHAUSTED",
+      "time_sec": 0.39,
+      "states_explored": 16,
+      "peak_active_states": 1,
+      "solution": null,
+      "solved_correctly": false,
+      "failure_cause": "Constructor bypass trap: .init_array __ensia_init_const_sbox not executed, sbox table uninitialized (zeroes)"
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 0.62,
+      "states_explored": 19,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true
+    }
+  },
+  {
+    "id": "PRESET_LOW",
+    "description": "Low Preset (Sub+MBA+Split+BCF+Str+Const)",
+    "standard_angr": {
+      "status": "EXHAUSTED",
+      "time_sec": 0.45,
+      "states_explored": 18,
+      "solution": null,
+      "solved_correctly": false,
+      "failure_cause": "Constructor bypass trap: .init_array sbox uninitialized"
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 4.29,
+      "states_explored": 136,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true,
+      "slowdown_factor": 4.87
+    }
+  },
+  {
+    "id": "PRESET_MID",
+    "description": "Mid Preset (Production standard)",
+    "standard_angr": {
+      "status": "EXHAUSTED",
+      "time_sec": 0.52,
+      "states_explored": 21,
+      "solution": null,
+      "solved_correctly": false,
+      "failure_cause": "Constructor bypass trap: .init_array sbox uninitialized"
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 4.62,
+      "states_explored": 142,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true,
+      "slowdown_factor": 5.25
+    }
+  },
+  {
+    "id": "PRESET_HIGH",
+    "description": "High Preset (CSM+Feistel+AntiAnalysis)",
+    "standard_angr": {
+      "status": "EXHAUSTED",
+      "time_sec": 0.58,
+      "states_explored": 24,
+      "solution": null,
+      "solved_correctly": false,
+      "failure_cause": "Constructor bypass trap: .init_array sbox uninitialized"
+    },
+    "constructor_aware_angr": {
+      "status": "SOLVED",
+      "time_sec": 4.48,
+      "states_explored": 150,
+      "solution": "K3y_P4ss",
+      "solved_correctly": true,
+      "slowdown_factor": 5.09
+    }
+  },
+  {
+    "id": "PRESET_MAX",
+    "description": "Max Preset (Full Extreme Cascade)",
+    "standard_angr": {
+      "status": "EXHAUSTED",
+      "time_sec": 0.65,
+      "states_explored": 28,
+      "solution": null,
+      "solved_correctly": false,
+      "failure_cause": "Constructor bypass trap: .init_array sbox uninitialized"
+    },
+    "constructor_aware_angr": {
+      "status": "TIMEOUT",
+      "time_sec": 60.0,
+      "states_explored": 850,
+      "solution": null,
+      "solved_correctly": false,
+      "failure_cause": "State space explosion + fs:[0x28] canary barriers + CSM nested dispatch loop trap"
+    }
+  }
+]

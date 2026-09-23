@@ -869,6 +869,21 @@ fn AntiClassDumpCard() -> impl IntoView {
                         get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.dummy_selectors))
                         set=move |v| cfg.update(|c| c.anti_class_dump.dummy_selectors = v)
                     />
+                    <ToggleField
+                        label="Encrypt strings (stack dec)"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.encrypt_strings))
+                        set=move |v| cfg.update(|c| c.anti_class_dump.encrypt_strings = v)
+                    />
+                    <ToggleField
+                        label="Runtime anti-hook guard"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.anti_hook))
+                        set=move |v| cfg.update(|c| c.anti_class_dump.anti_hook = v)
+                    />
+                    <ToggleField
+                        label="Opaque barriers"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.opaque_barriers))
+                        set=move |v| cfg.update(|c| c.anti_class_dump.opaque_barriers = v)
+                    />
                 </div>
                 {move || cfg.with(|c| c.anti_class_dump.dummy_selectors).then(|| view! {
                     <SliderField
