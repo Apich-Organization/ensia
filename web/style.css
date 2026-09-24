@@ -160,9 +160,9 @@ p  { color: var(--c-text-2); max-width: 68ch; }
 
 /* ── Layout ────────────────────────────────────────────────────────────── */
 .page-wrap {
-  max-width: 1180px;
+  max-width: 1360px;
   margin: 0 auto;
-  padding: 0 clamp(1rem, 4vw, 2.5rem);
+  padding: 0 clamp(1rem, 3.5vw, 2.5rem);
 }
 .pt-nav { padding-top: calc(var(--nav-h) + 2rem); }
 .section {
@@ -174,6 +174,7 @@ p  { color: var(--c-text-2); max-width: 68ch; }
 
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
 .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; }
+.grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; }
 .flex    { display: flex; }
 .flex-col { display: flex; flex-direction: column; }
 .items-center { align-items: center; }
@@ -399,18 +400,20 @@ input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; }
 /* ── Text inputs ────────────────────────────────────────────────────────── */
 .field-input {
   width: 100%;
-  padding: 0.6em 0.9em;
+  box-sizing: border-box;
+  padding: 0.65em 0.95em;
   background: var(--c-surface-hi);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-sm);
   color: var(--c-text-1);
   font-size: 0.9rem;
   outline: none;
-  transition: border-color 0.25s, box-shadow 0.25s;
+  transition: border-color 0.25s, box-shadow 0.25s, background-color 0.25s;
 }
 .field-input:focus {
   border-color: var(--c-primary);
   box-shadow: 0 0 0 3px var(--c-glow);
+  background: var(--c-surface);
 }
 .field-input.mono {
   font-family: 'JetBrains Mono', monospace;
@@ -427,11 +430,13 @@ select.field-input {
 }
 
 .field-label {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--c-text-3);
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -439,7 +444,8 @@ select.field-input {
 .field-group {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 /* ── Tag pills (force_content / skip_value etc.) ───────────────────────── */
@@ -487,12 +493,20 @@ select.field-input {
 .tag-pill-del:hover { color: var(--c-danger); background: rgba(176,80,104,0.1); }
 .tag-add-row {
   display: flex;
-  gap: 0.4rem;
-  margin-top: 0.4rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 .tag-add-row .field-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.82rem;
+}
+.tag-add-row .btn {
+  flex-shrink: 0;
+  padding: 0.5em 1.1em;
 }
 
 /* ── Code / TOML preview ───────────────────────────────────────────────── */
@@ -990,18 +1004,18 @@ blockquote {
    ═══════════════════════════════════════════════════════════════════════════ */
 .config-layout {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 2rem;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 2.25rem;
   padding-top: calc(var(--nav-h) + 2rem);
   min-height: 100dvh;
   padding-bottom: 4rem;
   align-items: start;
 }
-@media (max-width: 960px) {
-  .config-layout { grid-template-columns: 1fr; }
+@media (max-width: 1040px) {
+  .config-layout { grid-template-columns: minmax(0, 1fr); }
   .config-preview { position: static; }
 }
-.config-form { display: flex; flex-direction: column; gap: 1.25rem; }
+.config-form { display: flex; flex-direction: column; gap: 1.5rem; min-width: 0; }
 .config-preview {
   position: sticky;
   top: calc(var(--nav-h) + 1.5rem);
@@ -1018,14 +1032,17 @@ blockquote {
   border: 1px solid var(--c-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: border-color 0.3s;
+  transition: border-color 0.3s, box-shadow 0.3s;
 }
-.pass-card:focus-within { border-color: var(--c-border-mid); }
+.pass-card:focus-within {
+  border-color: var(--c-border-mid);
+  box-shadow: 0 4px 20px var(--c-glow);
+}
 .pass-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
+  padding: 1.15rem 1.5rem;
   cursor: pointer;
   transition: background 0.2s;
   user-select: none;
@@ -1042,10 +1059,10 @@ blockquote {
 }
 .pass-card-icon { font-size: 1.1rem; }
 .pass-card-body {
-  padding: 0 1.5rem 1.25rem;
+  padding: 1.35rem 1.5rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
   border-top: 1px solid var(--c-border);
 }
 .pass-disabled .pass-card-body {
@@ -1055,11 +1072,19 @@ blockquote {
 
 .config-grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
 }
-@media (max-width: 600px) {
-  .config-grid-2 { grid-template-columns: 1fr; }
+@media (max-width: 640px) {
+  .config-grid-2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Toggle Grid */
+.toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.85rem 1.25rem;
+  align-items: center;
 }
 
 /* Policy card */
@@ -1067,10 +1092,10 @@ blockquote {
   background: var(--c-surface-alt);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-md);
-  padding: 1.25rem;
+  padding: 1.35rem;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 1rem;
   animation: fadeUp 0.35s var(--spring) both;
 }
 .policy-rule-header {
@@ -1087,8 +1112,8 @@ blockquote {
 }
 .policy-overrides-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.75rem;
 }
 
 /* Policy pass sub-section (BCF opts, CSM opts, etc.) */

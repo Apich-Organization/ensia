@@ -112,6 +112,7 @@ benchmark/scripts/test_bcf_fork.c
 test/eval_harness/*.md
 **/*.patch
 **/*.diff
+**/*.bin
 
 # Large LLVM releases & python caches
 LLVM-*

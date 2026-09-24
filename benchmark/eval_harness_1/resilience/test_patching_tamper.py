@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 WORKSPACE = Path("/home/user/dev/ensia")
-EVAL_DIR = WORKSPACE / "independent_eval"
+EVAL_DIR = WORKSPACE / "benchmark" / "eval_harness_1"
 WORKLOADS_DIR = EVAL_DIR / "workloads"
 RESULTS_DIR = EVAL_DIR / "results"
 PLUGIN_SO = WORKSPACE / "build" / "obfuscation" / "libEnsia.so"

@@ -250,7 +250,7 @@ fn GlobalSection() -> impl IntoView {
                     />
                 </div>
             </div>
-            <div class="flex gap-lg mt-md flex-wrap">
+            <div class="toggle-grid mt-md">
                 <ToggleField
                     label="Verbose output"
                     get=Signal::derive(move || cfg.with(|c| c.verbose))
@@ -312,7 +312,7 @@ fn BcfCard() -> impl IntoView {
                         set=move |v| cfg.update(|c| c.bcf.complexity = v)
                     />
                 </div>
-                <div class="flex gap-lg flex-wrap">
+                <div class="toggle-grid">
                     <ToggleField
                         label="Entropy chain"
                         get=Signal::derive(move || cfg.with(|c| c.bcf.entropy_chain))
@@ -442,7 +442,7 @@ fn ConstEncCard() -> impl IntoView {
                         set=move |v| cfg.update(|c| c.const_enc.iterations = v)
                     />
                 </div>
-                <div class="flex gap-lg flex-wrap">
+                <div class="toggle-grid">
                     <ToggleField
                         label="Feistel layer"
                         get=Signal::derive(move || cfg.with(|c| c.const_enc.feistel))
@@ -665,7 +665,7 @@ fn VecCard() -> impl IntoView {
                         </select>
                     </div>
                 </div>
-                <div class="flex gap-lg flex-wrap">
+                <div class="toggle-grid">
                     <ToggleField
                         label="Lane shuffle"
                         get=Signal::derive(move || cfg.with(|c| c.vec_obf.shuffle))
@@ -699,7 +699,7 @@ fn IndirCard() -> impl IntoView {
                 />
             </div>
             <div class="pass-card-body">
-                <div class="flex gap-lg flex-wrap">
+                <div class="toggle-grid">
                     <ToggleField
                         label="Store state on stack"
                         get=Signal::derive(move || cfg.with(|c| c.indir_branch.use_stack))
@@ -812,7 +812,7 @@ fn AntiHookCard() -> impl IntoView {
                 />
             </div>
             <div class="pass-card-body">
-                <div class="flex gap-lg flex-wrap">
+                <div class="toggle-grid">
                     <ToggleField
                         label="AArch64 inline scan"
                         get=Signal::derive(move || cfg.with(|c| c.anti_hooking.inline_aarch64))
@@ -884,7 +884,7 @@ fn AntiClassDumpCard() -> impl IntoView {
                 />
             </div>
             <div class="pass-card-body">
-                <div class="flex gap-lg flex-wrap">
+                <div class="toggle-grid">
                     <ToggleField
                         label="Inject +initialize"
                         get=Signal::derive(move || cfg.with(|c| c.anti_class_dump.use_initialize))

@@ -4,7 +4,7 @@
     "description": "Unobfuscated Baseline",
     "standard_angr": {
       "status": "SOLVED",
-      "time_sec": 0.88,
+      "time_sec": 0.34,
       "states_explored": 19,
       "peak_active_states": 3,
       "solution": "K3y_P4ss",
@@ -12,7 +12,9 @@
     },
     "constructor_aware_angr": {
       "status": "SOLVED",
-      "time_sec": 0.88,
+      "time_sec": 0.34,
+      "states_explored": 19,
+      "peak_active_states": 3,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     }
@@ -22,15 +24,17 @@
     "description": "Instruction Substitution",
     "standard_angr": {
       "status": "SOLVED",
-      "time_sec": 0.73,
-      "states_explored": 22,
+      "time_sec": 0.57,
+      "states_explored": 20,
       "peak_active_states": 3,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     },
     "constructor_aware_angr": {
       "status": "SOLVED",
-      "time_sec": 0.73,
+      "time_sec": 0.57,
+      "states_explored": 20,
+      "peak_active_states": 3,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     }
@@ -40,7 +44,7 @@
     "description": "Mixed Boolean-Arithmetic",
     "standard_angr": {
       "status": "SOLVED",
-      "time_sec": 1.80,
+      "time_sec": 1.14,
       "states_explored": 23,
       "peak_active_states": 2,
       "solution": "K3y_P4ss",
@@ -48,7 +52,9 @@
     },
     "constructor_aware_angr": {
       "status": "SOLVED",
-      "time_sec": 1.80,
+      "time_sec": 1.14,
+      "states_explored": 23,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     }
@@ -58,15 +64,17 @@
     "description": "Bogus Control Flow",
     "standard_angr": {
       "status": "SOLVED",
-      "time_sec": 0.63,
+      "time_sec": 0.5,
       "states_explored": 33,
-      "peak_active_states": 3,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     },
     "constructor_aware_angr": {
       "status": "SOLVED",
-      "time_sec": 0.63,
+      "time_sec": 0.5,
+      "states_explored": 33,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     }
@@ -76,15 +84,17 @@
     "description": "Control Flow Flattening",
     "standard_angr": {
       "status": "SOLVED",
-      "time_sec": 1.05,
-      "states_explored": 92,
-      "peak_active_states": 4,
+      "time_sec": 0.69,
+      "states_explored": 72,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     },
     "constructor_aware_angr": {
       "status": "SOLVED",
-      "time_sec": 1.05,
+      "time_sec": 0.69,
+      "states_explored": 72,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     }
@@ -94,15 +104,17 @@
     "description": "Chaos State Machine",
     "standard_angr": {
       "status": "SOLVED",
-      "time_sec": 2.24,
-      "states_explored": 92,
-      "peak_active_states": 4,
+      "time_sec": 3.01,
+      "states_explored": 88,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     },
     "constructor_aware_angr": {
       "status": "SOLVED",
-      "time_sec": 2.24,
+      "time_sec": 3.01,
+      "states_explored": 88,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     }
@@ -112,15 +124,17 @@
     "description": "Vector Obfuscation",
     "standard_angr": {
       "status": "SOLVED",
-      "time_sec": 0.47,
-      "states_explored": 20,
-      "peak_active_states": 3,
+      "time_sec": 0.59,
+      "states_explored": 23,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     },
     "constructor_aware_angr": {
       "status": "SOLVED",
-      "time_sec": 0.47,
+      "time_sec": 0.59,
+      "states_explored": 23,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     }
@@ -130,17 +144,17 @@
     "description": "Constant Encryption (Feistel / Dynamic SBox)",
     "standard_angr": {
       "status": "EXHAUSTED",
-      "time_sec": 0.39,
+      "time_sec": 0.33,
       "states_explored": 16,
       "peak_active_states": 1,
       "solution": null,
-      "solved_correctly": false,
-      "failure_cause": "Constructor bypass trap: .init_array __ensia_init_const_sbox not executed, sbox table uninitialized (zeroes)"
+      "solved_correctly": false
     },
     "constructor_aware_angr": {
       "status": "SOLVED",
-      "time_sec": 0.62,
-      "states_explored": 19,
+      "time_sec": 0.68,
+      "states_explored": 30,
+      "peak_active_states": 2,
       "solution": "K3y_P4ss",
       "solved_correctly": true
     }
@@ -150,19 +164,19 @@
     "description": "Low Preset (Sub+MBA+Split+BCF+Str+Const)",
     "standard_angr": {
       "status": "EXHAUSTED",
-      "time_sec": 0.45,
-      "states_explored": 18,
+      "time_sec": 11.58,
+      "states_explored": 591,
+      "peak_active_states": 6,
       "solution": null,
-      "solved_correctly": false,
-      "failure_cause": "Constructor bypass trap: .init_array sbox uninitialized"
+      "solved_correctly": false
     },
     "constructor_aware_angr": {
       "status": "SOLVED",
-      "time_sec": 4.29,
-      "states_explored": 136,
+      "time_sec": 11.05,
+      "states_explored": 623,
+      "peak_active_states": 8,
       "solution": "K3y_P4ss",
-      "solved_correctly": true,
-      "slowdown_factor": 4.87
+      "solved_correctly": true
     }
   },
   {
@@ -170,19 +184,19 @@
     "description": "Mid Preset (Production standard)",
     "standard_angr": {
       "status": "EXHAUSTED",
-      "time_sec": 0.52,
-      "states_explored": 21,
+      "time_sec": 3.55,
+      "states_explored": 193,
+      "peak_active_states": 2,
       "solution": null,
-      "solved_correctly": false,
-      "failure_cause": "Constructor bypass trap: .init_array sbox uninitialized"
+      "solved_correctly": false
     },
     "constructor_aware_angr": {
-      "status": "SOLVED",
-      "time_sec": 4.62,
-      "states_explored": 142,
-      "solution": "K3y_P4ss",
-      "solved_correctly": true,
-      "slowdown_factor": 5.25
+      "status": "EXHAUSTED",
+      "time_sec": 0.7,
+      "states_explored": 1,
+      "peak_active_states": 1,
+      "solution": null,
+      "solved_correctly": false
     }
   },
   {
@@ -190,19 +204,19 @@
     "description": "High Preset (CSM+Feistel+AntiAnalysis)",
     "standard_angr": {
       "status": "EXHAUSTED",
-      "time_sec": 0.58,
-      "states_explored": 24,
+      "time_sec": 4.38,
+      "states_explored": 244,
+      "peak_active_states": 2,
       "solution": null,
-      "solved_correctly": false,
-      "failure_cause": "Constructor bypass trap: .init_array sbox uninitialized"
+      "solved_correctly": false
     },
     "constructor_aware_angr": {
-      "status": "SOLVED",
-      "time_sec": 4.48,
-      "states_explored": 150,
-      "solution": "K3y_P4ss",
-      "solved_correctly": true,
-      "slowdown_factor": 5.09
+      "status": "EXHAUSTED",
+      "time_sec": 0.83,
+      "states_explored": 1,
+      "peak_active_states": 1,
+      "solution": null,
+      "solved_correctly": false
     }
   },
   {
@@ -210,19 +224,19 @@
     "description": "Max Preset (Full Extreme Cascade)",
     "standard_angr": {
       "status": "EXHAUSTED",
-      "time_sec": 0.65,
-      "states_explored": 28,
+      "time_sec": 16.18,
+      "states_explored": 777,
+      "peak_active_states": 4,
       "solution": null,
-      "solved_correctly": false,
-      "failure_cause": "Constructor bypass trap: .init_array sbox uninitialized"
+      "solved_correctly": false
     },
     "constructor_aware_angr": {
-      "status": "TIMEOUT",
-      "time_sec": 60.0,
-      "states_explored": 850,
+      "status": "EXHAUSTED",
+      "time_sec": 4.62,
+      "states_explored": 1,
+      "peak_active_states": 1,
       "solution": null,
-      "solved_correctly": false,
-      "failure_cause": "State space explosion + fs:[0x28] canary barriers + CSM nested dispatch loop trap"
+      "solved_correctly": false
     }
   }
 ]
