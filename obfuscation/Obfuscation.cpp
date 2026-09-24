@@ -21,66 +21,52 @@
 // ── Pass execution order
 // ──────────────────────────────────────────────────────
 //
-//  1. AntiHooking          (module)   — Windows/Darwin/Linux inline-hook
-//  detection
-//                                       + kernel fast-fail termination
-//  2. AntiClassDump        (module)   — ObjC metadata scrambling
-//  3. FunctionCallObfuscate(function) — dlopen/dlsym indirection
-//  4. AntiDebugging        (module)   — ptrace/sysctl/timing anti-debug checks
-//  5. StringEncryption     (module)   — Vernam-GF(2^8) per-byte cipher
-//                                       (OTP XOR + GF8 multiply,
-//                                       info-theoretically
-//                                        secure; different from
-//                                        ConstantEncryption)
-//  6. Per-function (order is deliberate for maximum non-linear coupling):
-//     a. Substitution                 — integer/shift instruction substitution
-//                                       (Sub+AShr+Shl/LShr with verified
-//                                       identities)
-//     b. MBAObfuscation               — multi-term Mixed Boolean-Arithmetic
-//                                       (sees Substitution output → stacked
-//                                       layers,
-//                                        embeds polymorphic hardware barriers)
-//     c. SplitBasicBlocks             — slices across expanded MBA instruction
-//     chains
-//                                       + injects randomized stack-confusion
-//                                       (cuts single MBA expressions across
-//                                       multiple BBs!)
-//     d. BogusControlFlow             — hardware-predicate opaque edges & block
-//     cloning
-//                                       (clones blocks containing split MBA
-//                                       fragments)
-//     e. ChaosStateMachine            — logistic-map quadratic CFF (strongest)
-//                                       (runs on the split & cloned graph so
-//                                       disjoint
-//                                        MBA fragments live in separate chaotic
-//                                        states; stamps done functions so
-//                                        Flattening skips them)
-//     f. Flattening                   — chaos-seeded classic CFF (fallback)
-//                                       (only processes functions CSM skipped:
-//                                        EH pads, coroutines, ≤1 block, etc.)
-//     g. VectorObfuscation            — SIMD scalar→vector lifting
-//                                       (runs last per-fn so even CFF dispatch
-//                                       gets lifted)
-//  7. ConstantEncryption   (module)   — Phase 2: encrypts skeleton constants
-//  from
-//                                       CSM, CFF, BCF, Vec via k-share XOR +
-//                                       Feistel + adb.tok
-//  8. IndirectBranch       (function) — Knuth-hash encrypted branch targets
-//                                       (sees the Flatten/CSM switch tables)
-//  9. FunctionWrapper      (module)   — polymorphic proxy generation
-//                                       (wraps fully-obfuscated functions)
-// 10. FeatureElimination   (module)   — strip debug/ident/names, scramble
-// privates
-//                                       MUST run last so TOML policy
-//                                       name-matching works correctly in all
-//                                       preceding passes.
+//  1. AntiHooking & AntiClassDump (module)   — Windows/Darwin/Linux inline-hook
+//  detection,
+//                                              kernel fast-fail termination,
+//                                              ObjC metadata scrambling
+//  2. FunctionWrapper             (module)   — polymorphic proxy generation
+//                                              (wraps entry points before FCO
+//                                              lowers calls)
+//  3. FunctionCallObfuscate       (function) — dlopen/dlsym runtime resolution
+//                                              (lowers direct external calls in
+//                                              callers & proxies)
+//  4. AntiDebugging               (module)   — ptrace/sysctl/timing anti-debug
+//  checks & violent exit
+//  5. StringEncryption            (module)   — Vernam-GF(2^8) per-byte cipher +
+//  volatile zeroization
+//  6. ConstantEncryption          (module)   — Phase 1: encrypts programmer
+//  literals before CFG transforms
+//  7. Per-function (order is deliberate for maximum non-linear coupling):
+//     a. Substitution                        — integer/shift instruction
+//     substitution b. MBAObfuscation                      — multi-term Mixed
+//     Boolean-Arithmetic + hardware barriers c. SplitBasicBlocks — slices
+//     across expanded MBA chains + stack confusion d. BogusControlFlow —
+//     hardware-predicate opaque edges & block cloning e. ChaosStateMachine —
+//     logistic-map quadratic CFF (strongest) f. Flattening — chaos-seeded
+//     classic CFF (fallback for CSM-skipped fns) g. VectorObfuscation — SIMD
+//     scalar->vector lifting (lifts even CFF dispatch)
+//  8. ConstantEncryption          (module)   — Phase 2: encrypts skeleton
+//  constants from CSM, CFF, BCF, Vec
+//  9. IndirectBranch              (function) — Knuth-hash encrypted branch
+//  targets & jump tables
+// 10. FeatureElimination          (module)   — strip debug/ident/names,
+// scramble privates
+//                                              (MUST run last so TOML policy
+//                                              name-matching works)
 // 11. Cleanup: remove ensia_* marker declarations
 // 12. LTO Evasion: optnone + noinline attributes
 //
 // ── Ordering rationale
 // ────────────────────────────────────────────────────────
-//  • Sub → MBA: MBA sees both original and Substitution-generated ops.
-//  • MBA → Split: Split cuts through the dense MBA instruction chains,
+//  • AntiHook / AntiDump establish runtime integrity baselines & execution
+//  tokens. • FunctionWrapper runs BEFORE FunctionCallObfuscate: FW wraps direct
+//  external calls
+//    in polymorphic proxies; FCO then lowers those calls inside the proxies
+//    into dynamic dlopen/dlsym calls, eliminating all static imports.
+//  • ConstEnc Phase 1 encrypts developer constants so downstream CFG passes
+//  tangle them. • Sub → MBA: MBA sees both original and Substitution-generated
+//  ops. • MBA → Split: Split cuts through the dense MBA instruction chains,
 //  distributing
 //    parts of a single algebraic operation across multiple basic blocks.
 //  • Split → BCF: BCF clones the split blocks and injects opaque edges.
@@ -92,7 +78,7 @@
 //    Inversion ensures every function gets exactly ONE CFF layer, the
 //    strongest available: CSM when eligible, classic Flatten as fallback.
 //  • Vec last (per-fn): SIMD-lifts even the CFF/CSM dispatch arithmetic.
-//  • ConstEnc after Vec: encrypts constants introduced by all previous passes.
+//  • ConstEnc Phase 2: encrypts skeleton constants introduced by BCF/CSM/CFF.
 //  • IndirBranch after ConstEnc: Knuth-hash targets include ConstEnc-injected
 //  GVs.
 
@@ -412,9 +398,9 @@ static void LoadEnv() {
     EnableMedObfuscation = true;
   if (getenv("LOWOBF") || getenv("LOW"))
     EnableLowObfuscation = true;
-  if (getenv("VERBOSE"))
+  if (getenv("VERBOSE") || getenv("OBF_VERBOSE"))
     EnableObfVerbose = true;
-  if (getenv("TRACE"))
+  if (getenv("TRACE") || getenv("OBF_TRACE"))
     EnableObfTrace = true;
 
   if (const char *p = getenv("ENSIA_PRESET"))
@@ -679,9 +665,16 @@ static void loadObfConfig() {
     // file-preset's base (approximation: just keep GObfConfig.passes as
     // user-supplied delta and re-merge onto the CLI preset base).
     ObfPassConfig cli_preset_base = ObfGlobalConfig::presetConfig(presetStr);
-    ObfGlobalConfig::merge(cli_preset_base,
-                           GObfConfig.passes); // file settings win
-    GObfConfig.passes = cli_preset_base;
+    if (explicitConfig) {
+      ObfGlobalConfig::merge(cli_preset_base,
+                             GObfConfig.passes); // explicit file settings win
+      GObfConfig.passes = cli_preset_base;
+    } else {
+      // Auto-discovered file is just an example template — explicit CLI preset
+      // wins!
+      GObfConfig.passes = cli_preset_base;
+      GObfConfig.policies.clear();
+    }
   }
 }
 
@@ -893,6 +886,7 @@ struct Obfuscation : public ModulePass {
 
     // ── High-intensity mode: all passes at balanced high settings ────────
     if (EnableHighObfuscation && !EnableMaxObfuscation) {
+      ObfuscationHighMode = true;
       GObfConfig.preset = "high";
       ObfPassConfig highPreset = ObfGlobalConfig::presetConfig("high");
       ObfGlobalConfig::merge(highPreset, GObfConfig.passes);
@@ -918,6 +912,7 @@ struct Obfuscation : public ModulePass {
     // ── Medium-intensity mode: production-safe subset ─────────────────────
     if (EnableMedObfuscation && !EnableMaxObfuscation &&
         !EnableHighObfuscation) {
+      ObfuscationMedMode = true;
       GObfConfig.preset = "mid";
       ObfPassConfig midPreset = ObfGlobalConfig::presetConfig("mid");
       ObfGlobalConfig::merge(midPreset, GObfConfig.passes);
@@ -939,6 +934,7 @@ struct Obfuscation : public ModulePass {
     // ── Low-intensity mode: lightweight subset ────────────────────────────
     if (EnableLowObfuscation && !EnableMaxObfuscation &&
         !EnableHighObfuscation && !EnableMedObfuscation) {
+      ObfuscationLowMode = true;
       GObfConfig.preset = "low";
       ObfPassConfig lowPreset = ObfGlobalConfig::presetConfig("low");
       ObfGlobalConfig::merge(lowPreset, GObfConfig.passes);
@@ -1000,6 +996,8 @@ struct Obfuscation : public ModulePass {
         errs() << "[OLLVM-Next] Preset '" << GObfConfig.preset << "' active\n";
     }
 
+    ObfuscationFCOActive = EnableAllObfuscation || EnableFunctionCallObfuscate;
+
     auto startTime = std::chrono::steady_clock::now();
 
     errs() << "Running OLLVM-Next on " << M.getSourceFileName() << "  [LLVM "
@@ -1009,7 +1007,9 @@ struct Obfuscation : public ModulePass {
     annotation2Metadata(M);
     applyTomlPolicies(M); // inject per-function enables from TOML policies
 
-    // ── 1. AntiHooking ─────────────────────────────────────────────────────
+    // ── 1. AntiHooking & AntiClassDump ─────────────────────────────────────
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][1] AntiHooking & AntiClassDump\n";
     {
       ModulePass *MP =
           createAntiHookPass(EnableAllObfuscation || EnableAntiHooking);
@@ -1017,16 +1017,34 @@ struct Obfuscation : public ModulePass {
       MP->runOnModule(M);
       delete MP;
     }
-
-    // ── 2. AntiClassDump ───────────────────────────────────────────────────
     if (EnableAllObfuscation || EnableAntiClassDump) {
       ModulePass *P = createAntiClassDumpPass();
       P->doInitialization(M);
       P->runOnModule(M);
       delete P;
     }
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][1] AntiHooking & AntiClassDump: done\n";
+
+    // ── 2. FunctionWrapper (polymorphic proxies) ───────────────────────────
+    // Must run BEFORE FunctionCallObfuscate so direct calls to external
+    // functions are wrapped in EnsiaFW_... proxies first. When FCO follows, it
+    // finds the external call sites inside the proxy and lowers them to dynamic
+    // dlsym resolution, while callers target the polymorphic proxy.
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][2] FunctionWrapper\n";
+    {
+      ModulePass *MP = createFunctionWrapperPass(EnableAllObfuscation ||
+                                                 EnableFunctionWrapper);
+      MP->runOnModule(M);
+      delete MP;
+    }
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][2] FunctionWrapper: done\n";
 
     // ── 3. FunctionCallObfuscate ───────────────────────────────────────────
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][3] FunctionCallObfuscate\n";
     {
       FunctionPass *FP = createFunctionCallObfuscatePass(
           EnableAllObfuscation || EnableFunctionCallObfuscate);
@@ -1035,14 +1053,20 @@ struct Obfuscation : public ModulePass {
           FP->runOnFunction(F);
       delete FP;
     }
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][3] FunctionCallObfuscate: done\n";
 
     // ── 4. AntiDebugging ───────────────────────────────────────────────────
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][4] AntiDebugging\n";
     {
       ModulePass *MP =
           createAntiDebuggingPass(EnableAllObfuscation || EnableAntiDebugging);
       MP->runOnModule(M);
       delete MP;
     }
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][4] AntiDebugging: done\n";
 
     // ── 5. StringEncryption ────────────────────────────────────────────────
     if (ObfTrace)
@@ -1056,11 +1080,11 @@ struct Obfuscation : public ModulePass {
     if (ObfTrace)
       errs() << "[OLLVM-Next][5] StringEncryption: done\n";
 
-    // ── 5b. ConstantEncryption (Phase 1: Pre-phase for user literals) ─────
+    // ── 6. ConstantEncryption (Phase 1: Pre-phase for user literals) ───────
     // Encrypts original programmer constants before CFG transformations so
     // BCF / MBA / CSM / Flattening tangle the constant decryption logic.
     if (ObfTrace)
-      errs() << "[OLLVM-Next][5b] ConstantEncryption (Phase 1: Pre-phase)\n";
+      errs() << "[OLLVM-Next][6] ConstantEncryption (Phase 1: Pre-phase)\n";
     {
       ModulePass *MP = createConstantEncryptionPass(
           EnableAllObfuscation || EnableConstantEncryption,
@@ -1069,21 +1093,21 @@ struct Obfuscation : public ModulePass {
       delete MP;
     }
     if (ObfTrace)
-      errs() << "[OLLVM-Next][5b] ConstantEncryption (Phase 1): done\n";
+      errs() << "[OLLVM-Next][6] ConstantEncryption (Phase 1): done\n";
 
-    // ── 6. Per-function passes ─────────────────────────────────────────────
+    // ── 7. Per-function passes ─────────────────────────────────────────────
     if (ObfTrace)
-      errs() << "[OLLVM-Next][6] per-function loop: start\n";
+      errs() << "[OLLVM-Next][7] per-function loop: start\n";
     for (Function &F : M) {
       if (F.isDeclaration())
         continue;
 
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6] F=" << F.getName() << "\n";
+        errs() << "[OLLVM-Next][7] F=" << F.getName() << "\n";
 
-      // 6a. Instruction Substitution — transforms integer/shift instructions
+      // 7a. Instruction Substitution — transforms integer/shift instructions
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6a] sub\n";
+        errs() << "[OLLVM-Next][7a] sub\n";
       {
         FunctionPass *P =
             createSubstitutionPass(EnableAllObfuscation || EnableSubstitution);
@@ -1091,10 +1115,10 @@ struct Obfuscation : public ModulePass {
         delete P;
       }
 
-      // 6b. MBAObfuscation — multi-term Mixed Boolean-Arithmetic on Sub output;
+      // 7b. MBAObfuscation — multi-term Mixed Boolean-Arithmetic on Sub output;
       //     embeds polymorphic hardware barriers into instruction chains
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6b] mba\n";
+        errs() << "[OLLVM-Next][7b] mba\n";
       {
         FunctionPass *P = createMBAObfuscationPass(EnableAllObfuscation ||
                                                    EnableMBAObfuscation);
@@ -1102,11 +1126,11 @@ struct Obfuscation : public ModulePass {
         delete P;
       }
 
-      // 6c. SplitBasicBlocks — slices across expanded MBA instruction chains
+      // 7c. SplitBasicBlocks — slices across expanded MBA instruction chains
       //     and injects randomized stack-confusion instructions at block
       //     entries (cuts single MBA operations across multiple basic blocks)
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6c] split\n";
+        errs() << "[OLLVM-Next][7c] split\n";
       {
         FunctionPass *P = createSplitBasicBlockPass(EnableAllObfuscation ||
                                                     EnableBasicBlockSplit);
@@ -1114,10 +1138,10 @@ struct Obfuscation : public ModulePass {
         delete P;
       }
 
-      // 6d. BogusControlFlow — inserts opaque hardware-predicate edges & clones
+      // 7d. BogusControlFlow — inserts opaque hardware-predicate edges & clones
       //     the split blocks containing partial MBA expressions
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6d] bcf\n";
+        errs() << "[OLLVM-Next][7d] bcf\n";
       {
         FunctionPass *P = createBogusControlFlowPass(EnableAllObfuscation ||
                                                      EnableBogusControlFlow);
@@ -1125,12 +1149,12 @@ struct Obfuscation : public ModulePass {
         delete P;
       }
 
-      // 6e. ChaosStateMachine — logistic-map quadratic CFF on the obfuscated
+      // 7e. ChaosStateMachine — logistic-map quadratic CFF on the obfuscated
       // CFG.
       //     Stamps processed functions with "ensia.csm.done" so Flattening
       //     skips them.
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6e] csm\n";
+        errs() << "[OLLVM-Next][7e] csm\n";
       {
         FunctionPass *P = createChaosStateMachinePass(EnableAllObfuscation ||
                                                       EnableChaosStateMachine);
@@ -1138,11 +1162,11 @@ struct Obfuscation : public ModulePass {
         delete P;
       }
 
-      // 6f. Classic Flattening — fallback CFF for functions CSM couldn't handle
+      // 7f. Classic Flattening — fallback CFF for functions CSM couldn't handle
       //     (EH pads, coroutines, ≤1 block, or exceeding csm_maxblocks).
       //     Checks "ensia.csm.done" attribute and skips if CSM already ran.
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6f] flatten\n";
+        errs() << "[OLLVM-Next][7f] flatten\n";
       {
         FunctionPass *P =
             createFlatteningPass(EnableAllObfuscation || EnableFlattening);
@@ -1150,12 +1174,12 @@ struct Obfuscation : public ModulePass {
         delete P;
       }
 
-      // 6g. VectorObfuscation — SIMD scalar→vector lifting as final per-fn
+      // 7g. VectorObfuscation — SIMD scalar→vector lifting as final per-fn
       // step.
       //     Lifts remaining scalar arithmetic, state transition logic, and
       //     comparisons into wide SIMD vectors.
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6g] vec\n";
+        errs() << "[OLLVM-Next][7g] vec\n";
       {
         FunctionPass *P = createVectorObfuscationPass(EnableAllObfuscation ||
                                                       EnableVectorObfuscation);
@@ -1163,23 +1187,22 @@ struct Obfuscation : public ModulePass {
         delete P;
       }
       if (ObfTrace)
-        errs() << "[OLLVM-Next][6] F=" << F.getName() << " done\n";
+        errs() << "[OLLVM-Next][7] F=" << F.getName() << " done\n";
     }
     if (ObfTrace)
-      errs() << "[OLLVM-Next][6] per-function loop: done\n";
+      errs() << "[OLLVM-Next][7] per-function loop: done\n";
 
-    // ── 7. ConstantEncryption ─────────────────────────────────────────────
-    // Runs after all per-function passes so it also encrypts constants that
-    // were injected by Sub, MBA, BCF, and Vec.  Feistel tier adds a nonlinear
-    // layer (26 IR instructions per constant) on top of the k-share XOR chain.
-    // Must run BEFORE FeatureElimination (step 9) so TOML policy
-    // module/function name regexes can still match the original source file and
-    // function names.
-    // ── 7. ConstantEncryption (Phase 2: Post-phase for skeleton constants) ─
+    // ── 8. ConstantEncryption (Phase 2: Post-phase for skeleton constants) ─
     // Encrypts skeleton constants introduced by BCF, CSM, and CFF,
     // with small-constant whitelisting to eliminate combinatorial explosion.
+    // Runs after all per-function passes so it also encrypts constants that
+    // were injected by Sub, MBA, BCF, and Vec. Feistel tier adds a nonlinear
+    // layer (26 IR instructions per constant) on top of the k-share XOR chain.
+    // Must run BEFORE FeatureElimination (step 10) so TOML policy
+    // module/function name regexes can still match the original source file and
+    // function names.
     if (ObfTrace)
-      errs() << "[OLLVM-Next][7] ConstantEncryption (Phase 2: Post-phase)\n";
+      errs() << "[OLLVM-Next][8] ConstantEncryption (Phase 2: Post-phase)\n";
     {
       ModulePass *MP = createConstantEncryptionPass(
           EnableAllObfuscation || EnableConstantEncryption,
@@ -1188,12 +1211,12 @@ struct Obfuscation : public ModulePass {
       delete MP;
     }
     if (ObfTrace)
-      errs() << "[OLLVM-Next][7] ConstantEncryption (Phase 2): done\n";
+      errs() << "[OLLVM-Next][8] ConstantEncryption (Phase 2): done\n";
 
-    // ── 8. IndirectBranch (Knuth-hash encrypted targets) ─────────────────
+    // ── 9. IndirectBranch (Knuth-hash encrypted targets) ─────────────────
     // Also before FeatureElimination for the same naming reason.
     if (ObfTrace)
-      errs() << "[OLLVM-Next][8] IndirectBranch\n";
+      errs() << "[OLLVM-Next][9] IndirectBranch\n";
     {
       FunctionPass *P = createIndirectBranchPass(EnableAllObfuscation ||
                                                  EnableIndirectBranching);
@@ -1203,20 +1226,7 @@ struct Obfuscation : public ModulePass {
       delete P;
     }
     if (ObfTrace)
-      errs() << "[OLLVM-Next][8] IndirectBranch: done\n";
-
-    // ── 9. FunctionWrapper (polymorphic proxies) ──────────────────────────
-    // Also before FeatureElimination for the same naming reason.
-    if (ObfTrace)
-      errs() << "[OLLVM-Next][9] FunctionWrapper\n";
-    {
-      ModulePass *MP = createFunctionWrapperPass(EnableAllObfuscation ||
-                                                 EnableFunctionWrapper);
-      MP->runOnModule(M);
-      delete MP;
-    }
-    if (ObfTrace)
-      errs() << "[OLLVM-Next][9] FunctionWrapper: done\n";
+      errs() << "[OLLVM-Next][9] IndirectBranch: done\n";
 
     // ── 10. Feature Elimination ────────────────────────────────────────────
     // Runs LAST — after all obfuscation passes have finished — so that:

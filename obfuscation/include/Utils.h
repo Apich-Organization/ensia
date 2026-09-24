@@ -31,6 +31,21 @@ namespace llvm {
 // Set by -enable-maxobf in Obfuscation.cpp.
 extern bool ObfuscationMaxMode;
 
+// Global flag: when true passes run at high-preset intensity.
+// Set by -enable-highobf / preset=high in Obfuscation.cpp.
+extern bool ObfuscationHighMode;
+
+// Global flag: when true passes run at med-preset intensity.
+// Set by -enable-medobf / preset=mid in Obfuscation.cpp.
+extern bool ObfuscationMedMode;
+
+// Global flag: when true passes run at low-preset intensity.
+// Set by -enable-lowobf / preset=low in Obfuscation.cpp.
+extern bool ObfuscationLowMode;
+
+// Global flag: when true FCO is enabled in pipeline, coordinating with FW.
+extern bool ObfuscationFCOActive;
+
 // Global flag: when true each pass prints a "Running X On Y" line for every
 // function it processes.  Defaults to false because hundreds of stdlib
 // functions generate enough output to fill a 64 KB stderr pipe, causing the
@@ -39,11 +54,11 @@ extern bool ObfuscationMaxMode;
 extern bool ObfVerbose;
 
 // Global flag: when true, Obfuscation.cpp emits one "[OLLVM-Next][Nx]" line
-// before and after each major step (StringEncryption, per-function loop,
-// ConstantEncryption, IndirectBranch, FunctionWrapper).  Also prints each
-// function name and each sub-pass tag inside the per-function loop.
-// Maximum output: ~15 lines (module-level) + ~7 lines per function.
-// Use -obf-trace on the opt command line to diagnose 0% CPU hangs.
+// before and after each major pipeline stage (FunctionWrapper, AntiDebugging,
+// StringEncryption, ConstantEncryption, per-function loop, IndirectBranch,
+// etc.). Also prints each function name and each sub-pass tag inside the
+// per-function loop. Maximum output: ~15 lines (module-level) + ~7 lines per
+// function. Use -obf-trace on the opt command line to diagnose 0% CPU hangs.
 extern bool ObfTrace;
 
 void fixStack(Function *f);

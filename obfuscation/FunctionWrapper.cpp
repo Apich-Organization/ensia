@@ -223,19 +223,31 @@ struct FunctionWrapper : public ModulePass {
       }
     }
 
-    // Emit the real call via bit-rotated indirect pointer table / XOR-scrambled
-    // ptr
-    uint64_t ptrMask = cryptoutils->get_uint64_t();
-    Constant *maskC64 =
-        ConstantInt::get(Type::getInt64Ty(M.getContext()), ptrMask);
-    Value *calleeInt = IRB.CreatePtrToInt(
-        calledFunction, Type::getInt64Ty(M.getContext()), "fw.ptri");
-    Value *scrambled = IRB.CreateXor(calleeInt, maskC64, "fw.scram");
-    Value *barScrambled = insertOpaqueBarrier(IRB, scrambled);
-    Value *unscram = IRB.CreateXor(barScrambled, maskC64, "fw.unscram");
-    Value *calleePtr = IRB.CreateIntToPtr(
-        unscram, PointerType::getUnqual(M.getContext()), "fw.fnptr");
-    Value *retval = IRB.CreateCall(ft, calleePtr, ArrayRef<Value *>(callArgs));
+    // If the target is an external declaration and FCO is enabled in the
+    // pipeline, emit a direct call so FCO (running right after FW) lowers it
+    // to dynamic dlsym resolution, eliminating the external symbol from the
+    // binary. Otherwise, emit via XOR-scrambled indirect function pointer.
+    bool targetIsExternal = false;
+    if (Function *targetFunc = dyn_cast<Function>(calledFunction)) {
+      targetIsExternal = targetFunc->isDeclaration();
+    }
+
+    Value *retval = nullptr;
+    if (targetIsExternal && ObfuscationFCOActive) {
+      retval = IRB.CreateCall(ft, calledFunction, ArrayRef<Value *>(callArgs));
+    } else {
+      uint64_t ptrMask = cryptoutils->get_uint64_t();
+      Constant *maskC64 =
+          ConstantInt::get(Type::getInt64Ty(M.getContext()), ptrMask);
+      Value *calleeInt = IRB.CreatePtrToInt(
+          calledFunction, Type::getInt64Ty(M.getContext()), "fw.ptri");
+      Value *scrambled = IRB.CreateXor(calleeInt, maskC64, "fw.scram");
+      Value *barScrambled = insertOpaqueBarrier(IRB, scrambled);
+      Value *unscram = IRB.CreateXor(barScrambled, maskC64, "fw.unscram");
+      Value *calleePtr = IRB.CreateIntToPtr(
+          unscram, PointerType::getUnqual(M.getContext()), "fw.fnptr");
+      retval = IRB.CreateCall(ft, calleePtr, ArrayRef<Value *>(callArgs));
+    }
 
     // Strategy C: mask return value (zero-net XOR)
     if (strat == ProxyStrategy::RetMask && ft->getReturnType()->isIntegerTy()) {

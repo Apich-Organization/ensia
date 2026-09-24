@@ -615,7 +615,9 @@ fn FuncWrapSection() -> impl IntoView {
                 "Each selected function is wrapped in a polymorphic proxy that
                  forwards all arguments and return values. The wrapper can be
                  applied multiple times to build chains, and each wrapper is
-                 given a unique mangled name."
+                 given a unique mangled name. Runs in pipeline step 2 (immediately
+                 before FunctionCallObfuscate), so direct calls to external functions
+                 inside wrappers are subsequently lowered to dynamic dlopen/dlsym resolution."
             </p>
         </div>
 
@@ -843,7 +845,7 @@ fn FuncCallObfSection() -> impl IntoView {
                 <code class="font-mono">"dlsym"</code>
                 " is itself encrypted by StringEncryption (when enabled), so
                  neither the call target nor the symbol name is statically visible.
-                 Runs per-function in pipeline step 3, before CFG transforms."
+                 Runs in pipeline step 3 (immediately after FunctionWrapper), before CFG transforms."
             </p>
         </div>
 

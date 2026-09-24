@@ -751,7 +751,7 @@ impl TomlConfig {
                     enabled: true,
                     warmup: 128,
                     nested_dispatch: false,
-                    max_blocks: 5000,
+                    max_blocks: 10000,
                 };
                 self.vec_obf = VecObfCfg {
                     enabled: true,
@@ -858,7 +858,7 @@ impl TomlConfig {
                     enabled: true,
                     warmup: 256,
                     nested_dispatch: true,
-                    max_blocks: 10000,
+                    max_blocks: 100000,
                 };
                 self.vec_obf = VecObfCfg {
                     enabled: true,

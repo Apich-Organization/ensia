@@ -155,24 +155,29 @@ struct IndirectBranch : public FunctionPass {
       kk.xorK = cryptoutils->get_uint64_t();
       knuthKeys[&F] = kk;
       for (BasicBlock &BB : F) {
-        if (BB.isEntryBlock())
-          continue;
-        // BST comparison blocks created by manuallyLowerSwitches() do not need
-        // entries in the global table: runOnFunction() skips their own
-        // BranchInsts, and they are never targeted by the global table lookup
-        // (only by per-branch local table GVs whose immediate predecessor
-        // already holds the block address).  Including them bloats the table by
-        // O(switch-cases) entries per function with no benefit.
-        if (BB.getName().starts_with("sw.bst."))
-          continue;
-        indexmap[&BB] = i++;
+        if (!BB.hasName())
+          BB.setName("ib");
+      }
+      DenseSet<BasicBlock *> neededTargets;
+      for (BasicBlock &BB : F) {
+        if (BranchInst *BI = dyn_cast<BranchInst>(BB.getTerminator())) {
+          if (BI->isUnconditional()) {
+            BasicBlock *target = BI->getSuccessor(0);
+            if (!target->isEntryBlock() &&
+                !target->getName().starts_with("sw.bst."))
+              neededTargets.insert(target);
+          }
+        }
+      }
+      for (BasicBlock *BB : neededTargets) {
+        indexmap[BB] = i++;
         BBs.emplace_back(encJumpLocal ? ConstantExpr::getGetElementPtr(
                                             Type::getInt8Ty(M.getContext()),
                                             ConstantExpr::getBitCast(
-                                                BlockAddress::get(&BB),
+                                                BlockAddress::get(BB),
                                                 getOpaquePtrTy(M.getContext())),
                                             encmap[&F])
-                                      : BlockAddress::get(&BB));
+                                      : BlockAddress::get(BB));
       }
     }
     if (to_obf_funcs.size()) {

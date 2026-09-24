@@ -35,6 +35,10 @@ using namespace llvm;
 namespace llvm {
 
 bool ObfuscationMaxMode = false;
+bool ObfuscationHighMode = false;
+bool ObfuscationMedMode = false;
+bool ObfuscationLowMode = false;
+bool ObfuscationFCOActive = false;
 bool ObfVerbose = false;
 bool ObfTrace = false;
 
@@ -176,6 +180,19 @@ bool readFlag(Function *f, std::string attribute) {
 #if defined(ENSIA_RUST_PLUGIN)
   return false;
 #else
+  if (!f || !f->getParent())
+    return false;
+  std::string prefix = "ensia_" + attribute;
+  bool hasTargetDecl = false;
+  for (const Function &otherF : *f->getParent()) {
+    if (otherF.isDeclaration() && otherF.getName().starts_with(prefix)) {
+      hasTargetDecl = true;
+      break;
+    }
+  }
+  if (!hasTargetDecl)
+    return false;
+
   for (Instruction &I : instructions(f)) {
     Instruction *Inst = &I;
     if (CallInst *CI = dyn_cast<CallInst>(Inst)) {
@@ -264,6 +281,19 @@ bool readFlagUint32OptVal(Function *f, std::string opt, uint32_t *val) {
 #if defined(ENSIA_RUST_PLUGIN)
   return false;
 #else
+  if (!f || !f->getParent())
+    return false;
+  std::string prefix = "ensia_" + opt;
+  bool hasTargetDecl = false;
+  for (const Function &otherF : *f->getParent()) {
+    if (otherF.isDeclaration() && otherF.getName().starts_with(prefix)) {
+      hasTargetDecl = true;
+      break;
+    }
+  }
+  if (!hasTargetDecl)
+    return false;
+
   for (Instruction &I : instructions(f)) {
     Instruction *Inst = &I;
     if (CallInst *CI = dyn_cast<CallInst>(Inst)) {

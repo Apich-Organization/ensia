@@ -22,7 +22,7 @@ If you want to help improve this project, we welcome your contributions. Please 
 
 ### **Submitting a Pull Request**
 
-* Ensure your code compiles on LLVM 21 and 22.  
+* Ensure your code compiles on LLVM 21+ (LLVM 21, 22, 23+).  
 * Keep your commits focused. If you are fixing a bug and adding a feature, please use two separate pull requests.  
 * Be patient. This is a side project and code reviews may take some time.
 

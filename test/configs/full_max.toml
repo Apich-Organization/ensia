@@ -59,7 +59,7 @@ lift_comparisons = true
 enabled = true
 nested_dispatch = true
 warmup = 256
-max_blocks = 10000
+max_blocks = 100000
 
 [passes.flattening]
 enabled = true

@@ -233,7 +233,7 @@ static ObfPassConfig makeHighPreset() {
   c.csm.nested_dispatch =
       false; // nested would cause exponential growth at high BCF
   c.csm.warmup = 128;
-  c.csm.max_blocks = 5000;
+  c.csm.max_blocks = 10000;
   c.flatten.enabled =
       false; // CSM stamps done functions; flatten is fallback only
 
@@ -329,11 +329,11 @@ static ObfPassConfig makeMaxPreset() {
   c.vec.shuffle = true;
   c.vec.lift_comparisons = true;
 
-  // CSM: enabled, nested_dispatch=true, warmup=256, max_blocks=10000
+  // CSM: enabled, nested_dispatch=true, warmup=256, max_blocks=100000
   c.csm.enabled = true;
   c.csm.nested_dispatch = true;
   c.csm.warmup = 256;
-  c.csm.max_blocks = 10000;
+  c.csm.max_blocks = 100000;
   c.flatten.enabled = true;
 
   // IndirBranch: enabled, use_stack=true, enc_jump_target=true

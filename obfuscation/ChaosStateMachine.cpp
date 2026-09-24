@@ -306,6 +306,11 @@ struct ChaosStateMachine : public FunctionPass {
       ChaosNestedDispatchTemp = true;
       if (warmupOverride < 256)
         warmupOverride = 256;
+      if (maxBlocksOverride < 100000)
+        maxBlocksOverride = 100000;
+    } else if (ObfuscationHighMode) {
+      if (maxBlocksOverride < 10000)
+        maxBlocksOverride = 10000;
     }
 
     if (ObfVerbose)
@@ -330,12 +335,23 @@ struct ChaosStateMachine : public FunctionPass {
         return;
       }
       if (!isa<BranchInst>(BB.getTerminator()) &&
-          !isa<ReturnInst>(BB.getTerminator()))
+          !isa<ReturnInst>(BB.getTerminator()) &&
+          !isa<UnreachableInst>(BB.getTerminator())) {
+        if (ObfVerbose)
+          errs() << F->getName()
+                 << ": ChaosStateMachine skipped (unsupported terminator: "
+                 << BB.getTerminator()->getOpcodeName() << ")\n";
         return;
+      }
       origBBs.push_back(&BB);
     }
-    if (origBBs.size() <= 1)
+    if (origBBs.size() <= 1) {
+      if (ObfVerbose)
+        errs() << F->getName()
+               << ": ChaosStateMachine skipped (<= 1 basic block: "
+               << origBBs.size() << ")\n";
       return;
+    }
 
     // Size guard: running CSM on a function that was already processed by
     // ControlFlowFlattening causes LowerSwitchPass to expand the CFF switch

@@ -49,7 +49,7 @@ set(ENSIA_SOURCES
         MBAObfuscation.cpp        # Mixed Boolean-Arithmetic substitution
         ChaosStateMachine.cpp     # Logistic-map-driven control-flow flattening
         VectorObfuscation.cpp     # Scalar-to-SIMD vector lifting
-        RustCompat.cpp            # LLVM 21/22 ABI bridge for rustc plugin
+        RustCompat.cpp            # LLVM 21+ ABI bridge for rustc plugin
         )
 
 add_library(Ensia SHARED ${ENSIA_SOURCES})

@@ -96,14 +96,25 @@ void Flattening::flatten(Function *f) {
       return;
     }
     if (!isa<BranchInst>(BB.getTerminator()) &&
-        !isa<ReturnInst>(BB.getTerminator()))
+        !isa<ReturnInst>(BB.getTerminator()) &&
+        !isa<UnreachableInst>(BB.getTerminator())) {
+      if (ObfVerbose)
+        errs() << f->getName()
+               << ": ControlFlowFlattening skipped (unsupported terminator: "
+               << BB.getTerminator()->getOpcodeName() << ")\n";
       return;
+    }
     origBB.emplace_back(&BB);
   }
 
   // Nothing to flatten
-  if (origBB.size() <= 1)
+  if (origBB.size() <= 1) {
+    if (ObfVerbose)
+      errs() << f->getName()
+             << ": ControlFlowFlattening skipped (<= 1 basic block: "
+             << origBB.size() << ")\n";
     return;
+  }
 
   // Remove first BB
   origBB.erase(origBB.begin());

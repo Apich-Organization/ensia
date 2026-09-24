@@ -64,6 +64,7 @@ junk_asm_max = 6
 enabled = true
 nested_dispatch = false
 warmup = 128
+max_blocks = 10000
 
 [passes.vector_obfuscation]
 enabled = true
