@@ -38,12 +38,26 @@ static cl::opt<uint32_t>
                       "Obfuscated By FunctionWrapper"),
              cl::value_desc("Probability Rate"), cl::init(30), cl::Optional);
 static thread_local uint32_t ProbRateTemp = 30;
+static cl::alias ProbRateAlias1("fw-prob", cl::desc("Alias for -fw_prob"),
+                                cl::aliasopt(ProbRate));
+static cl::alias ProbRateAlias2("funcwra_prob", cl::desc("Alias for -fw_prob"),
+                                cl::aliasopt(ProbRate));
+static cl::alias ProbRateAlias3("funcwra-prob", cl::desc("Alias for -fw_prob"),
+                                cl::aliasopt(ProbRate));
 
 static cl::opt<uint32_t> ObfTimes(
     "fw_times",
     cl::desc(
         "Choose how many time the FunctionWrapper pass loop on a CallSite"),
     cl::value_desc("Number of Times"), cl::init(2), cl::Optional);
+static cl::alias ObfTimesAlias1("fw-times", cl::desc("Alias for -fw_times"),
+                                cl::aliasopt(ObfTimes));
+static cl::alias ObfTimesAlias2("funcwra_times",
+                                cl::desc("Alias for -fw_times"),
+                                cl::aliasopt(ObfTimes));
+static cl::alias ObfTimesAlias3("funcwra-times",
+                                cl::desc("Alias for -fw_times"),
+                                cl::aliasopt(ObfTimes));
 
 // Proxy strategy selector
 enum class ProxyStrategy { IdentityNoise, ArgShuffle, RetMask };
@@ -73,24 +87,31 @@ struct FunctionWrapper : public ModulePass {
     uint32_t effectiveTimes =
         modec.func_wrap.times.value_or((uint32_t)ObfTimes);
 
-    SmallVector<CallSite *, 16> callsites;
+    SmallVector<std::pair<CallSite *, uint32_t>, 16> callsites;
     for (Function &F : M) {
-      if (!toObfuscate(flag, &F, "fw"))
+      auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
+      bool shouldObf = ec.func_wrap.enabled.value_or(flag);
+      if (!toObfuscate(shouldObf, &F, "fw"))
         continue;
       if (ObfVerbose)
         errs() << "Running FunctionWrapper On " << F.getName() << "\n";
       if (!toObfuscateUint32Option(&F, "fw_prob", &ProbRateTemp)) {
-        auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
-        ProbRateTemp = ec.func_wrap.probability.value_or((uint32_t)ProbRate);
+        if (!toObfuscateUint32Option(&F, "funcwra_prob", &ProbRateTemp))
+          ProbRateTemp = ec.func_wrap.probability.value_or((uint32_t)ProbRate);
       }
       if (ProbRateTemp > 100) {
         errs() << "FunctionWrapper: -fw_prob must be 0-100\n";
         return false;
       }
+      uint32_t fnTimes = effectiveTimes;
+      if (!toObfuscateUint32Option(&F, "fw_times", &fnTimes)) {
+        if (!toObfuscateUint32Option(&F, "funcwra_times", &fnTimes))
+          fnTimes = ec.func_wrap.times.value_or(effectiveTimes);
+      }
       for (Instruction &Inst : instructions(F))
         if ((isa<CallInst>(&Inst) || isa<InvokeInst>(&Inst)))
           if (cryptoutils->get_range(100) <= ProbRateTemp)
-            callsites.push_back(new CallSite(&Inst));
+            callsites.push_back({new CallSite(&Inst), fnTimes});
     }
     // Collect all created proxy functions and call appendToCompilerUsed ONCE.
     // The old code called appendToCompilerUsed inside HandleCallSite (once per
@@ -98,9 +119,12 @@ struct FunctionWrapper : public ModulePass {
     // on every call, so N call sites → O(N²) work and O(N²) allocations of
     // temporary GlobalVariable initialisers that pile up in the LLVMContext.
     SmallVector<GlobalValue *, 16> newProxies;
-    for (CallSite *CS : callsites)
-      for (uint32_t i = 0; i < effectiveTimes && CS != nullptr; i++)
+    for (auto &entry : callsites) {
+      CallSite *CS = entry.first;
+      uint32_t times = entry.second;
+      for (uint32_t i = 0; i < times && CS != nullptr; i++)
         CS = HandleCallSite(CS, M, newProxies);
+    }
     if (!newProxies.empty())
       appendToCompilerUsed(M, newProxies);
     return true;

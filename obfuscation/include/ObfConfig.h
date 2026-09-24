@@ -69,6 +69,7 @@ struct ObfSplitConfig {
 struct ObfStrEncConfig {
   std::optional<bool> enabled;
   std::optional<uint32_t> probability;
+  std::optional<bool> anti_dump;
   // Regex patterns matched against raw string content (i8 arrays only).
   // skip_content: if any pattern matches, do not encrypt this string literal.
   // force_content: if any pattern matches, encrypt regardless of probability.
@@ -138,11 +139,14 @@ struct ObfAntiHookConfig {
   std::optional<bool> objc_runtime;
   std::optional<bool> antirebind;
   std::optional<bool> direct_syscall;
+  std::optional<bool> check_integrity;
+  std::optional<std::string> precompiled_ir_path;
 };
 
 struct ObfAntiDbgConfig {
   std::optional<bool> enabled;
   std::optional<uint32_t> probability;
+  std::optional<std::string> precompiled_ir_path;
 };
 
 struct ObfAntiAcdConfig {

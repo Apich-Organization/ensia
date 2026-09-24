@@ -17,6 +17,7 @@
  */
 
 #include "include/FunctionCallObfuscate.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "include/compat/CallSite.h"
 #include "include/json.hpp"
@@ -44,10 +45,20 @@ static cl::opt<uint64_t>
     dlopen_flag("fco_flag",
                 cl::desc("The value of RTLD_DEFAULT on your platform"),
                 cl::value_desc("value"), cl::init(-1), cl::Optional);
+static cl::alias dlopen_flag_alias("fco-flag", cl::desc("Alias for -fco_flag"),
+                                   cl::aliasopt(dlopen_flag));
+
 static cl::opt<std::string>
     SymbolConfigPath("fcoconfig",
                      cl::desc("FunctionCallObfuscate Configuration Path"),
                      cl::value_desc("filename"), cl::init("+-x/"));
+static cl::alias SymbolConfigPathAlias1("fco_config",
+                                        cl::desc("Alias for -fcoconfig"),
+                                        cl::aliasopt(SymbolConfigPath));
+static cl::alias SymbolConfigPathAlias2("fco-config",
+                                        cl::desc("Alias for -fcoconfig"),
+                                        cl::aliasopt(SymbolConfigPath));
+
 namespace llvm {
 struct FunctionCallObfuscate : public FunctionPass {
   static char ID;
@@ -69,7 +80,20 @@ struct FunctionCallObfuscate : public FunctionPass {
     // Basic Defs
     bool explicitlySpecified = (SymbolConfigPath != "+-x/");
     if (!explicitlySpecified) {
-      if (const char *env = getenv("ENSIA_SYMBOL_CONFIG")) {
+      if (GObfConfig.passes.fco.symbol_config_path.has_value() &&
+          !GObfConfig.passes.fco.symbol_config_path->empty()) {
+        SymbolConfigPath = *GObfConfig.passes.fco.symbol_config_path;
+        explicitlySpecified = true;
+      } else if (const char *env = getenv("ENSIA_SYMBOL_CONFIG")) {
+        SymbolConfigPath = env;
+        explicitlySpecified = true;
+      } else if (const char *env2 = getenv("FCO_CONFIG")) {
+        SymbolConfigPath = env2;
+        explicitlySpecified = true;
+      } else if (const char *env3 = getenv("FCO_SYMBOL_CONFIG")) {
+        SymbolConfigPath = env3;
+        explicitlySpecified = true;
+      } else if (sys::fs::exists("SymbolConfig.json")) {
         SymbolConfigPath = env;
         explicitlySpecified = true;
       } else if (sys::fs::exists("SymbolConfig.json")) {
@@ -278,7 +302,10 @@ struct FunctionCallObfuscate : public FunctionPass {
   }
   bool runOnFunction(Function &F) override {
     // Construct Function Prototypes
-    if (!toObfuscate(flag, &F, "fco"))
+    auto ec =
+        GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+    bool shouldObf = ec.fco.enabled.value_or(flag);
+    if (!toObfuscate(shouldObf, &F, "fco"))
       return false;
     if (ObfVerbose)
       errs() << "Running FunctionCallObfuscate On " << F.getName() << "\n";
@@ -388,19 +415,29 @@ struct FunctionCallObfuscate : public FunctionPass {
                 resolve_sym_decl,
                 {Handle, IRB.CreateGlobalString(calledFunctionName)});
           } else {
-            if (triple.isOSDarwin()) {
-              dlopen_flag = DARWIN_FLAG;
-            } else if (triple.isAndroid()) {
-              if (triple.isArch64Bit())
-                dlopen_flag = ANDROID64_FLAG;
-              else
-                dlopen_flag = ANDROID32_FLAG;
-            } else if (triple.isOSLinux()) {
-              dlopen_flag = 2; // RTLD_NOW
+            uint64_t effectiveDlopenFlag = dlopen_flag;
+            if (effectiveDlopenFlag == (uint64_t)-1) {
+              auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(),
+                                           F.getName());
+              if (ec.fco.flag.has_value()) {
+                effectiveDlopenFlag = *ec.fco.flag;
+              } else if (triple.isOSDarwin()) {
+                effectiveDlopenFlag = DARWIN_FLAG;
+              } else if (triple.isAndroid()) {
+                if (triple.isArch64Bit())
+                  effectiveDlopenFlag = ANDROID64_FLAG;
+                else
+                  effectiveDlopenFlag = ANDROID32_FLAG;
+              } else if (triple.isOSLinux()) {
+                effectiveDlopenFlag = 2; // RTLD_NOW
+              } else {
+                effectiveDlopenFlag = 2;
+              }
             }
-            Handle = IRB.CreateCall(resolve_lib_decl,
-                                    {Constant::getNullValue(Int8PtrTy),
-                                     ConstantInt::get(Int32Ty, dlopen_flag)});
+            Handle = IRB.CreateCall(
+                resolve_lib_decl,
+                {Constant::getNullValue(Int8PtrTy),
+                 ConstantInt::get(Int32Ty, effectiveDlopenFlag)});
             fp = IRB.CreateCall(
                 resolve_sym_decl,
                 {Handle, IRB.CreateGlobalString(calledFunctionName)});

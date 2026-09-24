@@ -19,6 +19,7 @@
 #include "include/Flattening.h"
 #include "include/ChaosStateMachine.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -45,8 +46,10 @@ INITIALIZE_PASS(Flattening, "cffobf", "Enable Control Flow Flattening.", false,
                 false)
 bool Flattening::runOnFunction(Function &F) {
   Function *tmp = &F;
+  auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+  bool shouldObf = ec.flatten.enabled.value_or(flag);
   // Do we obfuscate?
-  if (toObfuscate(flag, tmp, "fla") && !F.isPresplitCoroutine()) {
+  if (toObfuscate(shouldObf, tmp, "fla") && !F.isPresplitCoroutine()) {
     // ChaosStateMachine already ran on this function and provided a stronger
     // logistic-map-based CFF.  Running Flattening on top would cascade:
     // Flattening's LowerSwitchPass expands the CSM switch into a binary

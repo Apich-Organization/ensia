@@ -73,6 +73,7 @@ static ObfPassConfig makeLowPreset() {
   // String encryption: partial — reduces decryptor overhead at callsites
   c.str_enc.enabled = true;
   c.str_enc.probability = 70;
+  c.str_enc.anti_dump = true;
 
   // Constant encryption: minimal — classic 2-share XOR, no Feistel
   c.const_enc.enabled = true;
@@ -97,6 +98,7 @@ static ObfPassConfig makeLowPreset() {
   c.func_wrap.enabled = false;
   c.fco.enabled = false;
   c.anti_hook.enabled = false;
+  c.anti_hook.check_integrity = false;
   c.anti_dbg.enabled = false;
   c.anti_class_dump.enabled = false;
 
@@ -132,6 +134,7 @@ static ObfPassConfig makeMidPreset() {
   // String encryption: all strings
   c.str_enc.enabled = true;
   c.str_enc.probability = 100;
+  c.str_enc.anti_dump = true;
 
   // Constant encryption: 3-share XOR + XOR substitution, no Feistel
   c.const_enc.enabled = true;
@@ -201,6 +204,7 @@ static ObfPassConfig makeHighPreset() {
   // String encryption: all strings
   c.str_enc.enabled = true;
   c.str_enc.probability = 100;
+  c.str_enc.anti_dump = true;
 
   // Constant encryption: 4-share Feistel + XOR substitution
   c.const_enc.enabled = true;
@@ -253,6 +257,7 @@ static ObfPassConfig makeHighPreset() {
   c.anti_hook.objc_runtime = true;
   c.anti_hook.antirebind = false;
   c.anti_hook.direct_syscall = true;
+  c.anti_hook.check_integrity = true;
 
   c.anti_dbg.enabled = true;
   c.anti_dbg.probability = 50;
@@ -304,6 +309,7 @@ static ObfPassConfig makeMaxPreset() {
   // StrEnc: 100%
   c.str_enc.enabled = true;
   c.str_enc.probability = 100;
+  c.str_enc.anti_dump = true;
 
   // ConstEnc: 3 iterations, 6 shares, feistel=true, subxor=true (100%),
   // globalize=true (80%)
@@ -351,6 +357,7 @@ static ObfPassConfig makeMaxPreset() {
   c.anti_hook.objc_runtime = true;
   c.anti_hook.antirebind = true;
   c.anti_hook.direct_syscall = true;
+  c.anti_hook.check_integrity = true;
 
   // AntiDbg: 100% prob
   c.anti_dbg.enabled = true;
@@ -430,7 +437,8 @@ void ObfGlobalConfig::merge(ObfPassConfig &dst, const ObfPassConfig &src){
         MERGE_OPT(split.stack_confusion)
     // StrEnc
     MERGE_OPT(str_enc.enabled) MERGE_OPT(str_enc.probability)
-        MERGE_VEC(str_enc.skip_content) MERGE_VEC(str_enc.force_content)
+        MERGE_OPT(str_enc.anti_dump) MERGE_VEC(str_enc.skip_content)
+            MERGE_VEC(str_enc.force_content)
     // ConstEnc
     MERGE_OPT(const_enc.enabled) MERGE_OPT(const_enc.iterations)
         MERGE_OPT(const_enc.share_count) MERGE_OPT(const_enc.feistel)
@@ -459,21 +467,28 @@ void ObfGlobalConfig::merge(ObfPassConfig &dst, const ObfPassConfig &src){
     // Anti-*
     MERGE_OPT(anti_hook.enabled) MERGE_OPT(anti_hook.inline_aarch64) MERGE_OPT(
         anti_hook.inline_x86) MERGE_OPT(anti_hook.inline_win)
-        MERGE_OPT(anti_hook.objc_runtime) MERGE_OPT(anti_hook.antirebind)
-            MERGE_OPT(anti_hook.direct_syscall)
+        MERGE_OPT(anti_hook.objc_runtime) MERGE_OPT(
+            anti_hook.antirebind) MERGE_OPT(anti_hook.direct_syscall)
+            MERGE_OPT(anti_hook.check_integrity) MERGE_OPT(
+                anti_hook.precompiled_ir_path)
 
-                MERGE_OPT(anti_dbg.enabled) MERGE_OPT(anti_dbg.probability)
+                MERGE_OPT(anti_dbg.enabled)
+                    MERGE_OPT(anti_dbg.probability) MERGE_OPT(
+                        anti_dbg.precompiled_ir_path)
 
-                    MERGE_OPT(anti_class_dump.enabled) MERGE_OPT(
-                        anti_class_dump.use_initialize)
-                        MERGE_OPT(anti_class_dump.rename_methodimp) MERGE_OPT(
-                            anti_class_dump.scramble_methods)
-                            MERGE_OPT(anti_class_dump.dummy_selectors)
-                                MERGE_OPT(anti_class_dump.dummy_count)
-                                    MERGE_OPT(anti_class_dump.encrypt_strings)
-                                        MERGE_OPT(anti_class_dump.anti_hook)
-                                            MERGE_OPT(anti_class_dump
-                                                          .opaque_barriers)}
+                        MERGE_OPT(anti_class_dump.enabled)
+                            MERGE_OPT(anti_class_dump.use_initialize) MERGE_OPT(
+                                anti_class_dump.rename_methodimp)
+                                MERGE_OPT(anti_class_dump.scramble_methods)
+                                    MERGE_OPT(anti_class_dump.dummy_selectors)
+                                        MERGE_OPT(anti_class_dump.dummy_count)
+                                            MERGE_OPT(
+                                                anti_class_dump.encrypt_strings)
+                                                MERGE_OPT(
+                                                    anti_class_dump.anti_hook)
+                                                    MERGE_OPT(
+                                                        anti_class_dump
+                                                            .opaque_barriers)}
 
 #undef MERGE_OPT
 #undef MERGE_VEC
@@ -712,6 +727,10 @@ static void parseStrEnc(const toml::table &t, ObfStrEncConfig &c) {
     c.enabled = *v;
   if (auto v = tomlU32(t["probability"]))
     c.probability = *v;
+  if (auto v = t["anti_dump"].value<bool>())
+    c.anti_dump = *v;
+  else if (auto v = t["strcry_antidump"].value<bool>())
+    c.anti_dump = *v;
   tomlStrArr(t["skip_content"], c.skip_content);
   tomlStrArr(t["force_content"], c.force_content);
 }
@@ -803,6 +822,18 @@ static void parseAntiHook(const toml::table &t, ObfAntiHookConfig &c) {
     c.antirebind = *v;
   if (auto v = t["direct_syscall"].value<bool>())
     c.direct_syscall = *v;
+  if (auto v = t["check_integrity"].value<bool>())
+    c.check_integrity = *v;
+  else if (auto v = t["integrity"].value<bool>())
+    c.check_integrity = *v;
+  else if (auto v = t["ah_integrity"].value<bool>())
+    c.check_integrity = *v;
+  if (auto v = t["precompiled_ir_path"].value<std::string>())
+    c.precompiled_ir_path = *v;
+  else if (auto v = t["ir_path"].value<std::string>())
+    c.precompiled_ir_path = *v;
+  else if (auto v = t["adhexrirpath"].value<std::string>())
+    c.precompiled_ir_path = *v;
 }
 
 static void parseAntiDbg(const toml::table &t, ObfAntiDbgConfig &c) {
@@ -810,6 +841,12 @@ static void parseAntiDbg(const toml::table &t, ObfAntiDbgConfig &c) {
     c.enabled = *v;
   if (auto v = tomlU32(t["probability"]))
     c.probability = *v;
+  if (auto v = t["precompiled_ir_path"].value<std::string>())
+    c.precompiled_ir_path = *v;
+  else if (auto v = t["ir_path"].value<std::string>())
+    c.precompiled_ir_path = *v;
+  else if (auto v = t["adbextirpath"].value<std::string>())
+    c.precompiled_ir_path = *v;
 }
 
 static void parseAntiAcd(const toml::table &t, ObfAntiAcdConfig &c) {

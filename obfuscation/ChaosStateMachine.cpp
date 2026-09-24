@@ -35,12 +35,24 @@ static cl::opt<bool> ChaosNestedDispatch(
     cl::desc("[ChaosStateMachine] Enable two-level nested switch dispatch"),
     cl::init(false), cl::Optional);
 static thread_local bool ChaosNestedDispatchTemp = false;
+static cl::alias ChaosNestedDispatchAlias1("csm-nested",
+                                           cl::desc("Alias for -csm_nested"),
+                                           cl::aliasopt(ChaosNestedDispatch));
+static cl::alias ChaosNestedDispatchAlias2("csm_nested_dispatch",
+                                           cl::desc("Alias for -csm_nested"),
+                                           cl::aliasopt(ChaosNestedDispatch));
+static cl::alias ChaosNestedDispatchAlias3("csm-nested-dispatch",
+                                           cl::desc("Alias for -csm_nested"),
+                                           cl::aliasopt(ChaosNestedDispatch));
 
 static cl::opt<uint32_t>
     ChaosWarmup("csm_warmup",
                 cl::desc("[ChaosStateMachine] Logistic map warmup iterations "
                          "(skip initial transient)"),
                 cl::init(64), cl::Optional);
+static cl::alias ChaosWarmupAlias("csm-warmup",
+                                  cl::desc("Alias for -csm_warmup"),
+                                  cl::aliasopt(ChaosWarmup));
 
 static cl::opt<uint32_t> ChaosMaxBlocks(
     "csm_maxblocks",
@@ -49,6 +61,15 @@ static cl::opt<uint32_t> ChaosMaxBlocks(
         "after LowerSwitch exceeds this value (catastrophic-size guard only; "
         "normal operation is controlled by pass ordering, default 10000)"),
     cl::init(10000), cl::Optional);
+static cl::alias ChaosMaxBlocksAlias1("csm-maxblocks",
+                                      cl::desc("Alias for -csm_maxblocks"),
+                                      cl::aliasopt(ChaosMaxBlocks));
+static cl::alias ChaosMaxBlocksAlias2("csm_max_blocks",
+                                      cl::desc("Alias for -csm_maxblocks"),
+                                      cl::aliasopt(ChaosMaxBlocks));
+static cl::alias ChaosMaxBlocksAlias3("csm-max-blocks",
+                                      cl::desc("Alias for -csm_maxblocks"),
+                                      cl::aliasopt(ChaosMaxBlocks));
 
 // Per-compilation fallback constants generated dynamically to prevent pattern
 // matching
@@ -264,15 +285,17 @@ struct ChaosStateMachine : public FunctionPass {
   uint32_t maxBlocksOverride = 0;
 
   bool runOnFunction(Function &F) override {
-    if (!toObfuscate(flag, &F, "csm") || F.isPresplitCoroutine())
+    auto ec =
+        GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+    bool shouldObf = ec.csm.enabled.value_or(flag);
+    if (!toObfuscate(shouldObf, &F, "csm") || F.isPresplitCoroutine())
       return false;
     {
-      auto ec =
-          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       if (!toObfuscateBoolOption(&F, "csm_nested", &ChaosNestedDispatchTemp))
         ChaosNestedDispatchTemp =
             ec.csm.nested_dispatch.value_or((bool)ChaosNestedDispatch);
-      warmupOverride = ec.csm.warmup.value_or(0);
+      if (!toObfuscateUint32Option(&F, "csm_warmup", &warmupOverride))
+        warmupOverride = ec.csm.warmup.value_or(0);
       if (!toObfuscateUint32Option(&F, "csm_maxblocks", &maxBlocksOverride))
         maxBlocksOverride =
             ec.csm.max_blocks.value_or((uint32_t)ChaosMaxBlocks);

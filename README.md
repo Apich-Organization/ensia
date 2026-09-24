@@ -214,6 +214,7 @@ skip_value = ["^0x0$", "^0x1$"]
 [passes.string_encryption]    # alias: [passes.str_enc]
 enabled = true
 probability = 100
+anti_dump = true          # Volatile memory zeroization at function exits
 force_content = [".*key.*", ".*secret.*", ".*token.*"]
 skip_content = ["^%[0-9]*[a-zA-Z]$", "^PASS$", "^FAIL$"]
 
@@ -262,20 +263,33 @@ times = 1
 [passes.function_call_obfuscate] # alias: [passes.fco]
 enabled = false
 flag = 0
+symbol_config_path = ""  # Path to external symbol import JSON config
 
 [passes.anti_hooking]         # alias: [passes.anti_hook]
 enabled = true
 inline_x86 = true        # E9 / 48 B8 prologue integrity scans
 inline_aarch64 = true    # 0x14000001 (B .+4) inline hook scans
+inline_win = true        # Windows API inline hook detection
 direct_syscall = true    # Direct kernel syscall bypass (svc #0 / syscall)
 antirebind = true        # Counter dynamic linker symbol rebinding
+check_integrity = true   # Embedded code segment cryptographic self-checks
+precompiled_ir_path = "" # Path to external precompiled LLVM IR defense stubs
 
 [passes.anti_debugging]       # alias: [passes.anti_dbg]
 enabled = true
 probability = 80         # Hardware debug registers DR0-7, EFLAGS.TF single-step probes
+precompiled_ir_path = "" # Path to external precompiled LLVM IR defense stubs
 
 [passes.anti_class_dump]      # alias: [passes.anti_acd]
 enabled = false          # Objective-C / Swift metadata scrambling (macOS / iOS)
+use_initialize = true
+rename_methodimp = true
+scramble_methods = true
+dummy_selectors = false
+dummy_count = 8
+encrypt_strings = true   # Dynamic stack string decryption
+anti_hook = true         # Objective-C runtime hook detection
+opaque_barriers = true   # Memory barriers on runtime pointers
 
 # ── Granular per-module / per-function regex policy overrides ──────────────────
 [[policy]]

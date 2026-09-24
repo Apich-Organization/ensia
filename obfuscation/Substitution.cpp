@@ -43,6 +43,11 @@ static cl::opt<uint32_t>
                 cl::value_desc("probability rate"), cl::init(50), cl::Optional);
 static thread_local uint32_t ObfProbRateTemp = 50;
 
+static cl::alias ObfTimesAlias("sub-loop", cl::desc("Alias for -sub_loop"),
+                               cl::aliasopt(ObfTimes));
+static cl::alias ObfProbRateAlias("sub-prob", cl::desc("Alias for -sub_prob"),
+                                  cl::aliasopt(ObfProbRate));
+
 // Stats
 STATISTIC(Add, "Add substituted");
 STATISTIC(Sub, "Sub substituted");
@@ -63,14 +68,13 @@ struct Substitution : public FunctionPass {
   Substitution() : FunctionPass(ID) { this->flag = true; }
 
   bool runOnFunction(Function &F) override {
+    auto ec =
+        GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+    bool shouldObf = ec.sub.enabled.value_or(flag);
     if (!toObfuscateUint32Option(&F, "sub_loop", &ObfTimesTemp)) {
-      auto ec =
-          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       ObfTimesTemp = ec.sub.iterations.value_or((uint32_t)ObfTimes);
     }
     if (!toObfuscateUint32Option(&F, "sub_prob", &ObfProbRateTemp)) {
-      auto ec =
-          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       ObfProbRateTemp = ec.sub.probability.value_or((uint32_t)ObfProbRate);
     }
 
@@ -87,7 +91,7 @@ struct Substitution : public FunctionPass {
 
     Function *tmp = &F;
     // Do we obfuscate
-    if (toObfuscate(flag, tmp, "sub")) {
+    if (toObfuscate(shouldObf, tmp, "sub")) {
       if (ObfVerbose)
         errs() << "Running Instruction Substitution On " << F.getName() << "\n";
       substitute(tmp);

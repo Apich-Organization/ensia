@@ -18,6 +18,7 @@
 
 #include "include/IndirectBranch.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
@@ -42,11 +43,32 @@ static cl::opt<bool>
     UseStack("indibran-use-stack", cl::init(true), cl::NotHidden,
              cl::desc("[IndirectBranch]Stack-based indirect jumps"));
 static thread_local bool UseStackTemp = true;
+static cl::alias UseStackAlias1("indibran_use_stack",
+                                cl::desc("Alias for -indibran-use-stack"),
+                                cl::aliasopt(UseStack));
+static cl::alias UseStackAlias2("indibr_use_stack",
+                                cl::desc("Alias for -indibran-use-stack"),
+                                cl::aliasopt(UseStack));
+static cl::alias UseStackAlias3("indibr-use-stack",
+                                cl::desc("Alias for -indibran-use-stack"),
+                                cl::aliasopt(UseStack));
 
 static cl::opt<bool>
     EncryptJumpTarget("indibran-enc-jump-target", cl::init(true), cl::NotHidden,
                       cl::desc("[IndirectBranch]Encrypt jump target"));
 static thread_local bool EncryptJumpTargetTemp = true;
+static cl::alias
+    EncryptJumpTargetAlias1("indibran_enc_jump_target",
+                            cl::desc("Alias for -indibran-enc-jump-target"),
+                            cl::aliasopt(EncryptJumpTarget));
+static cl::alias
+    EncryptJumpTargetAlias2("indibr_enc_jump_target",
+                            cl::desc("Alias for -indibran-enc-jump-target"),
+                            cl::aliasopt(EncryptJumpTarget));
+static cl::alias
+    EncryptJumpTargetAlias3("indibr-enc-jump-target",
+                            cl::desc("Alias for -indibran-enc-jump-target"),
+                            cl::aliasopt(EncryptJumpTarget));
 
 // Per-function Knuth-hash encryption parameters
 struct KnuthEncKey {
@@ -99,7 +121,9 @@ struct IndirectBranch : public FunctionPass {
     for (Function &F : M) {
       if (F.getName().starts_with("__ensia_"))
         continue;
-      if (!toObfuscate(flag, &F, "indibr"))
+      auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
+      bool shouldObf = ec.indir_branch.enabled.value_or(flag);
+      if (!toObfuscate(shouldObf, &F, "indibr"))
         continue;
       else
         to_obf_funcs.insert(&F);
@@ -108,13 +132,16 @@ struct IndirectBranch : public FunctionPass {
       // value per function instead of whatever the last iteration left in the
       // shared file-level statics.
       bool useStackLocal = UseStack;
-      toObfuscateBoolOption(&F, "indibran_use_stack", &useStackLocal);
+      if (!toObfuscateBoolOption(&F, "indibran_use_stack", &useStackLocal))
+        useStackLocal = ec.indir_branch.use_stack.value_or((bool)UseStack);
       perFuncUseStack[&F] = useStackLocal;
 
       manuallyLowerSwitches(&F);
 
       bool encJumpLocal = EncryptJumpTarget;
-      toObfuscateBoolOption(&F, "indibran_enc_jump_target", &encJumpLocal);
+      if (!toObfuscateBoolOption(&F, "indibran_enc_jump_target", &encJumpLocal))
+        encJumpLocal =
+            ec.indir_branch.enc_jump_target.value_or((bool)EncryptJumpTarget);
       perFuncEncryptJump[&F] = encJumpLocal;
 
       if (encJumpLocal)

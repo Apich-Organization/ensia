@@ -242,6 +242,33 @@ static cl::opt<bool> BCFEntropyChain(
     cl::init(false), cl::Optional);
 static thread_local bool BCFEntropyChainTemp = false;
 
+static cl::alias ObfProbRateAlias("bcf-prob", cl::desc("Alias for -bcf_prob"),
+                                  cl::aliasopt(ObfProbRate));
+static cl::alias ObfTimesAlias("bcf-loop", cl::desc("Alias for -bcf_loop"),
+                               cl::aliasopt(ObfTimes));
+static cl::alias
+    CondComplexityAlias("bcf-cond-compl", cl::desc("Alias for -bcf_cond_compl"),
+                        cl::aliasopt(ConditionExpressionComplexity));
+static cl::alias OnlyJunkAsmAlias("bcf-onlyjunkasm",
+                                  cl::desc("Alias for -bcf_onlyjunkasm"),
+                                  cl::aliasopt(OnlyJunkAssembly));
+static cl::alias JunkAsmAlias("bcf-junkasm", cl::desc("Alias for -bcf_junkasm"),
+                              cl::aliasopt(JunkAssembly));
+static cl::alias MaxJunkAsmAlias("bcf-junkasm-maxnum",
+                                 cl::desc("Alias for -bcf_junkasm_maxnum"),
+                                 cl::aliasopt(MaxNumberOfJunkAssembly));
+static cl::alias MinJunkAsmAlias("bcf-junkasm-minnum",
+                                 cl::desc("Alias for -bcf_junkasm_minnum"),
+                                 cl::aliasopt(MinNumberOfJunkAssembly));
+static cl::alias
+    CreateFuncAlias("bcf-createfunc", cl::desc("Alias for -bcf_createfunc"),
+                    cl::aliasopt(CreateFunctionForOpaquePredicate));
+static cl::alias BCFNestedAlias("bcf-nested", cl::desc("Alias for -bcf_nested"),
+                                cl::aliasopt(BCFNested));
+static cl::alias BCFEntropyChainAlias("bcf-entropy-chain",
+                                      cl::desc("Alias for -bcf_entropy_chain"),
+                                      cl::aliasopt(BCFEntropyChain));
+
 static const Instruction::BinaryOps ops[] = {
     Instruction::Add, Instruction::Sub, Instruction::And, Instruction::Or,
     Instruction::Xor, Instruction::Mul, Instruction::UDiv};
@@ -287,9 +314,10 @@ struct BogusControlFlow : public FunctionPass {
    * to the function. See header for more details.
    */
   bool runOnFunction(Function &F) override {
+    auto ec =
+        GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+    bool shouldObf = ec.bcf.enabled.value_or(flag);
     if (!toObfuscateUint32Option(&F, "bcf_loop", &ObfTimesTemp)) {
-      auto ec =
-          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       ObfTimesTemp = ec.bcf.iterations.value_or((uint32_t)ObfTimes);
     }
 
@@ -300,8 +328,6 @@ struct BogusControlFlow : public FunctionPass {
     }
 
     if (!toObfuscateUint32Option(&F, "bcf_prob", &ObfProbRateTemp)) {
-      auto ec =
-          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       ObfProbRateTemp = ec.bcf.probability.value_or((uint32_t)ObfProbRate);
     }
     // MaxObf: prob=100, times=3.
@@ -312,7 +338,7 @@ struct BogusControlFlow : public FunctionPass {
     }
 
     // Check if the number of applications is correct
-    if (!((ObfProbRate > 0) && (ObfProbRate <= 100))) {
+    if (!((ObfProbRateTemp > 0) && (ObfProbRateTemp <= 100))) {
       errs() << "BogusControlFlow application basic blocks percentage "
                 "-bcf_prob=x must be 0 < x <= 100";
       return false;
@@ -320,15 +346,11 @@ struct BogusControlFlow : public FunctionPass {
 
     if (!toObfuscateUint32Option(&F, "bcf_junkasm_maxnum",
                                  &MaxNumberOfJunkAssemblyTemp)) {
-      auto ec =
-          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       MaxNumberOfJunkAssemblyTemp =
           ec.bcf.junk_asm_max.value_or((uint32_t)MaxNumberOfJunkAssembly);
     }
     if (!toObfuscateUint32Option(&F, "bcf_junkasm_minnum",
                                  &MinNumberOfJunkAssemblyTemp)) {
-      auto ec =
-          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       MinNumberOfJunkAssemblyTemp =
           ec.bcf.junk_asm_min.value_or((uint32_t)MinNumberOfJunkAssembly);
     }
@@ -341,7 +363,7 @@ struct BogusControlFlow : public FunctionPass {
     }
 
     // If fla annotations
-    if (toObfuscate(flag, &F, "bcf") && !F.isPresplitCoroutine() &&
+    if (toObfuscate(shouldObf, &F, "bcf") && !F.isPresplitCoroutine() &&
         !readAnnotationMetadata(&F, "bcfopfunc")) {
       if (ObfVerbose)
         errs() << "Running BogusControlFlow On " << F.getName() << "\n";

@@ -38,12 +38,24 @@ static cl::opt<uint32_t>
                          "is vectorized"),
                 cl::value_desc("probability"), cl::init(50), cl::Optional);
 static thread_local uint32_t VecProbRateTemp = 50;
+static cl::alias VecProbRateAlias1("vec-prob", cl::desc("Alias for -vec_prob"),
+                                   cl::aliasopt(VecProbRate));
+static cl::alias VecProbRateAlias2("vobf_prob", cl::desc("Alias for -vec_prob"),
+                                   cl::aliasopt(VecProbRate));
+static cl::alias VecProbRateAlias3("vobf-prob", cl::desc("Alias for -vec_prob"),
+                                   cl::aliasopt(VecProbRate));
 
 static cl::opt<uint32_t>
     VecWidth("vec_width",
              cl::desc("[VecObf] SIMD width in bits (128, 256, or 512)"),
              cl::value_desc("bits"), cl::init(256), cl::Optional);
 static thread_local uint32_t VecWidthTemp = 256;
+static cl::alias VecWidthAlias1("vec-width", cl::desc("Alias for -vec_width"),
+                                cl::aliasopt(VecWidth));
+static cl::alias VecWidthAlias2("vobf_width", cl::desc("Alias for -vec_width"),
+                                cl::aliasopt(VecWidth));
+static cl::alias VecWidthAlias3("vobf-width", cl::desc("Alias for -vec_width"),
+                                cl::aliasopt(VecWidth));
 
 static cl::opt<bool>
     VecShuffle("vec_shuffle",
@@ -51,6 +63,15 @@ static cl::opt<bool>
                         "vector op to defeat lane-extraction pattern matching"),
                cl::init(true), cl::Optional);
 static thread_local bool VecShuffleTemp = true;
+static cl::alias VecShuffleAlias1("vec-shuffle",
+                                  cl::desc("Alias for -vec_shuffle"),
+                                  cl::aliasopt(VecShuffle));
+static cl::alias VecShuffleAlias2("vobf_shuffle",
+                                  cl::desc("Alias for -vec_shuffle"),
+                                  cl::aliasopt(VecShuffle));
+static cl::alias VecShuffleAlias3("vobf-shuffle",
+                                  cl::desc("Alias for -vec_shuffle"),
+                                  cl::aliasopt(VecShuffle));
 
 static cl::opt<bool> VecICmp(
     "vec_icmp",
@@ -58,6 +79,18 @@ static cl::opt<bool> VecICmp(
              "to vector comparisons"),
     cl::init(true), cl::Optional);
 static thread_local bool VecICmpTemp = true;
+static cl::alias VecICmpAlias1("vec-icmp", cl::desc("Alias for -vec_icmp"),
+                               cl::aliasopt(VecICmp));
+static cl::alias VecICmpAlias2("vobf_icmp", cl::desc("Alias for -vec_icmp"),
+                               cl::aliasopt(VecICmp));
+static cl::alias VecICmpAlias3("vobf-icmp", cl::desc("Alias for -vec_icmp"),
+                               cl::aliasopt(VecICmp));
+static cl::alias VecICmpAlias4("vec_lift_comparisons",
+                               cl::desc("Alias for -vec_icmp"),
+                               cl::aliasopt(VecICmp));
+static cl::alias VecICmpAlias5("vobf_lift_comparisons",
+                               cl::desc("Alias for -vec_icmp"),
+                               cl::aliasopt(VecICmp));
 
 // ─── Width → lane count
 // ───────────────────────────────────────────────────────
@@ -503,12 +536,13 @@ struct VectorObfuscation : public FunctionPass {
   bool runOnFunction(Function &F) override {
     if (F.getName().starts_with("__ensia_"))
       return false;
-    if (!toObfuscate(flag, &F, "vobf"))
+    auto ec =
+        GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+    bool shouldObf = ec.vec.enabled.value_or(flag);
+    if (!toObfuscate(shouldObf, &F, "vobf"))
       return false;
 
     {
-      auto ec =
-          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       if (!toObfuscateUint32Option(&F, "vec_prob", &VecProbRateTemp))
         VecProbRateTemp = ec.vec.probability.value_or((uint32_t)VecProbRate);
       if (!toObfuscateUint32Option(&F, "vec_width", &VecWidthTemp))

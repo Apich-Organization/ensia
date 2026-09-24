@@ -359,6 +359,7 @@ fn StrEncSection() -> impl IntoView {
         <AlgoConfigTable pass="string_encryption" rows=vec![
             ("enabled",       "bool",    "true",  "Master switch."),
             ("probability",   "0-100",   "80",    "Percentage of string globals that are encrypted."),
+            ("anti_dump",     "bool",    "true",  "Zeroize plaintext buffers at return/resume exits to defeat memory dumping."),
             ("force_content", "regex[]", "[]",    "Substrings/patterns that guarantee encryption."),
             ("skip_content",  "regex[]", "[]",    "Substrings/patterns that skip encryption."),
         ]/>
@@ -687,8 +688,9 @@ fn AntiDebugSection() -> impl IntoView {
         </div>
 
         <AlgoConfigTable pass="anti_debugging" rows=vec![
-            ("enabled",     "bool",  "false", "Insert debugger-detection checks and violent fast-fail probes at function entry points."),
-            ("probability", "0-100", "50",    "Percentage of functions receiving inline anti-debug validation stubs."),
+            ("enabled",             "bool",   "false", "Insert debugger-detection checks and violent fast-fail probes at function entry points."),
+            ("probability",         "0-100",  "50",    "Percentage of functions receiving inline anti-debug validation stubs."),
+            ("precompiled_ir_path", "string", "\"\"",  "Path to external precompiled LLVM IR module containing verified defense stubs."),
         ]/>
     }
 }
@@ -735,9 +737,15 @@ fn AntiHookSection() -> impl IntoView {
         </div>
 
         <AlgoConfigTable pass="anti_hooking" rows=vec![
-            ("enabled",        "bool", "false", "Verify function prologue integrity and activate anti-taint I/O entanglement."),
-            ("direct_syscall", "bool", "false", "Bypass libc hooks with direct kernel syscalls (svc #0 / syscall)."),
-            ("antirebind",     "bool", "false", "Detect and counter dynamic linker rebinding (fishhook / dyld)."),
+            ("enabled",             "bool",   "false", "Verify function prologue integrity and activate anti-taint I/O entanglement."),
+            ("inline_aarch64",      "bool",   "true",  "Scan AArch64 prologues for 0x14000001 (B .+4) and hook branch stubs."),
+            ("inline_x86",          "bool",   "true",  "Scan x86_64 prologues for E9 (JMP) and 48 B8 (MOV RAX) inline patches."),
+            ("inline_win",          "bool",   "true",  "Windows API inline hook detection."),
+            ("objc_runtime",        "bool",   "false", "Inspect Objective-C method dispatch tables."),
+            ("antirebind",          "bool",   "false", "Detect and counter dynamic linker rebinding (fishhook / dyld)."),
+            ("direct_syscall",      "bool",   "false", "Bypass libc hooks with direct kernel syscalls (svc #0 / syscall)."),
+            ("check_integrity",     "bool",   "true",  "Verify code segment cryptographic checksums to detect memory tampering."),
+            ("precompiled_ir_path", "string", "\"\"",  "Path to external precompiled LLVM IR module containing verified defense stubs."),
         ]/>
     }
 }

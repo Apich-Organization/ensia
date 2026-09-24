@@ -87,6 +87,52 @@ static cl::opt<bool> FeistelTier(
     cl::init(true), cl::Optional);
 static thread_local bool FeistelTierTemp = true;
 
+static cl::alias SubXorAlias("constenc-subxor",
+                             cl::desc("Alias for -constenc_subxor"),
+                             cl::aliasopt(SubstituteXor));
+static cl::alias SubXorProbAlias("constenc-subxor-prob",
+                                 cl::desc("Alias for -constenc_subxor_prob"),
+                                 cl::aliasopt(SubstituteXorProb));
+static cl::alias ConstToGVAlias1("constenc-togv",
+                                 cl::desc("Alias for -constenc_togv"),
+                                 cl::aliasopt(ConstToGV));
+static cl::alias ConstToGVAlias2("constenc_globalize",
+                                 cl::desc("Alias for -constenc_togv"),
+                                 cl::aliasopt(ConstToGV));
+static cl::alias ConstToGVAlias3("constenc-globalize",
+                                 cl::desc("Alias for -constenc_togv"),
+                                 cl::aliasopt(ConstToGV));
+static cl::alias ConstToGVProbAlias1("constenc-togv-prob",
+                                     cl::desc("Alias for -constenc_togv_prob"),
+                                     cl::aliasopt(ConstToGVProb));
+static cl::alias ConstToGVProbAlias2("constenc_globalize_prob",
+                                     cl::desc("Alias for -constenc_togv_prob"),
+                                     cl::aliasopt(ConstToGVProb));
+static cl::alias ConstToGVProbAlias3("constenc-globalize-prob",
+                                     cl::desc("Alias for -constenc_togv_prob"),
+                                     cl::aliasopt(ConstToGVProb));
+static cl::alias ConstTimesAlias1("constenc-times",
+                                  cl::desc("Alias for -constenc_times"),
+                                  cl::aliasopt(ObfTimes));
+static cl::alias ConstTimesAlias2("constenc_iterations",
+                                  cl::desc("Alias for -constenc_times"),
+                                  cl::aliasopt(ObfTimes));
+static cl::alias ConstTimesAlias3("constenc-iterations",
+                                  cl::desc("Alias for -constenc_times"),
+                                  cl::aliasopt(ObfTimes));
+static cl::alias KShareCountAlias1("constenc-kshare",
+                                   cl::desc("Alias for -constenc_kshare"),
+                                   cl::aliasopt(KShareCount));
+static cl::alias KShareCountAlias2("constenc_share_count",
+                                   cl::desc("Alias for -constenc_kshare"),
+                                   cl::aliasopt(KShareCount));
+static cl::alias KShareCountAlias3("constenc-share-count",
+                                   cl::desc("Alias for -constenc_kshare"),
+                                   cl::aliasopt(KShareCount));
+static cl::alias FeistelTierAlias("constenc-feistel",
+                                  cl::desc("Alias for -constenc_feistel"),
+                                  cl::aliasopt(FeistelTier));
+
 namespace llvm {
 struct ConstantEncryption : public ModulePass {
   static char ID;
@@ -175,14 +221,15 @@ struct ConstantEncryption : public ModulePass {
     for (Function &F : M) {
       if (F.getName().starts_with("__ensia_"))
         continue;
-      if (toObfuscate(flag, &F, "constenc") && !F.isPresplitCoroutine()) {
+      auto ec =
+          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      bool shouldObf = ec.const_enc.enabled.value_or(flag);
+      if (toObfuscate(shouldObf, &F, "constenc") && !F.isPresplitCoroutine()) {
         if (ObfVerbose)
           errs() << "Running ConstantEncryption On " << F.getName() << "\n";
         FixFunctionConstantExpr(&F);
         std::vector<std::string> skipVal, forceVal;
         {
-          auto ec = GObfConfig.resolve(F.getParent()->getSourceFileName(),
-                                       F.getName());
           if (!toObfuscateUint32Option(&F, "constenc_times", &ObfTimesTemp))
             ObfTimesTemp = ec.const_enc.iterations.value_or((uint32_t)ObfTimes);
           if (!toObfuscateBoolOption(&F, "constenc_togv", &ConstToGVTemp))

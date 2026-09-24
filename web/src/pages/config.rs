@@ -386,6 +386,11 @@ fn StrEncCard() -> impl IntoView {
                     get=Signal::derive(move || cfg.with(|c| c.str_enc.probability))
                     set=move |v| cfg.update(|c| c.str_enc.probability = v)
                 />
+                <ToggleField
+                    label="Anti-Dump (Zeroize plaintext memory at exit)"
+                    get=Signal::derive(move || cfg.with(|c| c.str_enc.anti_dump))
+                    set=move |v| cfg.update(|c| c.str_enc.anti_dump = v)
+                />
                 <TagField
                     label="force_content — always encrypt these patterns"
                     placeholder="regex pattern, e.g. SHA256"
@@ -772,6 +777,19 @@ fn AntiDebugCard() -> impl IntoView {
                     get=Signal::derive(move || cfg.with(|c| c.anti_debugging.probability))
                     set=move |v| cfg.update(|c| c.anti_debugging.probability = v)
                 />
+                <div class="field-group mt-sm">
+                    <label class="field-label">"Precompiled IR path (optional)"</label>
+                    <input
+                        type="text"
+                        class="field-input mono"
+                        placeholder="/path/to/anti_dbg.ll"
+                        prop:value=move || cfg.with(|c| c.anti_debugging.precompiled_ir_path.clone())
+                        on:input=move |e| {
+                            let v = event_target_value(&e);
+                            cfg.update(|c| c.anti_debugging.precompiled_ir_path = v);
+                        }
+                    />
+                </div>
             </div>
         </div>
     }
@@ -824,6 +842,24 @@ fn AntiHookCard() -> impl IntoView {
                         label="Direct kernel syscall"
                         get=Signal::derive(move || cfg.with(|c| c.anti_hooking.direct_syscall))
                         set=move |v| cfg.update(|c| c.anti_hooking.direct_syscall = v)
+                    />
+                    <ToggleField
+                        label="Code integrity check"
+                        get=Signal::derive(move || cfg.with(|c| c.anti_hooking.check_integrity))
+                        set=move |v| cfg.update(|c| c.anti_hooking.check_integrity = v)
+                    />
+                </div>
+                <div class="field-group mt-sm">
+                    <label class="field-label">"Precompiled IR path (optional)"</label>
+                    <input
+                        type="text"
+                        class="field-input mono"
+                        placeholder="/path/to/anti_hook.ll"
+                        prop:value=move || cfg.with(|c| c.anti_hooking.precompiled_ir_path.clone())
+                        on:input=move |e| {
+                            let v = event_target_value(&e);
+                            cfg.update(|c| c.anti_hooking.precompiled_ir_path = v);
+                        }
                     />
                 </div>
             </div>

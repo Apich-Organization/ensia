@@ -48,6 +48,26 @@ static cl::opt<bool> AntiDump(
              "at function exit to prevent dynamic memory dumping"));
 static thread_local bool AntiDumpTemp = true;
 
+static cl::alias ElementEncryptProbAlias1("strcry-prob",
+                                          cl::desc("Alias for -strcry_prob"),
+                                          cl::aliasopt(ElementEncryptProb));
+static cl::alias ElementEncryptProbAlias2("strenc_prob",
+                                          cl::desc("Alias for -strcry_prob"),
+                                          cl::aliasopt(ElementEncryptProb));
+static cl::alias ElementEncryptProbAlias3("strenc-prob",
+                                          cl::desc("Alias for -strcry_prob"),
+                                          cl::aliasopt(ElementEncryptProb));
+
+static cl::alias AntiDumpAlias1("strcry-antidump",
+                                cl::desc("Alias for -strcry_antidump"),
+                                cl::aliasopt(AntiDump));
+static cl::alias AntiDumpAlias2("strenc_antidump",
+                                cl::desc("Alias for -strcry_antidump"),
+                                cl::aliasopt(AntiDump));
+static cl::alias AntiDumpAlias3("strenc-antidump",
+                                cl::desc("Alias for -strcry_antidump"),
+                                cl::aliasopt(AntiDump));
+
 namespace llvm {
 struct StringEncryption : public ModulePass {
   static char ID;
@@ -100,19 +120,20 @@ struct StringEncryption : public ModulePass {
     this->appleptrauth = hasApplePtrauth(&M);
     this->opaquepointers = true;
 
-    for (Function &F : M)
-      if (toObfuscate(flag, &F, "strenc")) {
+    for (Function &F : M) {
+      auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
+      bool shouldObf = ec.str_enc.enabled.value_or(flag);
+      if (toObfuscate(shouldObf, &F, "strenc")) {
         if (ObfVerbose)
           errs() << "Running StringEncryption On " << F.getName() << "\n";
 
         if (!toObfuscateUint32Option(&F, "strcry_prob",
                                      &ElementEncryptProbTemp)) {
-          auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
           ElementEncryptProbTemp =
               ec.str_enc.probability.value_or((uint32_t)ElementEncryptProb);
         }
         if (!toObfuscateBoolOption(&F, "strcry_antidump", &AntiDumpTemp)) {
-          AntiDumpTemp = AntiDump;
+          AntiDumpTemp = ec.str_enc.anti_dump.value_or((bool)AntiDump);
         }
 
         // Check if the number of applications is correct
@@ -130,6 +151,7 @@ struct StringEncryption : public ModulePass {
         encstatus[&F] = GV;
         HandleFunction(&F);
       }
+    }
     for (GlobalVariable *GV : globalProcessedGVs) {
       GV->removeDeadConstantUsers();
       if (GV->getNumUses() == 0) {

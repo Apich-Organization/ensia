@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Increase stack size limit for deep recursion stress tests (e.g. Ackermann) under heavy obfuscation
+ulimit -s 65536 2>/dev/null || true
+
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${PROJECT_DIR}/build"
 PLUGIN_LIB="${BUILD_DIR}/obfuscation/libEnsia.so"

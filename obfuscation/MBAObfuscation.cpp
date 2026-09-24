@@ -45,6 +45,14 @@ static cl::opt<bool>
                  cl::desc("[MBA] Enable heuristic zero-term noise injection"));
 static thread_local bool MBAHeuristicTemp = true;
 
+static cl::alias MBAProbRateAlias("mba-prob", cl::desc("Alias for -mba_prob"),
+                                  cl::aliasopt(MBAProbRate));
+static cl::alias MBALayersAlias("mba-layers", cl::desc("Alias for -mba_layers"),
+                                cl::aliasopt(MBALayers));
+static cl::alias MBAHeuristicAlias("mba-heuristic",
+                                   cl::desc("Alias for -mba_heuristic"),
+                                   cl::aliasopt(MBAHeuristic));
+
 // ─── context-dependent zero-term generator ───────────────────────────────────
 //
 // Introduces runtime contextual zero terms derived from @__ensia_mba_ctx and
@@ -821,11 +829,12 @@ struct MBAObfuscation : public FunctionPass {
   bool runOnFunction(Function &F) override {
     if (F.getName().starts_with("__ensia_"))
       return false;
-    if (!toObfuscate(flag, &F, "mba"))
+    auto ec =
+        GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+    bool shouldObf = ec.mba.enabled.value_or(flag);
+    if (!toObfuscate(shouldObf, &F, "mba"))
       return false;
     {
-      auto ec =
-          GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
       if (!toObfuscateUint32Option(&F, "mba_prob", &MBAProbRateTemp))
         MBAProbRateTemp = ec.mba.probability.value_or((uint32_t)MBAProbRate);
       if (!toObfuscateUint32Option(&F, "mba_layers", &MBALayersTemp))

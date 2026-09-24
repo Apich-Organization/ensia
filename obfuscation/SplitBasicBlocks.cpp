@@ -40,6 +40,24 @@ static cl::opt<bool> StackConfusion(
     cl::init(true), cl::Optional);
 static thread_local bool StackConfusionTemp = true;
 
+static cl::alias SplitNumAlias1("split-num", cl::desc("Alias for -split_num"),
+                                cl::aliasopt(SplitNum));
+static cl::alias SplitNumAlias2("split_splits",
+                                cl::desc("Alias for -split_num"),
+                                cl::aliasopt(SplitNum));
+static cl::alias SplitNumAlias3("split-splits",
+                                cl::desc("Alias for -split_num"),
+                                cl::aliasopt(SplitNum));
+static cl::alias StackConfusionAlias1("split-stackconf",
+                                      cl::desc("Alias for -split_stackconf"),
+                                      cl::aliasopt(StackConfusion));
+static cl::alias StackConfusionAlias2("split_stack_confusion",
+                                      cl::desc("Alias for -split_stackconf"),
+                                      cl::aliasopt(StackConfusion));
+static cl::alias StackConfusionAlias3("split-stack-confusion",
+                                      cl::desc("Alias for -split_stackconf"),
+                                      cl::aliasopt(StackConfusion));
+
 static bool moduleIsX86_64(Function *F) {
   StringRef triple = F->getParent()->getTargetTriple().getTriple();
   return triple.contains("x86_64") || triple.contains("amd64");
@@ -111,9 +129,11 @@ struct SplitBasicBlock : public FunctionPass {
   SplitBasicBlock(bool flag) : FunctionPass(ID) { this->flag = flag; }
 
   bool runOnFunction(Function &F) override {
+    bool shouldObf = flag;
     {
       auto ec =
           GObfConfig.resolve(F.getParent()->getSourceFileName(), F.getName());
+      shouldObf = ec.split.enabled.value_or(flag);
       if (!toObfuscateUint32Option(&F, "split_num", &SplitNumTemp))
         SplitNumTemp = ec.split.splits.value_or((uint32_t)SplitNum);
       if (!toObfuscateBoolOption(&F, "split_stackconf", &StackConfusionTemp))
@@ -130,7 +150,7 @@ struct SplitBasicBlock : public FunctionPass {
     }
 
     // Do we obfuscate
-    if (toObfuscate(flag, &F, "split")) {
+    if (toObfuscate(shouldObf, &F, "split")) {
       if (ObfVerbose)
         errs() << "Running BasicBlockSplit On " << F.getName() << "\n";
       split(&F);

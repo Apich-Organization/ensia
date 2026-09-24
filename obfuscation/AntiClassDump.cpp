@@ -79,6 +79,67 @@ static cl::opt<bool>
                    cl::desc("[AntiClassDump]Insert memory barriers on runtime "
                             "pointers to foil SMT/lifters"));
 
+static cl::alias UseInitializeAlias1("acd_use_initialize",
+                                     cl::desc("Alias for -acd-use-initialize"),
+                                     cl::aliasopt(UseInitialize));
+static cl::alias UseInitializeAlias2("acd_use_init",
+                                     cl::desc("Alias for -acd-use-initialize"),
+                                     cl::aliasopt(UseInitialize));
+static cl::alias UseInitializeAlias3("acd-use-init",
+                                     cl::desc("Alias for -acd-use-initialize"),
+                                     cl::aliasopt(UseInitialize));
+static cl::alias
+    RenameMethodIMPAlias1("acd_rename_methodimp",
+                          cl::desc("Alias for -acd-rename-methodimp"),
+                          cl::aliasopt(RenameMethodIMP));
+static cl::alias
+    RenameMethodIMPAlias2("acd_rename_imp",
+                          cl::desc("Alias for -acd-rename-methodimp"),
+                          cl::aliasopt(RenameMethodIMP));
+static cl::alias
+    RenameMethodIMPAlias3("acd-rename-imp",
+                          cl::desc("Alias for -acd-rename-methodimp"),
+                          cl::aliasopt(RenameMethodIMP));
+static cl::alias
+    ScrambleMethodOrderAlias1("acd_scramble_methods",
+                              cl::desc("Alias for -acd-scramble-methods"),
+                              cl::aliasopt(ScrambleMethodOrder));
+static cl::alias
+    ScrambleMethodOrderAlias2("acd_scramble",
+                              cl::desc("Alias for -acd-scramble-methods"),
+                              cl::aliasopt(ScrambleMethodOrder));
+static cl::alias
+    ScrambleMethodOrderAlias3("acd-scramble",
+                              cl::desc("Alias for -acd-scramble-methods"),
+                              cl::aliasopt(ScrambleMethodOrder));
+static cl::alias
+    InjectDummySelectorsAlias1("acd_dummy_selectors",
+                               cl::desc("Alias for -acd-dummy-selectors"),
+                               cl::aliasopt(InjectDummySelectors));
+static cl::alias
+    InjectDummySelectorsAlias2("acd_dummy_sel",
+                               cl::desc("Alias for -acd-dummy-selectors"),
+                               cl::aliasopt(InjectDummySelectors));
+static cl::alias
+    InjectDummySelectorsAlias3("acd-dummy-sel",
+                               cl::desc("Alias for -acd-dummy-selectors"),
+                               cl::aliasopt(InjectDummySelectors));
+static cl::alias
+    DummySelectorCountAlias1("acd_dummy_count",
+                             cl::desc("Alias for -acd-dummy-count"),
+                             cl::aliasopt(DummySelectorCount));
+static cl::alias
+    EncryptStringsAlias1("acd_encrypt_strings",
+                         cl::desc("Alias for -acd-encrypt-strings"),
+                         cl::aliasopt(EncryptStrings));
+static cl::alias AntiHookRuntimeAlias1("acd_anti_hook",
+                                       cl::desc("Alias for -acd-anti-hook"),
+                                       cl::aliasopt(AntiHookRuntime));
+static cl::alias
+    OpaqueBarriersAlias1("acd_opaque_barriers",
+                         cl::desc("Alias for -acd-opaque-barriers"),
+                         cl::aliasopt(OpaqueBarriers));
+
 // Realistic security-themed decoy selectors for honeypot injection
 static const char *kRealisticDecoySelectors[] = {
     "_validateAppReceiptStatus:error:",
@@ -150,6 +211,8 @@ struct AntiClassDump : public ModulePass {
       errs() << "Running AntiClassDump On " << M.getSourceFileName() << "\n";
 
     auto ec = GObfConfig.resolve(M.getSourceFileName(), "");
+    if (ec.anti_class_dump.enabled.has_value() && !*ec.anti_class_dump.enabled)
+      return false;
     EffectiveAcdConfig cfg;
     cfg.use_initialize =
         ec.anti_class_dump.use_initialize.value_or(UseInitialize);

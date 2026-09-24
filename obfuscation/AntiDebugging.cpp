@@ -50,11 +50,20 @@ static cl::opt<std::string> PreCompiledIRPath(
     "adbextirpath",
     cl::desc("External Path Pointing To Pre-compiled AntiDebugging IR"),
     cl::value_desc("filename"), cl::init(""));
+static cl::alias PreCompiledIRPathAlias1("adb_ir_path",
+                                         cl::desc("Alias for -adbextirpath"),
+                                         cl::aliasopt(PreCompiledIRPath));
+static cl::alias PreCompiledIRPathAlias2("adb-ir-path",
+                                         cl::desc("Alias for -adbextirpath"),
+                                         cl::aliasopt(PreCompiledIRPath));
+
 static cl::opt<uint32_t>
     ProbRate("adb_prob",
              cl::desc("Choose the probability [%] For Each Function To Be "
                       "Obfuscated By AntiDebugging"),
              cl::value_desc("Probability Rate"), cl::init(40), cl::Optional);
+static cl::alias ProbRateAlias("adb-prob", cl::desc("Alias for -adb_prob"),
+                               cl::aliasopt(ProbRate));
 
 namespace llvm {
 struct AntiDebugging : public ModulePass {
@@ -74,8 +83,15 @@ struct AntiDebugging : public ModulePass {
   bool initialize(Module &M) {
     bool explicitlySpecified = !PreCompiledIRPath.empty();
     if (!explicitlySpecified) {
-      if (const char *env = getenv("ENSIA_PRECOMPILED_ADB")) {
+      if (GObfConfig.passes.anti_dbg.precompiled_ir_path.has_value() &&
+          !GObfConfig.passes.anti_dbg.precompiled_ir_path->empty()) {
+        PreCompiledIRPath = *GObfConfig.passes.anti_dbg.precompiled_ir_path;
+        explicitlySpecified = true;
+      } else if (const char *env = getenv("ENSIA_PRECOMPILED_ADB")) {
         PreCompiledIRPath = env;
+        explicitlySpecified = true;
+      } else if (const char *env2 = getenv("ADB_IR_PATH")) {
+        PreCompiledIRPath = env2;
         explicitlySpecified = true;
       } else {
         Triple tri(M.getTargetTriple());
@@ -191,13 +207,19 @@ struct AntiDebugging : public ModulePass {
     }
     bool anyObf = false;
     for (Function &F : M) {
-      if (toObfuscate(flag, &F, "adb") && F.getName() != "ADBCallBack" &&
+      auto fnEc = GObfConfig.resolve(M.getSourceFileName(), F.getName());
+      bool shouldObf = fnEc.anti_dbg.enabled.value_or(flag);
+      if (toObfuscate(shouldObf, &F, "adb") && F.getName() != "ADBCallBack" &&
           F.getName() != "InitADB") {
         if (ObfVerbose)
           errs() << "Running AntiDebugging On " << F.getName() << "\n";
         if (!this->initialized)
           initialize(M);
-        if (cryptoutils->get_range(100) <= effProb) {
+        uint32_t fnProb = effProb;
+        if (!toObfuscateUint32Option(&F, "adb_prob", &fnProb)) {
+          fnProb = fnEc.anti_dbg.probability.value_or(effProb);
+        }
+        if (cryptoutils->get_range(100) <= fnProb) {
           runOnFunction(F);
           anyObf = true;
         }

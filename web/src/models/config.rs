@@ -38,6 +38,7 @@ impl Default for BcfCfg {
 pub struct StrEncCfg {
     pub enabled: bool,
     pub probability: u32,
+    pub anti_dump: bool,
     pub force_content: Vec<String>,
     pub skip_content: Vec<String>,
 }
@@ -46,6 +47,7 @@ impl Default for StrEncCfg {
         Self {
             enabled: true,
             probability: 80,
+            anti_dump: true,
             force_content: vec![],
             skip_content: vec![],
         }
@@ -229,12 +231,14 @@ impl Default for FuncCallObfCfg {
 pub struct AntiDbgCfg {
     pub enabled: bool,
     pub probability: u32,
+    pub precompiled_ir_path: String,
 }
 impl Default for AntiDbgCfg {
     fn default() -> Self {
         Self {
             enabled: false,
             probability: 50,
+            precompiled_ir_path: "".into(),
         }
     }
 }
@@ -248,6 +252,8 @@ pub struct AntiHookCfg {
     pub objc_runtime: bool,
     pub antirebind: bool,
     pub direct_syscall: bool,
+    pub check_integrity: bool,
+    pub precompiled_ir_path: String,
 }
 impl Default for AntiHookCfg {
     fn default() -> Self {
@@ -259,6 +265,8 @@ impl Default for AntiHookCfg {
             objc_runtime: false,
             antirebind: false,
             direct_syscall: false,
+            check_integrity: true,
+            precompiled_ir_path: "".into(),
         }
     }
 }
@@ -497,6 +505,7 @@ impl TomlConfig {
                 self.str_enc = StrEncCfg {
                     enabled: true,
                     probability: 70,
+                    anti_dump: true,
                     force_content: self.str_enc.force_content.clone(),
                     skip_content: self.str_enc.skip_content.clone(),
                 };
@@ -550,6 +559,7 @@ impl TomlConfig {
                 self.anti_debugging = AntiDbgCfg {
                     enabled: false,
                     probability: 50,
+                    precompiled_ir_path: "".into(),
                 };
                 self.anti_hooking = AntiHookCfg {
                     enabled: false,
@@ -559,6 +569,8 @@ impl TomlConfig {
                     objc_runtime: false,
                     antirebind: false,
                     direct_syscall: false,
+                    check_integrity: false,
+                    precompiled_ir_path: "".into(),
                 };
                 self.anti_class_dump = AntiAcdCfg {
                     enabled: false,
@@ -600,6 +612,7 @@ impl TomlConfig {
                 self.str_enc = StrEncCfg {
                     enabled: true,
                     probability: 100,
+                    anti_dump: true,
                     force_content: self.str_enc.force_content.clone(),
                     skip_content: self.str_enc.skip_content.clone(),
                 };
@@ -653,6 +666,7 @@ impl TomlConfig {
                 self.anti_debugging = AntiDbgCfg {
                     enabled: false,
                     probability: 50,
+                    precompiled_ir_path: "".into(),
                 };
                 self.anti_hooking = AntiHookCfg {
                     enabled: false,
@@ -662,6 +676,8 @@ impl TomlConfig {
                     objc_runtime: false,
                     antirebind: false,
                     direct_syscall: false,
+                    check_integrity: false,
+                    precompiled_ir_path: "".into(),
                 };
                 self.anti_class_dump = AntiAcdCfg {
                     enabled: false,
@@ -703,6 +719,7 @@ impl TomlConfig {
                 self.str_enc = StrEncCfg {
                     enabled: true,
                     probability: 100,
+                    anti_dump: true,
                     force_content: self.str_enc.force_content.clone(),
                     skip_content: self.str_enc.skip_content.clone(),
                 };
@@ -756,6 +773,7 @@ impl TomlConfig {
                 self.anti_debugging = AntiDbgCfg {
                     enabled: true,
                     probability: 80,
+                    precompiled_ir_path: "".into(),
                 };
                 self.anti_hooking = AntiHookCfg {
                     enabled: true,
@@ -765,6 +783,8 @@ impl TomlConfig {
                     objc_runtime: true,
                     antirebind: true,
                     direct_syscall: true,
+                    check_integrity: true,
+                    precompiled_ir_path: "".into(),
                 };
                 self.anti_class_dump = AntiAcdCfg {
                     enabled: true,
@@ -806,6 +826,7 @@ impl TomlConfig {
                 self.str_enc = StrEncCfg {
                     enabled: true,
                     probability: 100,
+                    anti_dump: true,
                     force_content: self.str_enc.force_content.clone(),
                     skip_content: self.str_enc.skip_content.clone(),
                 };
@@ -859,6 +880,7 @@ impl TomlConfig {
                 self.anti_debugging = AntiDbgCfg {
                     enabled: true,
                     probability: 100,
+                    precompiled_ir_path: "".into(),
                 };
                 self.anti_hooking = AntiHookCfg {
                     enabled: true,
@@ -868,6 +890,8 @@ impl TomlConfig {
                     objc_runtime: true,
                     antirebind: true,
                     direct_syscall: true,
+                    check_integrity: true,
+                    precompiled_ir_path: "".into(),
                 };
                 self.anti_class_dump = AntiAcdCfg {
                     enabled: true,
@@ -1050,6 +1074,9 @@ impl TomlConfig {
         s.push_str(&format!("enabled = {}\n", self.str_enc.enabled));
         if self.str_enc.enabled {
             s.push_str(&format!("probability = {}\n", self.str_enc.probability));
+            if self.str_enc.anti_dump {
+                s.push_str("anti_dump = true\n");
+            }
             if !self.str_enc.force_content.is_empty() {
                 s.push_str(&format!(
                     "force_content = {}\n",
@@ -1188,6 +1215,12 @@ impl TomlConfig {
                 "probability = {}\n",
                 self.anti_debugging.probability
             ));
+            if !self.anti_debugging.precompiled_ir_path.is_empty() {
+                s.push_str(&format!(
+                    "precompiled_ir_path = \"{}\"\n",
+                    self.anti_debugging.precompiled_ir_path
+                ));
+            }
         }
         s.push('\n');
 
@@ -1212,6 +1245,15 @@ impl TomlConfig {
             }
             if self.anti_hooking.direct_syscall {
                 s.push_str("direct_syscall = true\n");
+            }
+            if self.anti_hooking.check_integrity {
+                s.push_str("check_integrity = true\n");
+            }
+            if !self.anti_hooking.precompiled_ir_path.is_empty() {
+                s.push_str(&format!(
+                    "precompiled_ir_path = \"{}\"\n",
+                    self.anti_hooking.precompiled_ir_path
+                ));
             }
         }
         s.push('\n');

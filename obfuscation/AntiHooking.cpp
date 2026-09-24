@@ -18,6 +18,7 @@
 
 #include "include/AntiHook.h"
 #include "include/CryptoUtils.h"
+#include "include/ObfConfig.h"
 #include "include/Utils.h"
 #include "include/compat/CallSite.h"
 #include "llvm/ADT/SmallString.h"
@@ -76,31 +77,61 @@ static cl::opt<std::string>
                       cl::desc("External Path Pointing To Pre-compiled Anti "
                                "Hooking Handler IR"),
                       cl::value_desc("filename"), cl::init(""));
+static cl::alias PreCompiledIRPathAlias1("ah_ir_path",
+                                         cl::desc("Alias for -adhexrirpath"),
+                                         cl::aliasopt(PreCompiledIRPath));
+static cl::alias PreCompiledIRPathAlias2("ah-ir-path",
+                                         cl::desc("Alias for -adhexrirpath"),
+                                         cl::aliasopt(PreCompiledIRPath));
 
 static cl::opt<bool> CheckInlineHook("ah_inline", cl::init(true), cl::NotHidden,
                                      cl::desc("Check Inline Hook for AArch64"));
 static thread_local bool CheckInlineHookTemp = true;
+static cl::alias CheckInlineHookAlias1("ah-inline",
+                                       cl::desc("Alias for -ah_inline"),
+                                       cl::aliasopt(CheckInlineHook));
+static cl::alias CheckInlineHookAlias2("ah_inline_aarch64",
+                                       cl::desc("Alias for -ah_inline"),
+                                       cl::aliasopt(CheckInlineHook));
 
 static cl::opt<bool>
     CheckObjectiveCRuntimeHook("ah_objcruntime", cl::init(true), cl::NotHidden,
                                cl::desc("Check Objective-C Runtime Hook"));
 static thread_local bool CheckObjectiveCRuntimeHookTemp = true;
+static cl::alias
+    CheckObjectiveCRuntimeHookAlias1("ah-objcruntime",
+                                     cl::desc("Alias for -ah_objcruntime"),
+                                     cl::aliasopt(CheckObjectiveCRuntimeHook));
+static cl::alias
+    CheckObjectiveCRuntimeHookAlias2("ah_objc",
+                                     cl::desc("Alias for -ah_objcruntime"),
+                                     cl::aliasopt(CheckObjectiveCRuntimeHook));
 
 static cl::opt<bool> AntiRebindSymbol("ah_antirebind", cl::init(false),
                                       cl::NotHidden,
                                       cl::desc("Make fishhook unavailable"));
 static thread_local bool AntiRebindSymbolTemp = false;
+static cl::alias AntiRebindSymbolAlias("ah-antirebind",
+                                       cl::desc("Alias for -ah_antirebind"),
+                                       cl::aliasopt(AntiRebindSymbol));
 
 static cl::opt<bool>
     CheckInlineHookX86("ah_inline_x86", cl::init(true), cl::NotHidden,
                        cl::desc("[AntiHook]Check Inline Hook for x86_64"));
 static thread_local bool CheckInlineHookX86Temp = true;
+static cl::alias CheckInlineHookX86Alias("ah-inline-x86",
+                                         cl::desc("Alias for -ah_inline_x86"),
+                                         cl::aliasopt(CheckInlineHookX86));
 
 static cl::opt<bool> DirectSyscallExit(
     "ah_direct_syscall", cl::init(true), cl::NotHidden,
     cl::desc("[AntiHook]Use direct syscall (not libc abort) "
              "as hook-detected handler — bypasses libc hooks"));
 static thread_local bool DirectSyscallExitTemp = true;
+static cl::alias
+    DirectSyscallExitAlias("ah-direct-syscall",
+                           cl::desc("Alias for -ah_direct_syscall"),
+                           cl::aliasopt(DirectSyscallExit));
 
 // ── Windows-specific options
 // ──────────────────────────────────────────────────
@@ -109,6 +140,9 @@ static cl::opt<bool> CheckInlineHookWin(
     cl::desc("[AntiHook]Check Windows-specific prologue hook "
              "patterns (Detours INT3, MOV EDI EDI, etc.)"));
 static thread_local bool CheckInlineHookWinTemp = true;
+static cl::alias CheckInlineHookWinAlias("ah-inline-win",
+                                         cl::desc("Alias for -ah_inline_win"),
+                                         cl::aliasopt(CheckInlineHookWin));
 
 // ── Embedded Integrity Self-Check with Anti-Patching Data-Flow Entanglement
 static cl::opt<bool>
@@ -116,6 +150,9 @@ static cl::opt<bool>
                    cl::desc("[AntiHook] Embedded Code Integrity Self-Check "
                             "with Data-Flow Entanglement"));
 static thread_local bool CheckIntegrityTemp = true;
+static cl::alias CheckIntegrityAlias("ah-integrity",
+                                     cl::desc("Alias for -ah_integrity"),
+                                     cl::aliasopt(CheckIntegrity));
 
 namespace llvm {
 struct AntiHook : public ModulePass {
@@ -137,14 +174,23 @@ struct AntiHook : public ModulePass {
   bool initialize(Module &M) {
     this->triple = Triple(M.getTargetTriple());
     if (PreCompiledIRPath == "") {
-      SmallString<32> Path;
-      if (sys::path::home_directory(Path)) {
-        sys::path::append(Path, "Ensia");
-        sys::path::append(Path,
-                          "PrecompiledAntiHooking-" +
-                              Triple::getArchTypeName(triple.getArch()) + "-" +
-                              Triple::getOSTypeName(triple.getOS()) + ".bc");
-        PreCompiledIRPath = Path.c_str();
+      if (GObfConfig.passes.anti_hook.precompiled_ir_path.has_value() &&
+          !GObfConfig.passes.anti_hook.precompiled_ir_path->empty()) {
+        PreCompiledIRPath = *GObfConfig.passes.anti_hook.precompiled_ir_path;
+      } else if (const char *env = getenv("ENSIA_PRECOMPILED_AH")) {
+        PreCompiledIRPath = env;
+      } else if (const char *env2 = getenv("AH_IR_PATH")) {
+        PreCompiledIRPath = env2;
+      } else {
+        SmallString<32> Path;
+        if (sys::path::home_directory(Path)) {
+          sys::path::append(Path, "Ensia");
+          sys::path::append(
+              Path, "PrecompiledAntiHooking-" +
+                        Triple::getArchTypeName(triple.getArch()) + "-" +
+                        Triple::getOSTypeName(triple.getOS()) + ".bc");
+          PreCompiledIRPath = Path.c_str();
+        }
       }
     }
     std::ifstream f(PreCompiledIRPath);
@@ -200,7 +246,9 @@ struct AntiHook : public ModulePass {
   bool runOnModule(Module &M) override {
     SmallVector<Function *, 16> protectedFuncs;
     for (Function &F : M) {
-      if (toObfuscate(flag, &F, "antihook")) {
+      auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
+      bool shouldObf = ec.anti_hook.enabled.value_or(flag);
+      if (toObfuscate(shouldObf, &F, "antihook")) {
         if (triple.getArch() == Triple::x86_64)
           F.addFnAttr(Attribute::NoRedZone);
         if (ObfVerbose)
@@ -208,13 +256,16 @@ struct AntiHook : public ModulePass {
         if (!this->initialized)
           initialize(M);
         if (!toObfuscateBoolOption(&F, "ah_inline", &CheckInlineHookTemp))
-          CheckInlineHookTemp = CheckInlineHook;
+          CheckInlineHookTemp =
+              ec.anti_hook.inline_aarch64.value_or((bool)CheckInlineHook);
         if (!toObfuscateBoolOption(&F, "ah_direct_syscall",
                                    &DirectSyscallExitTemp))
-          DirectSyscallExitTemp = DirectSyscallExit;
+          DirectSyscallExitTemp =
+              ec.anti_hook.direct_syscall.value_or((bool)DirectSyscallExit);
         if (!toObfuscateBoolOption(&F, "ah_inline_x86",
                                    &CheckInlineHookX86Temp))
-          CheckInlineHookX86Temp = CheckInlineHookX86;
+          CheckInlineHookX86Temp =
+              ec.anti_hook.inline_x86.value_or((bool)CheckInlineHookX86);
 
         // AArch64 inline hook detection (existing — covers Darwin + Linux)
         if (triple.isAArch64() && !triple.isOSWindows() &&
@@ -234,7 +285,8 @@ struct AntiHook : public ModulePass {
         // Windows inline hook detection (x86_64 and AArch64)
         if (!toObfuscateBoolOption(&F, "ah_inline_win",
                                    &CheckInlineHookWinTemp))
-          CheckInlineHookWinTemp = CheckInlineHookWin;
+          CheckInlineHookWinTemp =
+              ec.anti_hook.inline_win.value_or((bool)CheckInlineHookWin);
         if (triple.isOSWindows() && CheckInlineHookWinTemp) {
           if (triple.getArch() == Triple::x86_64 ||
               triple.getArch() == Triple::x86_64)
@@ -245,14 +297,16 @@ struct AntiHook : public ModulePass {
 
         // Embedded Code Integrity Self-Check with Data-Flow Entanglement
         if (!toObfuscateBoolOption(&F, "ah_integrity", &CheckIntegrityTemp))
-          CheckIntegrityTemp = CheckIntegrity;
+          CheckIntegrityTemp =
+              ec.anti_hook.check_integrity.value_or((bool)CheckIntegrity);
         if (CheckIntegrityTemp && !F.isDeclaration() && !F.empty()) {
           HandleIntegritySelfCheck(&F);
           protectedFuncs.push_back(&F);
         }
 
         if (!toObfuscateBoolOption(&F, "ah_antirebind", &AntiRebindSymbolTemp))
-          AntiRebindSymbolTemp = AntiRebindSymbol;
+          AntiRebindSymbolTemp =
+              ec.anti_hook.antirebind.value_or((bool)AntiRebindSymbol);
         if (AntiRebindSymbolTemp)
           for (Instruction &I : instructions(F))
             if (isa<CallInst>(&I) || isa<InvokeInst>(&I)) {
@@ -283,7 +337,8 @@ struct AntiHook : public ModulePass {
             }
         if (!toObfuscateBoolOption(&F, "ah_objcruntime",
                                    &CheckObjectiveCRuntimeHookTemp))
-          CheckObjectiveCRuntimeHookTemp = CheckObjectiveCRuntimeHook;
+          CheckObjectiveCRuntimeHookTemp = ec.anti_hook.objc_runtime.value_or(
+              (bool)CheckObjectiveCRuntimeHook);
         if (!CheckObjectiveCRuntimeHookTemp)
           continue;
         GlobalVariable *methodListGV = nullptr;

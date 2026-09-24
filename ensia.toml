@@ -66,6 +66,7 @@ stack_confusion = true   # Inject push/pop (x86) or str/ldr (ARM64) stack-frame 
 [passes.string_encryption]
 enabled = true
 probability = 100        # Probability of encrypting discovered global string literals (0–100)
+anti_dump = true          # Strip memory dump markers / wipe decrypted strings from memory
 # Always encrypt matching strings (regex patterns)
 force_content = [
     ".*secret.*",
@@ -148,11 +149,14 @@ inline_win = true        # Windows API inline hook detection
 objc_runtime = false     # Inspect Objective-C method dispatch tables
 antirebind = true        # Counter dynamic linker symbol rebinding (fishhook / dyld)
 direct_syscall = true    # Execute direct kernel syscalls (svc #0 / syscall) bypassing libc
+check_integrity = true   # Verify code segment cryptographic hashes
+precompiled_ir_path = "" # Path to external precompiled LLVM IR module for anti-hooking
 
 # ── Anti-Debugging ───────────────────────────────────────────────────────────
 [passes.anti_debugging]
 enabled = true
 probability = 80         # Percentage of function entries receiving anti-debug probes (0–100)
+precompiled_ir_path = "" # Path to external precompiled LLVM IR module for anti-debugging
 
 # ── Anti-Class Dump (ObjC / Swift) ───────────────────────────────────────────
 [passes.anti_class_dump]
@@ -162,6 +166,9 @@ rename_methodimp = true  # Scramble method implementation names
 scramble_methods = true  # Permute selector order using Fisher-Yates shuffle
 dummy_selectors = false  # Inject phantom selector entries into class metadata
 dummy_count = 8          # Number of phantom dummy selectors to inject
+encrypt_strings = true   # Dynamically decrypt selector and class names at runtime
+anti_hook = true         # Detect Frida/Substrate hooks on class_replaceMethod and sel_registerName
+opaque_barriers = true   # Insert opaque memory barriers on runtime pointers
 
 # ==============================================================================
 # GRANULAR POLICY OVERRIDES ([[policy]])

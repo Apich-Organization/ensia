@@ -250,6 +250,13 @@ static cl::alias FlaAlias("fla", cl::desc("Alias for -enable-cffobf"),
                           cl::aliasopt(EnableFlattening));
 static cl::alias CffAlias("cff", cl::desc("Alias for -enable-cffobf"),
                           cl::aliasopt(EnableFlattening));
+static cl::alias CffobfAlias("cffobf", cl::desc("Alias for -enable-cffobf"),
+                             cl::aliasopt(EnableFlattening));
+static cl::alias FlattenAlias("flatten", cl::desc("Alias for -enable-cffobf"),
+                              cl::aliasopt(EnableFlattening));
+static cl::alias FlatteningAlias("flattening",
+                                 cl::desc("Alias for -enable-cffobf"),
+                                 cl::aliasopt(EnableFlattening));
 static cl::alias BcfAlias("bcf", cl::desc("Alias for -enable-bcfobf"),
                           cl::aliasopt(EnableBogusControlFlow));
 static cl::alias SplitAlias("split", cl::desc("Alias for -enable-splitobf"),
@@ -353,6 +360,14 @@ static std::optional<bool> getEnvBool(const char *name) {
   return std::nullopt;
 }
 
+static std::optional<std::string> getEnvString(const char *name) {
+  if (const char *v = getenv(name)) {
+    if (*v != '\0')
+      return std::string(v);
+  }
+  return std::nullopt;
+}
+
 static void LoadEnv() {
   if (getEnvBool("ENSIA").value_or(false))
     EnableIRObfusaction = true;
@@ -413,12 +428,18 @@ static void LoadEnv() {
     pc.bcf.probability = *v;
   if (auto v = getEnvU32("BCF_LOOP"))
     pc.bcf.iterations = *v;
+  else if (auto v2 = getEnvU32("BCF_ITERATIONS"))
+    pc.bcf.iterations = *v2;
   if (auto v = getEnvU32("BCF_COND_COMPL"))
     pc.bcf.complexity = *v;
+  else if (auto v2 = getEnvU32("BCF_COMPLEXITY"))
+    pc.bcf.complexity = *v2;
   if (auto v = getEnvBool("BCF_ENTROPY_CHAIN"))
     pc.bcf.entropy_chain = *v;
   if (auto v = getEnvBool("BCF_JUNKASM"))
     pc.bcf.junk_asm = *v;
+  else if (auto v2 = getEnvBool("BCF_JUNK_ASM"))
+    pc.bcf.junk_asm = *v2;
   if (auto v = getEnvU32("BCF_JUNKASM_MINNUM"))
     pc.bcf.junk_asm_min = *v;
   if (auto v = getEnvU32("BCF_JUNKASM_MAXNUM"))
@@ -434,6 +455,8 @@ static void LoadEnv() {
     pc.sub.probability = *v;
   if (auto v = getEnvU32("SUB_LOOP"))
     pc.sub.iterations = *v;
+  else if (auto v2 = getEnvU32("SUB_ITERATIONS"))
+    pc.sub.iterations = *v2;
 
   if (auto v = getEnvU32("MBA_PROB"))
     pc.mba.probability = *v;
@@ -444,16 +467,30 @@ static void LoadEnv() {
 
   if (auto v = getEnvU32("SPLIT_NUM"))
     pc.split.splits = *v;
+  else if (auto v2 = getEnvU32("SPLIT_SPLITS"))
+    pc.split.splits = *v2;
   if (auto v = getEnvBool("SPLIT_STACKCONF"))
     pc.split.stack_confusion = *v;
+  else if (auto v2 = getEnvBool("SPLIT_STACK_CONFUSION"))
+    pc.split.stack_confusion = *v2;
 
   if (auto v = getEnvU32("STRCRY_PROB"))
     pc.str_enc.probability = *v;
+  else if (auto v2 = getEnvU32("STR_ENC_PROB"))
+    pc.str_enc.probability = *v2;
+  if (auto v = getEnvBool("STRCRY_ANTIDUMP"))
+    pc.str_enc.anti_dump = *v;
+  else if (auto v2 = getEnvBool("STR_ENC_ANTIDUMP"))
+    pc.str_enc.anti_dump = *v2;
 
   if (auto v = getEnvU32("CONSTENC_TIMES"))
     pc.const_enc.iterations = *v;
+  else if (auto v2 = getEnvU32("CONSTENC_ITERATIONS"))
+    pc.const_enc.iterations = *v2;
   if (auto v = getEnvU32("CONSTENC_KSHARE"))
     pc.const_enc.share_count = *v;
+  else if (auto v2 = getEnvU32("CONSTENC_SHARE_COUNT"))
+    pc.const_enc.share_count = *v2;
   if (auto v = getEnvBool("CONSTENC_FEISTEL"))
     pc.const_enc.feistel = *v;
   if (auto v = getEnvBool("CONSTENC_SUBXOR"))
@@ -462,64 +499,130 @@ static void LoadEnv() {
     pc.const_enc.substitute_xor_prob = *v;
   if (auto v = getEnvBool("CONSTENC_TOGV"))
     pc.const_enc.globalize = *v;
+  else if (auto v2 = getEnvBool("CONSTENC_GLOBALIZE"))
+    pc.const_enc.globalize = *v2;
   if (auto v = getEnvU32("CONSTENC_TOGV_PROB"))
     pc.const_enc.globalize_prob = *v;
+  else if (auto v2 = getEnvU32("CONSTENC_GLOBALIZE_PROB"))
+    pc.const_enc.globalize_prob = *v2;
 
   if (auto v = getEnvU32("VOBF_PROB"))
     pc.vec.probability = *v;
+  else if (auto v2 = getEnvU32("VEC_PROB"))
+    pc.vec.probability = *v2;
   if (auto v = getEnvU32("VOBF_WIDTH"))
     pc.vec.width = *v;
+  else if (auto v2 = getEnvU32("VEC_WIDTH"))
+    pc.vec.width = *v2;
   if (auto v = getEnvBool("VOBF_SHUFFLE"))
     pc.vec.shuffle = *v;
+  else if (auto v2 = getEnvBool("VEC_SHUFFLE"))
+    pc.vec.shuffle = *v2;
   if (auto v = getEnvBool("VOBF_ICMP"))
     pc.vec.lift_comparisons = *v;
+  else if (auto v2 = getEnvBool("VEC_ICMP"))
+    pc.vec.lift_comparisons = *v2;
+  else if (auto v3 = getEnvBool("VOBF_LIFT_COMPARISONS"))
+    pc.vec.lift_comparisons = *v3;
+  else if (auto v4 = getEnvBool("VEC_LIFT_COMPARISONS"))
+    pc.vec.lift_comparisons = *v4;
 
   if (auto v = getEnvBool("CSM_NESTED"))
     pc.csm.nested_dispatch = *v;
+  else if (auto v2 = getEnvBool("CSM_NESTED_DISPATCH"))
+    pc.csm.nested_dispatch = *v2;
   if (auto v = getEnvU32("CSM_WARMUP"))
     pc.csm.warmup = *v;
   if (auto v = getEnvU32("CSM_MAXBLOCKS"))
     pc.csm.max_blocks = *v;
+  else if (auto v2 = getEnvU32("CSM_MAX_BLOCKS"))
+    pc.csm.max_blocks = *v2;
 
   if (auto v = getEnvBool("INDIR_USE_STACK"))
     pc.indir_branch.use_stack = *v;
+  else if (auto v2 = getEnvBool("INDIBRAN_USE_STACK"))
+    pc.indir_branch.use_stack = *v2;
+  else if (auto v3 = getEnvBool("INDIBR_USE_STACK"))
+    pc.indir_branch.use_stack = *v3;
   if (auto v = getEnvBool("INDIR_ENC_JUMP"))
     pc.indir_branch.enc_jump_target = *v;
+  else if (auto v2 = getEnvBool("INDIBRAN_ENC_JUMP"))
+    pc.indir_branch.enc_jump_target = *v2;
+  else if (auto v3 = getEnvBool("INDIBR_ENC_JUMP"))
+    pc.indir_branch.enc_jump_target = *v3;
 
   if (auto v = getEnvU32("FUNCWRA_PROB"))
     pc.func_wrap.probability = *v;
+  else if (auto v2 = getEnvU32("FW_PROB"))
+    pc.func_wrap.probability = *v2;
   if (auto v = getEnvU32("FUNCWRA_TIMES"))
     pc.func_wrap.times = *v;
+  else if (auto v2 = getEnvU32("FW_TIMES"))
+    pc.func_wrap.times = *v2;
 
   if (auto v = getEnvU64("FCO_FLAG"))
     pc.fco.flag = *v;
+  if (auto v = getEnvString("FCO_CONFIG"))
+    pc.fco.symbol_config_path = *v;
+  else if (auto v2 = getEnvString("FCO_SYMBOL_CONFIG"))
+    pc.fco.symbol_config_path = *v2;
+  else if (auto v3 = getEnvString("ENSIA_SYMBOL_CONFIG"))
+    pc.fco.symbol_config_path = *v3;
 
   if (auto v = getEnvBool("AH_INLINE"))
     pc.anti_hook.inline_aarch64 = *v;
+  else if (auto v2 = getEnvBool("AH_INLINE_AARCH64"))
+    pc.anti_hook.inline_aarch64 = *v2;
   if (auto v = getEnvBool("AH_INLINE_X86"))
     pc.anti_hook.inline_x86 = *v;
   if (auto v = getEnvBool("AH_INLINE_WIN"))
     pc.anti_hook.inline_win = *v;
   if (auto v = getEnvBool("AH_OBJC"))
     pc.anti_hook.objc_runtime = *v;
+  else if (auto v2 = getEnvBool("AH_OBJC_RUNTIME"))
+    pc.anti_hook.objc_runtime = *v2;
   if (auto v = getEnvBool("AH_ANTIREBIND"))
     pc.anti_hook.antirebind = *v;
   if (auto v = getEnvBool("AH_DIRECT_SYSCALL"))
     pc.anti_hook.direct_syscall = *v;
+  if (auto v = getEnvBool("AH_INTEGRITY"))
+    pc.anti_hook.check_integrity = *v;
+  if (auto v = getEnvString("AH_IR_PATH"))
+    pc.anti_hook.precompiled_ir_path = *v;
+  else if (auto v2 = getEnvString("ENSIA_PRECOMPILED_AH"))
+    pc.anti_hook.precompiled_ir_path = *v2;
 
   if (auto v = getEnvU32("ADB_PROB"))
     pc.anti_dbg.probability = *v;
+  if (auto v = getEnvString("ADB_IR_PATH"))
+    pc.anti_dbg.precompiled_ir_path = *v;
+  else if (auto v2 = getEnvString("ENSIA_PRECOMPILED_ADB"))
+    pc.anti_dbg.precompiled_ir_path = *v2;
 
   if (auto v = getEnvBool("ACD_USE_INIT"))
     pc.anti_class_dump.use_initialize = *v;
+  else if (auto v2 = getEnvBool("ACD_USE_INITIALIZE"))
+    pc.anti_class_dump.use_initialize = *v2;
   if (auto v = getEnvBool("ACD_RENAME_IMP"))
     pc.anti_class_dump.rename_methodimp = *v;
+  else if (auto v2 = getEnvBool("ACD_RENAME_METHODIMP"))
+    pc.anti_class_dump.rename_methodimp = *v2;
   if (auto v = getEnvBool("ACD_SCRAMBLE"))
     pc.anti_class_dump.scramble_methods = *v;
+  else if (auto v2 = getEnvBool("ACD_SCRAMBLE_METHODS"))
+    pc.anti_class_dump.scramble_methods = *v2;
   if (auto v = getEnvBool("ACD_DUMMY_SEL"))
     pc.anti_class_dump.dummy_selectors = *v;
+  else if (auto v2 = getEnvBool("ACD_DUMMY_SELECTORS"))
+    pc.anti_class_dump.dummy_selectors = *v2;
   if (auto v = getEnvU32("ACD_DUMMY_COUNT"))
     pc.anti_class_dump.dummy_count = *v;
+  if (auto v = getEnvBool("ACD_ENCRYPT_STRINGS"))
+    pc.anti_class_dump.encrypt_strings = *v;
+  if (auto v = getEnvBool("ACD_ANTI_HOOK"))
+    pc.anti_class_dump.anti_hook = *v;
+  if (auto v = getEnvBool("ACD_OPAQUE_BARRIERS"))
+    pc.anti_class_dump.opaque_barriers = *v;
 }
 
 // ── Config loading
