@@ -13,7 +13,7 @@
 | **CFG Edge Transition Explosion** | **26.51x** | Massive state-transition graph defeats linear control-flow reconstruction |
 | **Cyclomatic Complexity Expansion** | **12.07x** | Extreme complexity score breaks automatic decompilers |
 | **SMT Invariant Solving Slowdown** | **1108.86x** | Multi-layer MBA & Feistel expansion severely bogs down Z3 queries |
-| **Symbolic Execution Timeout Rate** | **40/79 (50.6%)** vs Baseline (10/79) | Automated symbolic solvers get trapped in chaos state machines |
+| **Symbolic Execution Defeat Rate** | **60/79 (76.0%)** [40 Timeout + 20 Trapped] | SMT path saturation & anti-analysis traps eliminate automated solving |
 
 ---
 

@@ -9,7 +9,7 @@
 
 **⚠️ ETHICAL USE WARNING:** This is a high-strength industrial compiler obfuscation tool. Please read our [Ethics & Disclaimer Notice](./ETHICS.md) before use.
 
-OLLVM-Next (Ensia) is a modern, high-resilience LLVM-based compiler obfuscation framework. Continuing the lineage of the [Hikari](https://github.com/HikariObfuscator/Hikari/), [Hikari-LLVM15](https://github.com/NeHyci/Hikari-LLVM15/), and [Hikari-LLVM19](https://github.com/PPKunOfficial/Hikari-LLVM19/) projects, Ensia completely redesigns the core transformation engine for modern LLVM toolchains (**LLVM 21, 22, and 23**).
+OLLVM-Next (Ensia) is a modern, high-resilience LLVM-based compiler obfuscation framework. Continuing the lineage of the [Hikari](https://github.com/HikariObfuscator/Hikari/), [Hikari-LLVM15](https://github.com/NeHyci/Hikari-LLVM15/), and [Hikari-LLVM19](https://github.com/PPKunOfficial/Hikari-LLVM19/) projects, Ensia completely redesigns the core transformation engine for modern LLVM toolchains (**LLVM 21+**, including LLVM 21, 22, and 23+).
 
 Ensia supports cross-platform code protection across **Linux, Windows (MSVC, clang-cl, MinGW), macOS, iOS, and Android**, with first-class architecture support for **x86_64, AArch64 (ARM64), and i386**.
 

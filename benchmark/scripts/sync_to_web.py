@@ -44,6 +44,8 @@ def generate_rust_code(json_file, target_rs):
 
         base_to = "true" if base.get("symbolic_timed_out", False) else "false"
         max_to = "true" if mx.get("symbolic_timed_out", False) else "false"
+        base_status = base.get("symbolic_status", "TIMEOUT" if base.get("symbolic_timed_out") else "OK")
+        max_status = mx.get("symbolic_status", "TIMEOUT" if mx.get("symbolic_timed_out") else "OK")
 
         row = f"""    BenchmarkRow {{
         algo: "{algo}",
@@ -65,6 +67,8 @@ def generate_rust_code(json_file, target_rs):
         z3_ratio: {z3_ratio},
         base_timeout: {base_to},
         max_timeout: {max_to},
+        base_status: "{base_status}",
+        max_status: "{max_status}",
     }},"""
         rows.append(row)
 

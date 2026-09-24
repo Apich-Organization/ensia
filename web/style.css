@@ -1180,11 +1180,49 @@ blockquote {
   display: flex;
   gap: 1.25rem;
 }
-.footer-links a {
+.footer-links a,
+.footer-links button,
+.footer-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: inherit;
+  cursor: pointer;
   color: var(--c-text-3);
+  text-decoration: none;
   transition: color 0.2s;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
 }
-.footer-links a:hover { color: var(--c-primary); }
+.footer-links a:hover,
+.footer-links button:hover,
+.footer-link-btn:hover {
+  color: var(--c-primary);
+  background: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Theme-Adaptive Benchmark Charts
+   ═══════════════════════════════════════════════════════════════════════════ */
+.chart-dark { display: none; }
+.chart-light { display: block; }
+
+[data-theme="dusk"] .chart-dark { display: block; }
+[data-theme="dusk"] .chart-light { display: none; }
+[data-theme="mist"] .chart-dark { display: none; }
+[data-theme="mist"] .chart-light { display: block; }
+
+.chart-card-img {
+  width: 100%;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--c-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  transition: opacity 0.2s ease;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Utilities

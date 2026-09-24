@@ -21,6 +21,8 @@ pub struct BenchmarkRow {
     pub z3_ratio: f64,
     pub base_timeout: bool,
     pub max_timeout: bool,
+    pub base_status: &'static str,
+    pub max_status: &'static str,
 }
 
 // Full 79-target empirical data compiled into static binary
@@ -45,6 +47,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 18.93,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "aes192_ecb",
@@ -66,6 +70,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 68.85,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "aes256_ecb",
@@ -87,6 +93,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 60.67,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "aes_cbc",
@@ -108,6 +116,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 7.47,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "aes_ccm",
@@ -129,6 +139,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 21.83,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "aes_cfb",
@@ -150,6 +162,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 14.66,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "aes_ctr",
@@ -171,6 +185,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 36.78,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "aes_ecb_mode",
@@ -192,6 +208,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 34.43,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "aes_gcm",
@@ -213,6 +231,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 18.21,
         base_timeout: true,
         max_timeout: true,
+        base_status: "TIMEOUT",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "aes_ofb",
@@ -234,6 +254,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 14.24,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "aes_siv",
@@ -255,6 +277,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 132.27,
         base_timeout: true,
         max_timeout: true,
+        base_status: "TIMEOUT",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "aes_xts",
@@ -276,6 +300,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 7.05,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "ascon_aead128",
@@ -297,6 +323,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 31.0,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "ascon_hash256",
@@ -318,6 +346,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 5840.0,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "ascon_xof128",
@@ -339,6 +369,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 15608.0,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "bcrypt",
@@ -360,6 +392,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 3412.0,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "blake2b256",
@@ -381,6 +415,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 64.84,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "blake2b512",
@@ -402,6 +438,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 118.94,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "blake2s128",
@@ -423,6 +461,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 48.14,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "blake2s256",
@@ -444,6 +484,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 1.99,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "blowfish_ecb",
@@ -465,6 +507,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 7.4,
         base_timeout: true,
         max_timeout: true,
+        base_status: "TIMEOUT",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "camellia_ecb",
@@ -486,6 +530,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 80.57,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "cast128_ecb",
@@ -507,6 +553,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 27.98,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "cast256_ecb",
@@ -528,6 +576,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 1.38,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "chacha20_poly1305",
@@ -549,6 +599,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 102.58,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "chacha20_stream",
@@ -570,6 +622,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 48.28,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "cmac_aes",
@@ -591,6 +645,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 20.7,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "cshake128",
@@ -612,6 +668,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 39.91,
         base_timeout: true,
         max_timeout: true,
+        base_status: "TIMEOUT",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "des3_ecb",
@@ -633,6 +691,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 58.36,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "des_ecb",
@@ -654,6 +714,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 54.4,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "dh2048",
@@ -675,6 +737,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 5725.0,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "dsa2048",
@@ -696,6 +760,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 84.91,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "ecdh_p256",
@@ -717,6 +783,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 25.77,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "ecdsa_p256",
@@ -738,6 +806,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 9.07,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "ed25519",
@@ -759,6 +829,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 4.32,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "gmac_aes",
@@ -780,6 +852,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 33.6,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "hkdf_sha256",
@@ -799,8 +873,10 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         base_z3_s: 0.0216,
         max_z3_s: 0.9805,
         z3_ratio: 45.39,
-        base_timeout: true,
+        base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "hmac_sha256",
@@ -822,6 +898,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 14.21,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "idea_ecb",
@@ -843,6 +921,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 2.08,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "kmac128",
@@ -864,6 +944,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 10.9,
         base_timeout: true,
         max_timeout: true,
+        base_status: "TIMEOUT",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "mars_ecb",
@@ -885,6 +967,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 13.21,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "md5",
@@ -906,6 +990,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 24.0,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "mldsa44",
@@ -927,6 +1013,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 5251.0,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "mlkem512",
@@ -948,6 +1036,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 5651.0,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "mlkem768",
@@ -969,6 +1059,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 10764.0,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "pbkdf2_sha256",
@@ -990,6 +1082,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 228.69,
         base_timeout: true,
         max_timeout: false,
+        base_status: "TIMEOUT",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "poly1305",
@@ -1011,6 +1105,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 25826.0,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "present_ecb",
@@ -1032,6 +1128,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 30.34,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "rc2_ecb",
@@ -1053,6 +1151,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 20.59,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "rc4_stream",
@@ -1074,6 +1174,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 48.16,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "rc6_ecb",
@@ -1095,6 +1197,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 10.62,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "ripemd128",
@@ -1116,6 +1220,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 10.91,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "ripemd160",
@@ -1137,6 +1243,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 89.03,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "rsa2048",
@@ -1158,6 +1266,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 86.38,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "salsa20_stream",
@@ -1179,6 +1289,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 6441.0,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "scrypt",
@@ -1200,6 +1312,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 42.63,
         base_timeout: true,
         max_timeout: false,
+        base_status: "TIMEOUT",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "seed_ecb",
@@ -1221,6 +1335,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 55.31,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "serpent_ecb",
@@ -1242,6 +1358,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 59.62,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "sha1",
@@ -1263,6 +1381,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 13.26,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "sha224",
@@ -1284,6 +1404,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 36.68,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "sha256",
@@ -1305,6 +1427,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 55.87,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "sha256_crypt",
@@ -1326,6 +1450,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 75.27,
         base_timeout: true,
         max_timeout: false,
+        base_status: "TIMEOUT",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "sha384",
@@ -1347,6 +1473,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 132.78,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "sha3_256",
@@ -1368,6 +1496,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 13.25,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "sha3_512",
@@ -1389,6 +1519,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 65.18,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "sha512",
@@ -1410,6 +1542,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 4.49,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "shake128",
@@ -1431,6 +1565,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 109.39,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "shake256",
@@ -1452,6 +1588,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 83.69,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "sm2",
@@ -1473,6 +1611,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 23.56,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "sm3",
@@ -1494,6 +1634,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 55.66,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "sm4_ecb",
@@ -1515,6 +1657,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 38.16,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "tea_ecb",
@@ -1536,6 +1680,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 8.68,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "tiger",
@@ -1557,6 +1703,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 25.52,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "twofish_ecb",
@@ -1578,6 +1726,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 39.6,
         base_timeout: true,
         max_timeout: false,
+        base_status: "TIMEOUT",
+        max_status: "TRAPPED",
     },
     BenchmarkRow {
         algo: "whirlpool",
@@ -1599,6 +1749,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 54.22,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "x25519",
@@ -1620,6 +1772,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 45.96,
         base_timeout: false,
         max_timeout: false,
+        base_status: "OK",
+        max_status: "OK",
     },
     BenchmarkRow {
         algo: "xcbc_mac",
@@ -1641,6 +1795,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 47.49,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "xtea_ecb",
@@ -1662,6 +1818,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 45.91,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
     BenchmarkRow {
         algo: "zuc_stream",
@@ -1683,6 +1841,8 @@ const BENCHMARK_DATA: &[BenchmarkRow] = &[
         z3_ratio: 15.4,
         base_timeout: false,
         max_timeout: true,
+        base_status: "OK",
+        max_status: "TIMEOUT",
     },
 ];
 
@@ -2342,7 +2502,7 @@ pub fn BenchmarkPage() -> impl IntoView {
                 "Comprehensive quantitative evaluation across 79 standardized cryptographic targets
                  (NIST, ISO/IEC, GB/T, IETF), 16 orthogonal compiler transformation passes,
                  and 4 enterprise cascading presets under automated reverse-engineering attack using
-                 Angr 9.3 symbolic execution, Z3 4.12 SMT constraint solver, and aggressive LLVM 22/23 opt -O3 de-lifting."
+                 Angr 9.3 symbolic execution, Z3 4.12 SMT constraint solver, and aggressive LLVM 21+ opt -O3 de-lifting."
             </p>
         </section>
 
@@ -2364,7 +2524,8 @@ pub fn BenchmarkPage() -> impl IntoView {
                     <p class="text-xs text-muted mb-md">
                         "Min, mean, and maximum binary expansion across the 8 cryptographic domains under the Max profile."
                     </p>
-                    <img src="benchmark/size_expansion.svg" alt="Binary Size Expansion Chart" class="w-full rounded shadow" style="border: 1px solid var(--c-border); background: #0f172a;" />
+                    <img src="benchmark/size_expansion_light.svg" alt="Binary Size Expansion Chart" class="chart-card-img chart-light" />
+                    <img src="benchmark/size_expansion_dark.svg" alt="Binary Size Expansion Chart" class="chart-card-img chart-dark" />
                 </div>
 
                 // Chart 2: CFG Multipliers
@@ -2373,7 +2534,8 @@ pub fn BenchmarkPage() -> impl IntoView {
                     <p class="text-xs text-muted mb-md">
                         "Dual-metric comparative analysis of Basic Block multipliers (BB) vs. Global CFG transition edges."
                     </p>
-                    <img src="benchmark/cfg_expansion.svg" alt="CFG Expansion Chart" class="w-full rounded shadow" style="border: 1px solid var(--c-border); background: #0f172a;" />
+                    <img src="benchmark/cfg_expansion_light.svg" alt="CFG Expansion Chart" class="chart-card-img chart-light" />
+                    <img src="benchmark/cfg_expansion_dark.svg" alt="CFG Expansion Chart" class="chart-card-img chart-dark" />
                 </div>
             </div>
 
@@ -2384,7 +2546,8 @@ pub fn BenchmarkPage() -> impl IntoView {
                     <p class="text-xs text-muted mb-md">
                         "Scatter comparison of baseline complexity (4–15) versus obfuscated complexity (30–110)."
                     </p>
-                    <img src="benchmark/cyclomatic_complexity.svg" alt="Cyclomatic Complexity Chart" class="w-full rounded shadow" style="border: 1px solid var(--c-border); background: #0f172a;" />
+                    <img src="benchmark/cyclomatic_complexity_light.svg" alt="Cyclomatic Complexity Chart" class="chart-card-img chart-light" />
+                    <img src="benchmark/cyclomatic_complexity_dark.svg" alt="Cyclomatic Complexity Chart" class="chart-card-img chart-dark" />
                 </div>
 
                 // Chart 4: Symbolic Traversal: Solver Trapping Rate
@@ -2393,7 +2556,8 @@ pub fn BenchmarkPage() -> impl IntoView {
                     <p class="text-xs text-muted mb-md">
                         "Automated path exploration convergence vs. state space saturation on Baseline vs. Ensia Max."
                     </p>
-                    <img src="benchmark/symbolic_execution_resilience.svg" alt="Symbolic Execution Resilience Chart" class="w-full rounded shadow" style="border: 1px solid var(--c-border); background: #0f172a;" />
+                    <img src="benchmark/symbolic_execution_resilience_light.svg" alt="Symbolic Execution Resilience Chart" class="chart-card-img chart-light" />
+                    <img src="benchmark/symbolic_execution_resilience_dark.svg" alt="Symbolic Execution Resilience Chart" class="chart-card-img chart-dark" />
                 </div>
             </div>
 
@@ -2404,7 +2568,8 @@ pub fn BenchmarkPage() -> impl IntoView {
                     <p class="text-xs text-muted mb-md">
                         "Direct comparison of IR retention under opt -O3: respecting memory barriers vs. stripped barriers."
                     </p>
-                    <img src="benchmark/barrier_protection_gap.svg" alt="Barrier Protection Gap Chart" class="w-full rounded shadow" style="border: 1px solid var(--c-border); background: #0f172a;" />
+                    <img src="benchmark/barrier_protection_gap_light.svg" alt="Barrier Protection Gap Chart" class="chart-card-img chart-light" />
+                    <img src="benchmark/barrier_protection_gap_dark.svg" alt="Barrier Protection Gap Chart" class="chart-card-img chart-dark" />
                 </div>
 
                 // Chart 6: Real-World SMT Crackme Defense
@@ -2413,7 +2578,8 @@ pub fn BenchmarkPage() -> impl IntoView {
                     <p class="text-xs text-muted mb-md">
                         "Angr 9.3 + Z3 4.12 key-recovery latency: Standard Angr trapped by Constructor Trap; Preset Max triggers solver timeout."
                     </p>
-                    <img src="benchmark/symbolic_crackme_resilience.svg" alt="Symbolic Crackme Resilience Chart" class="w-full rounded shadow" style="border: 1px solid var(--c-border); background: #0f172a;" />
+                    <img src="benchmark/symbolic_crackme_resilience_light.svg" alt="Symbolic Crackme Resilience Chart" class="chart-card-img chart-light" />
+                    <img src="benchmark/symbolic_crackme_resilience_dark.svg" alt="Symbolic Crackme Resilience Chart" class="chart-card-img chart-dark" />
                 </div>
             </div>
 
@@ -2424,7 +2590,8 @@ pub fn BenchmarkPage() -> impl IntoView {
                     "8-Dimensional radar comparison showing balanced defense across Code Footprint, BB Density, CFG Transitions, Cyclomatic V(G), and SMT Resistance."
                 </p>
                 <div style="max-width: 680px; margin: 0 auto;">
-                    <img src="benchmark/category_radar.svg" alt="Cryptographic Category Radar Chart" class="w-full rounded shadow" style="border: 1px solid var(--c-border); background: #0f172a;" />
+                    <img src="benchmark/category_radar_light.svg" alt="Cryptographic Category Radar Chart" class="chart-card-img chart-light" />
+                    <img src="benchmark/category_radar_dark.svg" alt="Cryptographic Category Radar Chart" class="chart-card-img chart-dark" />
                 </div>
             </div>
         </section>
@@ -2855,7 +3022,16 @@ pub fn BenchmarkPage() -> impl IntoView {
                             } else {
                                 rows.into_iter()
                                     .map(|r| {
-                                        let sym_max_style = if r.max_timeout { "color: var(--c-danger); font-weight: bold;" } else { "color: var(--c-success);" };
+                                        let sym_max_style = match r.max_status {
+                                            "TIMEOUT" => "color: var(--c-danger); font-weight: bold;",
+                                            "TRAPPED" => "color: #c084fc; font-weight: bold;",
+                                            _ => "color: var(--c-success);",
+                                        };
+                                        let sym_base_style = match r.base_status {
+                                            "TIMEOUT" => "color: var(--c-danger);",
+                                            "TRAPPED" => "color: #c084fc;",
+                                            _ => "color: var(--c-text-2);",
+                                        };
                                         view! {
                                             <tr style="border-bottom: 1px solid var(--c-border-light);">
                                                 <td style="padding: 0.5rem 0.8rem; font-family: monospace; font-weight: 600;">{r.algo}</td>
@@ -2876,9 +3052,9 @@ pub fn BenchmarkPage() -> impl IntoView {
                                                     {format!("{:.1}x", r.z3_ratio)}
                                                 </td>
                                                 <td style="padding: 0.5rem 0.8rem;">
-                                                    <span>{if r.base_timeout { "TIMEOUT" } else { "OK" }}</span>
+                                                    <span style=sym_base_style>{r.base_status}</span>
                                                     " / "
-                                                    <span style=sym_max_style>{if r.max_timeout { "TIMEOUT" } else { "OK" }}</span>
+                                                    <span style=sym_max_style>{r.max_status}</span>
                                                 </td>
                                             </tr>
                                         }

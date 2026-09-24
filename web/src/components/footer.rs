@@ -15,9 +15,12 @@ pub fn Footer() -> impl IntoView {
                 </a>
             </span>
             <div class="footer-links">
-                <button class="btn-link" on:click=go_sponsor>
+                <a href="#sponsor" class="footer-link-btn" on:click=move |e| {
+                    e.prevent_default();
+                    go_sponsor(());
+                }>
                     "Sponsor"
-                </button>
+                </a>
                 <a href="https://github.com/Apich-Organization/ensia" target="_blank" rel="noopener">
                     "Source"
                 </a>

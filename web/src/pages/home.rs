@@ -15,7 +15,7 @@ pub fn HomePage() -> impl IntoView {
             <h1 class="hero-title">"Ensia"</h1>
             <p class="hero-sub">
                 "Principled, precise, and open-source IR-level code protection
-                 built on LLVM \u{2014} continuing the Hikari lineage, modernised for LLVM 21, 22, and 23.
+                 built on LLVM \u{2014} continuing the Hikari lineage, modernised for LLVM 21+ (LLVM 21, 22, 23+).
                  Engineered for x86_64, AArch64 (ARM64), and i386 across Linux, Windows (MSVC/clang-cl/MinGW),
                  macOS, iOS, and Android for transparent, high-resilience binary hardening."
             </p>
@@ -136,7 +136,7 @@ pub fn HomePage() -> impl IntoView {
                 <FeatureCard
                     icon="\u{1F9E9}"
                     title="Modern Pass Plugin"
-                    body="Integrates via modern LLVM Pass Plugin (-fpass-plugin=libEnsia.so for Clang, -Z llvm-plugins=libEnsia_rust.so for Rust/Cargo). Native support for Linux & Windows (MSVC/clang-cl/MinGW) with LLVM 21/22."
+                    body="Integrates via modern LLVM Pass Plugin (-fpass-plugin=libEnsia.so for Clang, -Z llvm-plugins=libEnsia_rust.so for Rust/Cargo). Native support for Linux & Windows (MSVC/clang-cl/MinGW) with LLVM 21+."
                 />
                 <FeatureCard
                     icon="\u{1F310}"
@@ -473,7 +473,7 @@ pub fn HomePage() -> impl IntoView {
                     <span class="badge badge-success">"AGPL-3.0"</span>
                     <span class="badge badge-primary">"Open Source"</span>
                     <span class="badge badge-primary">"Hikari Lineage"</span>
-                    <span class="badge badge-primary">"LLVM 21/22"</span>
+                    <span class="badge badge-primary">"LLVM 21+"</span>
                 </div>
             </div>
         </section>

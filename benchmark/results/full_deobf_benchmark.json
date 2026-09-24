@@ -15,7 +15,8 @@
       "symbolic_trace_steps": 755,
       "symbolic_trace_time_s": 3.624,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes128_ecb_max",
@@ -31,7 +32,9 @@
       "symbolic_trace_steps": 2456,
       "symbolic_trace_time_s": 15.031,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 50.28,
@@ -57,7 +60,8 @@
       "symbolic_trace_steps": 1008,
       "symbolic_trace_time_s": 4.905,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes256_ecb_max",
@@ -73,7 +77,9 @@
       "symbolic_trace_steps": 2351,
       "symbolic_trace_time_s": 15.002,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 42.39,
@@ -99,7 +105,8 @@
       "symbolic_trace_steps": 876,
       "symbolic_trace_time_s": 4.222,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes192_ecb_max",
@@ -115,7 +122,9 @@
       "symbolic_trace_steps": 2343,
       "symbolic_trace_time_s": 15.003,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 51.42,
@@ -141,7 +150,8 @@
       "symbolic_trace_steps": 913,
       "symbolic_trace_time_s": 4.965,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes_cbc_max",
@@ -157,7 +167,9 @@
       "symbolic_trace_steps": 2177,
       "symbolic_trace_time_s": 15.003,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 58.81,
@@ -183,7 +195,8 @@
       "symbolic_trace_steps": 921,
       "symbolic_trace_time_s": 5.996,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes_cfb_max",
@@ -199,7 +212,9 @@
       "symbolic_trace_steps": 2490,
       "symbolic_trace_time_s": 13.53,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 62.32,
@@ -225,7 +240,8 @@
       "symbolic_trace_steps": 925,
       "symbolic_trace_time_s": 5.884,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes_ctr_max",
@@ -241,7 +257,9 @@
       "symbolic_trace_steps": 2799,
       "symbolic_trace_time_s": 14.307,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 63.04,
@@ -267,7 +285,8 @@
       "symbolic_trace_steps": 821,
       "symbolic_trace_time_s": 5.013,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes_ecb_mode_max",
@@ -283,7 +302,9 @@
       "symbolic_trace_steps": 2777,
       "symbolic_trace_time_s": 14.455,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 50.84,
@@ -309,7 +330,8 @@
       "symbolic_trace_steps": 1509,
       "symbolic_trace_time_s": 11.822,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes_ccm_max",
@@ -325,7 +347,9 @@
       "symbolic_trace_steps": 2427,
       "symbolic_trace_time_s": 15.032,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 70.61,
@@ -351,7 +375,8 @@
       "symbolic_trace_steps": 922,
       "symbolic_trace_time_s": 6.81,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes_ofb_max",
@@ -367,7 +392,9 @@
       "symbolic_trace_steps": 2003,
       "symbolic_trace_time_s": 9.511,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 60.94,
@@ -393,7 +420,8 @@
       "symbolic_trace_steps": 663,
       "symbolic_trace_time_s": 3.966,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes_xts_max",
@@ -409,7 +437,9 @@
       "symbolic_trace_steps": 2996,
       "symbolic_trace_time_s": 15.015,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 49.31,
@@ -435,7 +465,8 @@
       "symbolic_trace_steps": 1580,
       "symbolic_trace_time_s": 15.012,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes_gcm_max",
@@ -451,7 +482,9 @@
       "symbolic_trace_steps": 2819,
       "symbolic_trace_time_s": 15.017,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 82.57,
@@ -477,7 +510,8 @@
       "symbolic_trace_steps": 1843,
       "symbolic_trace_time_s": 15.004,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT"
     },
     "max": {
       "path": "benchmark/builds/build_max/aes_siv_max",
@@ -493,7 +527,9 @@
       "symbolic_trace_steps": 1797,
       "symbolic_trace_time_s": 15.039,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 55.32,
@@ -519,7 +555,8 @@
       "symbolic_trace_steps": 506,
       "symbolic_trace_time_s": 5.095,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/ascon_aead128_max",
@@ -535,7 +572,9 @@
       "symbolic_trace_steps": 1751,
       "symbolic_trace_time_s": 14.685,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 39.83,
@@ -561,7 +600,8 @@
       "symbolic_trace_steps": 357,
       "symbolic_trace_time_s": 5.219,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/ascon_hash256_max",
@@ -577,7 +617,9 @@
       "symbolic_trace_steps": 1135,
       "symbolic_trace_time_s": 15.009,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 37.89,
@@ -603,7 +645,8 @@
       "symbolic_trace_steps": 375,
       "symbolic_trace_time_s": 5.616,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/ascon_xof128_max",
@@ -619,7 +662,9 @@
       "symbolic_trace_steps": 560,
       "symbolic_trace_time_s": 7.072,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 39.16,
@@ -645,7 +690,8 @@
       "symbolic_trace_steps": 12,
       "symbolic_trace_time_s": 0.061,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/bcrypt_max",
@@ -661,7 +707,9 @@
       "symbolic_trace_steps": 1006,
       "symbolic_trace_time_s": 15.36,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 69.12,
@@ -687,7 +735,8 @@
       "symbolic_trace_steps": 238,
       "symbolic_trace_time_s": 2.128,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/blake2b512_max",
@@ -703,7 +752,9 @@
       "symbolic_trace_steps": 157,
       "symbolic_trace_time_s": 1.486,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 40.77,
@@ -729,7 +780,8 @@
       "symbolic_trace_steps": 182,
       "symbolic_trace_time_s": 1.531,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/blake2b256_max",
@@ -745,7 +797,9 @@
       "symbolic_trace_steps": 1138,
       "symbolic_trace_time_s": 15.017,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 39.17,
@@ -771,7 +825,8 @@
       "symbolic_trace_steps": 162,
       "symbolic_trace_time_s": 1.79,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/blake2s128_max",
@@ -787,7 +842,9 @@
       "symbolic_trace_steps": 1035,
       "symbolic_trace_time_s": 15.064,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 48.08,
@@ -813,7 +870,8 @@
       "symbolic_trace_steps": 438,
       "symbolic_trace_time_s": 3.866,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/camellia_ecb_max",
@@ -829,7 +887,9 @@
       "symbolic_trace_steps": 25,
       "symbolic_trace_time_s": 0.526,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 38.84,
@@ -855,7 +915,8 @@
       "symbolic_trace_steps": 202,
       "symbolic_trace_time_s": 1.983,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/blake2s256_max",
@@ -871,7 +932,9 @@
       "symbolic_trace_steps": 1416,
       "symbolic_trace_time_s": 15.005,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 35.3,
@@ -897,7 +960,8 @@
       "symbolic_trace_steps": 125,
       "symbolic_trace_time_s": 2.244,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/cast128_ecb_max",
@@ -913,7 +977,9 @@
       "symbolic_trace_steps": 1295,
       "symbolic_trace_time_s": 12.479,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 32.86,
@@ -939,7 +1005,8 @@
       "symbolic_trace_steps": 1572,
       "symbolic_trace_time_s": 15.01,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT"
     },
     "max": {
       "path": "benchmark/builds/build_max/blowfish_ecb_max",
@@ -955,7 +1022,9 @@
       "symbolic_trace_steps": 1916,
       "symbolic_trace_time_s": 15.013,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 32.93,
@@ -981,7 +1050,8 @@
       "symbolic_trace_steps": 221,
       "symbolic_trace_time_s": 4.848,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/cast256_ecb_max",
@@ -997,7 +1067,9 @@
       "symbolic_trace_steps": 1315,
       "symbolic_trace_time_s": 10.908,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 21.42,
@@ -1023,7 +1095,8 @@
       "symbolic_trace_steps": 365,
       "symbolic_trace_time_s": 2.618,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/chacha20_stream_max",
@@ -1039,7 +1112,9 @@
       "symbolic_trace_steps": 2053,
       "symbolic_trace_time_s": 12.908,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 60.69,
@@ -1065,7 +1140,8 @@
       "symbolic_trace_steps": 978,
       "symbolic_trace_time_s": 6.818,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/chacha20_poly1305_max",
@@ -1081,7 +1157,9 @@
       "symbolic_trace_steps": 1815,
       "symbolic_trace_time_s": 14.864,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 94.15,
@@ -1107,7 +1185,8 @@
       "symbolic_trace_steps": 570,
       "symbolic_trace_time_s": 4.134,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/cmac_aes_max",
@@ -1123,7 +1202,9 @@
       "symbolic_trace_steps": 2226,
       "symbolic_trace_time_s": 15.001,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 50.82,
@@ -1149,7 +1230,8 @@
       "symbolic_trace_steps": 2246,
       "symbolic_trace_time_s": 15.03,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT"
     },
     "max": {
       "path": "benchmark/builds/build_max/cshake128_max",
@@ -1165,7 +1247,9 @@
       "symbolic_trace_steps": 1398,
       "symbolic_trace_time_s": 15.007,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 54.92,
@@ -1191,7 +1275,8 @@
       "symbolic_trace_steps": 209,
       "symbolic_trace_time_s": 2.368,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/des_ecb_max",
@@ -1207,7 +1292,9 @@
       "symbolic_trace_steps": 278,
       "symbolic_trace_time_s": 2.381,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 65.49,
@@ -1233,7 +1320,8 @@
       "symbolic_trace_steps": 601,
       "symbolic_trace_time_s": 7.583,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/des3_ecb_max",
@@ -1249,7 +1337,9 @@
       "symbolic_trace_steps": 1679,
       "symbolic_trace_time_s": 15.006,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 38.48,
@@ -1275,7 +1365,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/dh2048_max",
@@ -1291,7 +1382,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 115.42,
@@ -1317,7 +1410,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/dsa2048_max",
@@ -1333,7 +1427,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 123.05,
@@ -1359,7 +1455,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/ecdh_p256_max",
@@ -1375,7 +1472,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 112.71,
@@ -1401,7 +1500,8 @@
       "symbolic_trace_steps": 710,
       "symbolic_trace_time_s": 5.647,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/gmac_aes_max",
@@ -1417,7 +1517,9 @@
       "symbolic_trace_steps": 2003,
       "symbolic_trace_time_s": 15.002,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 62.04,
@@ -1443,7 +1545,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/ecdsa_p256_max",
@@ -1459,7 +1562,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 107.11,
@@ -1482,10 +1587,11 @@
       "analyzed_branches": 1,
       "z3_branch_time_s": 0.0216,
       "opaque_resistant_branches": 1,
-      "symbolic_trace_steps": 1498,
-      "symbolic_trace_time_s": 15.004,
-      "symbolic_timed_out": true,
-      "status": "OK"
+      "symbolic_trace_steps": 2454,
+      "symbolic_trace_time_s": 11.96,
+      "symbolic_timed_out": false,
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/hkdf_sha256_max",
@@ -1501,7 +1607,9 @@
       "symbolic_trace_steps": 128,
       "symbolic_trace_time_s": 1.771,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 62.44,
@@ -1527,7 +1635,8 @@
       "symbolic_trace_steps": 1035,
       "symbolic_trace_time_s": 5.627,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/idea_ecb_max",
@@ -1543,7 +1652,9 @@
       "symbolic_trace_steps": 2657,
       "symbolic_trace_time_s": 15.011,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 39.08,
@@ -1569,7 +1680,8 @@
       "symbolic_trace_steps": 1222,
       "symbolic_trace_time_s": 13.887,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/hmac_sha256_max",
@@ -1585,7 +1697,9 @@
       "symbolic_trace_steps": 1563,
       "symbolic_trace_time_s": 15.001,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 31.71,
@@ -1611,7 +1725,8 @@
       "symbolic_trace_steps": 152,
       "symbolic_trace_time_s": 1.043,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/md5_max",
@@ -1627,7 +1742,9 @@
       "symbolic_trace_steps": 974,
       "symbolic_trace_time_s": 15.034,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 36.18,
@@ -1653,7 +1770,8 @@
       "symbolic_trace_steps": 903,
       "symbolic_trace_time_s": 7.093,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/mars_ecb_max",
@@ -1669,7 +1787,9 @@
       "symbolic_trace_steps": 2107,
       "symbolic_trace_time_s": 15.018,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 45.79,
@@ -1695,7 +1815,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/mldsa44_max",
@@ -1711,7 +1832,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 13.75,
@@ -1737,7 +1860,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/mlkem512_max",
@@ -1753,7 +1877,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 6.85,
@@ -1779,7 +1905,8 @@
       "symbolic_trace_steps": 2219,
       "symbolic_trace_time_s": 15.002,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT"
     },
     "max": {
       "path": "benchmark/builds/build_max/kmac128_max",
@@ -1795,7 +1922,9 @@
       "symbolic_trace_steps": 949,
       "symbolic_trace_time_s": 15.004,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 60.72,
@@ -1821,7 +1950,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/mlkem768_max",
@@ -1837,7 +1967,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 4.29,
@@ -1863,7 +1995,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/ed25519_max",
@@ -1879,7 +2012,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 111.68,
@@ -1905,7 +2040,8 @@
       "symbolic_trace_steps": 173,
       "symbolic_trace_time_s": 1.813,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/present_ecb_max",
@@ -1921,7 +2057,9 @@
       "symbolic_trace_steps": 1572,
       "symbolic_trace_time_s": 13.03,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 55.19,
@@ -1947,7 +2085,8 @@
       "symbolic_trace_steps": 91,
       "symbolic_trace_time_s": 0.558,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/poly1305_max",
@@ -1963,7 +2102,9 @@
       "symbolic_trace_steps": 1016,
       "symbolic_trace_time_s": 15.037,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 67.41,
@@ -1989,7 +2130,8 @@
       "symbolic_trace_steps": 1031,
       "symbolic_trace_time_s": 6.536,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/rc2_ecb_max",
@@ -2005,7 +2147,9 @@
       "symbolic_trace_steps": 1458,
       "symbolic_trace_time_s": 11.877,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 43.04,
@@ -2031,7 +2175,8 @@
       "symbolic_trace_steps": 1554,
       "symbolic_trace_time_s": 15.002,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT"
     },
     "max": {
       "path": "benchmark/builds/build_max/pbkdf2_sha256_max",
@@ -2047,7 +2192,9 @@
       "symbolic_trace_steps": 805,
       "symbolic_trace_time_s": 6.445,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 38.53,
@@ -2073,7 +2220,8 @@
       "symbolic_trace_steps": 1275,
       "symbolic_trace_time_s": 9.064,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/rc4_stream_max",
@@ -2089,7 +2237,9 @@
       "symbolic_trace_steps": 59,
       "symbolic_trace_time_s": 0.397,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 21.59,
@@ -2115,7 +2265,8 @@
       "symbolic_trace_steps": 513,
       "symbolic_trace_time_s": 4.866,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/rc6_ecb_max",
@@ -2131,7 +2282,9 @@
       "symbolic_trace_steps": 1826,
       "symbolic_trace_time_s": 14.394,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 36.05,
@@ -2157,7 +2310,8 @@
       "symbolic_trace_steps": 136,
       "symbolic_trace_time_s": 0.999,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/ripemd128_max",
@@ -2173,7 +2327,9 @@
       "symbolic_trace_steps": 798,
       "symbolic_trace_time_s": 15.007,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 57.46,
@@ -2199,7 +2355,8 @@
       "symbolic_trace_steps": 149,
       "symbolic_trace_time_s": 1.321,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/ripemd160_max",
@@ -2215,7 +2372,9 @@
       "symbolic_trace_steps": 736,
       "symbolic_trace_time_s": 15.002,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 66.57,
@@ -2241,7 +2400,8 @@
       "symbolic_trace_steps": 173,
       "symbolic_trace_time_s": 1.194,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/salsa20_stream_max",
@@ -2257,7 +2417,9 @@
       "symbolic_trace_steps": 960,
       "symbolic_trace_time_s": 15.034,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 26.19,
@@ -2283,7 +2445,8 @@
       "symbolic_trace_steps": 199,
       "symbolic_trace_time_s": 2.392,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/seed_ecb_max",
@@ -2299,7 +2462,9 @@
       "symbolic_trace_steps": 82,
       "symbolic_trace_time_s": 0.547,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 22.8,
@@ -2325,7 +2490,8 @@
       "symbolic_trace_steps": 431,
       "symbolic_trace_time_s": 4.218,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/serpent_ecb_max",
@@ -2341,7 +2507,9 @@
       "symbolic_trace_steps": 664,
       "symbolic_trace_time_s": 5.266,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 66.44,
@@ -2367,7 +2535,8 @@
       "symbolic_trace_steps": 558,
       "symbolic_trace_time_s": 3.891,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sha1_max",
@@ -2383,7 +2552,9 @@
       "symbolic_trace_steps": 957,
       "symbolic_trace_time_s": 15.002,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 61.69,
@@ -2409,7 +2580,8 @@
       "symbolic_trace_steps": 1430,
       "symbolic_trace_time_s": 15.008,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT"
     },
     "max": {
       "path": "benchmark/builds/build_max/scrypt_max",
@@ -2425,7 +2597,9 @@
       "symbolic_trace_steps": 1020,
       "symbolic_trace_time_s": 8.742,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 59.15,
@@ -2451,7 +2625,8 @@
       "symbolic_trace_steps": 330,
       "symbolic_trace_time_s": 3.337,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sha224_max",
@@ -2467,7 +2642,9 @@
       "symbolic_trace_steps": 931,
       "symbolic_trace_time_s": 15.014,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 37.2,
@@ -2493,7 +2670,8 @@
       "symbolic_trace_steps": 367,
       "symbolic_trace_time_s": 3.558,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sha256_max",
@@ -2509,7 +2687,9 @@
       "symbolic_trace_steps": 1112,
       "symbolic_trace_time_s": 15.01,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 42.27,
@@ -2535,7 +2715,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/rsa2048_max",
@@ -2551,7 +2732,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 139.19,
@@ -2577,7 +2760,8 @@
       "symbolic_trace_steps": 406,
       "symbolic_trace_time_s": 3.982,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sha384_max",
@@ -2593,7 +2777,9 @@
       "symbolic_trace_steps": 126,
       "symbolic_trace_time_s": 1.233,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 66.14,
@@ -2619,7 +2805,8 @@
       "symbolic_trace_steps": 1342,
       "symbolic_trace_time_s": 15.013,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT"
     },
     "max": {
       "path": "benchmark/builds/build_max/sha256_crypt_max",
@@ -2635,7 +2822,9 @@
       "symbolic_trace_steps": 5,
       "symbolic_trace_time_s": 0.159,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 80.76,
@@ -2661,7 +2850,8 @@
       "symbolic_trace_steps": 504,
       "symbolic_trace_time_s": 6.526,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sha3_256_max",
@@ -2677,7 +2867,9 @@
       "symbolic_trace_steps": 1003,
       "symbolic_trace_time_s": 15.05,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 38.12,
@@ -2703,7 +2895,8 @@
       "symbolic_trace_steps": 488,
       "symbolic_trace_time_s": 6.152,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sha3_512_max",
@@ -2719,7 +2912,9 @@
       "symbolic_trace_steps": 953,
       "symbolic_trace_time_s": 15.004,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 48.53,
@@ -2745,7 +2940,8 @@
       "symbolic_trace_steps": 419,
       "symbolic_trace_time_s": 3.491,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sha512_max",
@@ -2761,7 +2957,9 @@
       "symbolic_trace_steps": 926,
       "symbolic_trace_time_s": 15.049,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 59.44,
@@ -2787,7 +2985,8 @@
       "symbolic_trace_steps": 534,
       "symbolic_trace_time_s": 6.006,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/shake128_max",
@@ -2803,7 +3002,9 @@
       "symbolic_trace_steps": 1202,
       "symbolic_trace_time_s": 15.002,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 51.21,
@@ -2829,7 +3030,8 @@
       "symbolic_trace_steps": 509,
       "symbolic_trace_time_s": 6.881,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/shake256_max",
@@ -2845,7 +3047,9 @@
       "symbolic_trace_steps": 195,
       "symbolic_trace_time_s": 2.78,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 47.26,
@@ -2871,7 +3075,8 @@
       "symbolic_trace_steps": 363,
       "symbolic_trace_time_s": 3.973,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sm3_max",
@@ -2887,7 +3092,9 @@
       "symbolic_trace_steps": 1094,
       "symbolic_trace_time_s": 15.002,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 50.69,
@@ -2913,7 +3120,8 @@
       "symbolic_trace_steps": 125,
       "symbolic_trace_time_s": 1.065,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/tea_ecb_max",
@@ -2929,7 +3137,9 @@
       "symbolic_trace_steps": 1363,
       "symbolic_trace_time_s": 11.884,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 18.73,
@@ -2955,7 +3165,8 @@
       "symbolic_trace_steps": 181,
       "symbolic_trace_time_s": 2.308,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sm4_ecb_max",
@@ -2971,7 +3182,9 @@
       "symbolic_trace_steps": 1007,
       "symbolic_trace_time_s": 15.114,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 34.17,
@@ -2997,7 +3210,8 @@
       "symbolic_trace_steps": 116,
       "symbolic_trace_time_s": 0.96,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/tiger_max",
@@ -3013,7 +3227,9 @@
       "symbolic_trace_steps": 896,
       "symbolic_trace_time_s": 7.22,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 31.9,
@@ -3039,7 +3255,8 @@
       "symbolic_trace_steps": 286,
       "symbolic_trace_time_s": 3.622,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/whirlpool_max",
@@ -3055,7 +3272,9 @@
       "symbolic_trace_steps": 1330,
       "symbolic_trace_time_s": 15.005,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 37.47,
@@ -3081,7 +3300,8 @@
       "symbolic_trace_steps": 1882,
       "symbolic_trace_time_s": 15.002,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT"
     },
     "max": {
       "path": "benchmark/builds/build_max/twofish_ecb_max",
@@ -3097,7 +3317,9 @@
       "symbolic_trace_steps": 1881,
       "symbolic_trace_time_s": 12.968,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TRAPPED",
+      "symbolic_trapped": true
     },
     "ratios": {
       "size_expansion": 57.5,
@@ -3123,7 +3345,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/x25519_max",
@@ -3139,7 +3362,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 109.31,
@@ -3165,7 +3390,8 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/sm2_max",
@@ -3181,7 +3407,9 @@
       "symbolic_trace_steps": 18,
       "symbolic_trace_time_s": 0.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 100.08,
@@ -3207,7 +3435,8 @@
       "symbolic_trace_steps": 125,
       "symbolic_trace_time_s": 1.132,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/xtea_ecb_max",
@@ -3223,7 +3452,9 @@
       "symbolic_trace_steps": 897,
       "symbolic_trace_time_s": 15.156,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 33.17,
@@ -3249,7 +3480,8 @@
       "symbolic_trace_steps": 921,
       "symbolic_trace_time_s": 7.533,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/xcbc_mac_max",
@@ -3265,7 +3497,9 @@
       "symbolic_trace_steps": 2544,
       "symbolic_trace_time_s": 15.0,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 38.78,
@@ -3291,7 +3525,8 @@
       "symbolic_trace_steps": 641,
       "symbolic_trace_time_s": 7.04,
       "symbolic_timed_out": false,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "OK"
     },
     "max": {
       "path": "benchmark/builds/build_max/zuc_stream_max",
@@ -3307,7 +3542,9 @@
       "symbolic_trace_steps": 3220,
       "symbolic_trace_time_s": 15.0,
       "symbolic_timed_out": true,
-      "status": "OK"
+      "status": "OK",
+      "symbolic_status": "TIMEOUT",
+      "symbolic_trapped": false
     },
     "ratios": {
       "size_expansion": 48.38,
