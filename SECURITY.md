@@ -7,9 +7,13 @@
 | 0.1.x | Active Support |
 | < 0.1.0 | End of Life (Unsupported) |
 
+---
+
 ## Reporting a Vulnerability
 
-Please do not report a vulnerability via Github issues. Any vulnerability shall be reported by emailing to **security@apich.org** or via our official website security reporting section (under construction). Please visit **https://security.apich.org** for more details on reporting.
+Please do not report a vulnerability via Github issues. Any vulnerability shall be reported by emailing to **security@apich.org** or via our official website security reporting section (under construction).
+
+We commit to addressing all responsibly disclosed vulnerabilities within 7 days of receipt.
 
 ```text
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -49,27 +53,31 @@ LrAkjU6KoSw2GRerRDGu
 -----END PGP PUBLIC KEY BLOCK-----
 ```
 
+---
+
 ## Developer Security Standards (Mandatory for Organization Members and Recommended for Contributors)
 
 ### **I. Authorized Operating Environment**
 
-* **Recommended OS:** Fedora KDE Plasma Desktop
+* **Mandatory OS:** Fedora KDE Plasma Desktop or Qubes OS
+* **Mandatory IDE:** GNU Emacs or Zed
 * **Disk Encryption:** LUKS (Linux Unified Key Setup) **must** be enabled by default during installation.
+* **Mandatory Authentication:** Enforce FIDO2-based two-factor authentication (2FA) via biometric fingerprint or PIN/password, and strictly disable direct root logins and root SSH access.
 
 ### **II. Mandatory Security Suite**
 
 To ensure system integrity and real-time threat detection, the following tools must be installed and configured:
 
-* **Endpoint Monitoring:** Wazuh-agent
-* **Hardening & Auditing:** SELinux (set to `Enforcing`), firewalld, Lynis
+* **Endpoint Monitoring:** Wazuh-agent and ESET Endpoint Security
+* **Hardening & Auditing:** SELinux (set to `Enforcing` and `MLS` mode), firewalld, Lynis
 * **Threat Scanning:** ClamAV, rkhunter, chkrootkit
 * **System Integrity:** AIDE (Advanced Intrusion Detection Environment), unhide
 * **Network Scanning:** Daily Nmap scan of the local network (e.g., `192.168.1.0/24`)
-* **Security Server:** Wazuh-server (includes Wazuh-dashboard, Wazuh-manager and Wazuh-indexer), Greenbone Community Edition
+* **Security Server Per Team:** Wazuh-server (includes Wazuh-dashboard, Wazuh-manager and Wazuh-indexer), Greenbone Community Edition
 
 ### **III. Identity & Access Management**
 
-* **2FA Requirement:** Hardware-based authentication via **YubiKey** is mandatory for all organizational accounts and SSH access.
+* **2FA Requirement:** Hardware-based authentication via **YubiKey 5 FIPS Series (FIPS 140-3)** is mandatory for all organizational accounts and SSH access.
 
 ---
 
@@ -87,81 +95,86 @@ To ensure system integrity and real-time threat detection, the following tools m
 #
 # For more information, see sysctl.conf(5) and sysctl.d(5).
 
-# --- A. Network Hardening ---
+# ==============================================================================
+# Linux Kernel Security Hardening Baseline
+# ==============================================================================
 
-# Protect against IP spoofing (source validation)
+# --- A. Kernel Self-Protection & Exploit Mitigation ---
+# Enforce strict ASLR, prevent kernel pointer leakage via /proc/kallsyms,
+# restrict dmesg to CAP_SYSLOG, disable magic SysRq, and restrict perf/kexec.
+kernel.randomize_va_space = 2
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.sysrq = 0
+kernel.perf_event_paranoid = 3
+kernel.kexec_load_disabled = 1
+
+# --- B. Process Trace & Execution Restrictions (Yama / BPF) ---
+# Lock ptrace entirely against all callers, enforce BPF JIT blinding,
+# lock BPF syscall from unprivileged users, and prevent TTY hijacking via TIOCSTI.
+kernel.yama.ptrace_scope = 3
+kernel.unprivileged_bpf_disabled = 1
+net.core.bpf_jit_harden = 2
+dev.tty.legacy_tiocsti = 0
+
+# --- C. Namespace & Container Boundary Hardening ---
+# Completely disable unprivileged user namespaces to block local privilege escalations.
+kernel.unprivileged_userns_clone = 0
+user.max_user_namespaces = 0
+
+# --- D. Filesystem & Memory Dump Restrictions ---
+# Block symlink/hardlink race conditions, prevent malicious writes into FIFO/regular
+# files in world-writable stickied dirs, and completely suppress suid core dumps.
+fs.protected_symlinks = 1
+fs.protected_hardlinks = 1
+fs.protected_fifos = 2
+fs.protected_regular = 2
+fs.suid_dumpable = 0
+
+# --- E. Memory Management Tuning ---
+# Strict overcommit control to avoid memory exhaustion attacks and expand VMA mapping.
+vm.overcommit_memory = 2
+vm.overcommit_ratio = 50
+vm.max_map_count = 262144
+
+# --- F. IPv4 Network Hardening (Strict Source Routing & Anti-Spoofing) ---
+# Enforce strict reverse path filtering, drop/log martians, disable ICMP redirects,
+# and drop source routing.
 net.ipv4.conf.all.rp_filter = 1
 net.ipv4.conf.default.rp_filter = 1
-
-# Ignore ICMP broadcast requests to avoid being part of Smurf attacks
-net.ipv4.icmp_echo_ignore_broadcasts = 1
-
-# Ignore bad ICMP errors (prevents some types of attacks)
-net.ipv4.icmp_ignore_bogus_error_responses = 1
-
-# Disable IP source routing (usually unnecessary and exploitable)
 net.ipv4.conf.all.accept_source_route = 0
 net.ipv4.conf.default.accept_source_route = 0
-
-# Disable secure ICMP redirects
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
 net.ipv4.conf.all.secure_redirects = 0
 net.ipv4.conf.default.secure_redirects = 0
-
-# Log spoofed packets, source routed packets, and redirects
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
 net.ipv4.conf.all.log_martians = 1
+net.ipv4.conf.default.log_martians = 1
+net.ipv4.conf.all.bootp_relay = 0
 
-# Protection against SYN flood attacks (enables SYN cookies)
+# --- G. IPv4 DoS & Flood Mitigation ---
+# Enforce SYN cookies, drop ICMP echo/broadcast requests, and ignore bogus errors.
 net.ipv4.tcp_syncookies = 1
-
-# Increase the maximum number of connections waiting for acceptance
+net.ipv4.tcp_rfc1337 = 1
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+net.ipv4.icmp_echo_ignore_all = 1
 net.core.somaxconn = 4096
 net.core.netdev_max_backlog = 5000
 
-# Others 
-net.ipv4.conf.all.send_redirects = 0
-net.ipv4.conf.default.send_redirects = 0
-net.ipv4.conf.all.accept_redirects = 0
-net.ipv4.conf.default.accept_redirects = 0
-net.ipv4.conf.default.log_martians = 1
-
-# --- B. Filesystem / Permission Hardening ---
-
-# Disable magic SysRq key (unless you need it for emergency debugging)
-kernel.sysrq = 0
-
-# Enable restriction of link/symlink traversal (to prevent user links in world-writable dirs)
-fs.protected_hardlinks = 1
-fs.protected_symlinks = 1
-
-# Restrict the permissions of dmesg to non-root users (hiding kernel messages from attackers)
-kernel.dmesg_restrict = 1
-
-# Restrict unprivileged users from using the bpf() system call
-kernel.unprivileged_bpf_disabled = 1
-
-# Randomize the virtual address space layout (ASLR) - Default is usually 2, ensure it's on
-kernel.randomize_va_space = 2
-
-# --- C. Resource and Memory Hardening ---
-
-# Prevent non-root users from writing to /proc/sys/vm/*
-kernel.yama.protected_sysctl = 1 
-
-# Restrict the dumping of memory (core dumps)
-fs.suid_dumpable = 0
-
-# Controls memory allocation behavior - often set to 1 or 2. 
-# A value of 2 ensures no overcommit, helping prevent stability issues when memory runs out.
-vm.overcommit_memory = 1
-vm.max_map_count=262144
-
-# Restrict non-root user create too many User Namespace
-user.max_user_namespaces = 10000
-
-# ---D. Yama Settings ---
-
-# Restrict ptrace to only ancestor processes (prevents snooping)
-kernel.yama.ptrace_scope = 1
+# --- H. IPv6 Protocol Hardening & Neutralization ---
+# If IPv6 is unused, fully disable stack across all interfaces to eliminate attack surface.
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+net.ipv6.conf.all.accept_ra = 0
+net.ipv6.conf.default.accept_ra = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_source_route = 0
+net.ipv6.conf.default.accept_source_route = 0
 ```
 
 ```text
