@@ -705,9 +705,9 @@ fn AntiHookSection() -> impl IntoView {
         <div class="algo-header">
             <h2>"\u{1F3A3} Anti-Hooking"</h2>
             <p>
-                "Validates function prologue integrity against inline hooks (E9 / 48 B8),
-                 incorporates direct syscall bypass paths, and deploys a 3-Tier Anti-Taint Engine
-                 with Bidirectional Function I/O Entanglement."
+                "Dual-defense integrity scanning (Entry Prologue Guard + Scattered In-Flight Auditing),
+                 cryptographic code self-checks with data-flow entanglement (T_env / T_exp), direct syscall bypass,
+                 and a 3-Tier Anti-Taint Engine."
             </p>
         </div>
 
@@ -716,6 +716,22 @@ fn AntiHookSection() -> impl IntoView {
             <div class="vis-frame">
                 <AntiHookSvg />
             </div>
+        </div>
+
+        <div class="glass card-pad">
+            <p class="algo-section-title">"Dual-Defense Hook Detection Architecture"</p>
+            <p class="text-sm">
+                <strong>"1. Entry Prologue Guard: "</strong>
+                "Embedded directly in the function entry block. Inspects the first machine instructions against classic and modern inline hook patterns: 1-byte opcodes (0xE9 JMP rel32, 0xEB short JMP, 0xCC INT3, 0x68 PUSH imm32, 0xF1 ICEBP), 2-byte opcodes (0x48 0xB8 MOVABS RAX, 0x8B 0xFF hotpatch, 0x90 0x90 double NOP sled, 0x0F 0x0B UD2, 0xCD 0x03), 64-bit indirect jump prefixes (0xFF 0x25 JMP [RIP+disp32]), and AArch64 branch stubs (0x14000001 B .+4, BRK, LDR x16/x17)."
+            </p>
+            <p class="text-sm mt-sm">
+                <strong>"2. Scattered In-Flight CFG Auditing: "</strong>
+                "Injects randomized integrity audits across non-EH interior basic blocks throughout the function CFG. If an attacker uses a trampoline hook that bypasses the prologue guard and jumps into interior instructions, executing downstream basic blocks re-audits the function head (F[0], F[1]). All scattered check sites branch to a single consolidated cold handler with violent exit, eliminating register coalescing pressure and preserving LLVM exception handling invariants."
+            </p>
+            <p class="text-sm mt-sm">
+                <strong>"3. Cryptographic Code Integrity & Data-Flow Entanglement: "</strong>
+                "When check_integrity is active, the function computes runtime checksums of machine code pages, binding the digest directly into execution tokens (T_env / T_exp). If hooks or software breakpoints modify memory, subsequent computations diverge catastrophically without triggering a detectable exception at the check point."
+            </p>
         </div>
 
         <div class="glass card-pad">
@@ -740,13 +756,13 @@ fn AntiHookSection() -> impl IntoView {
 
         <AlgoConfigTable pass="anti_hooking" rows=vec![
             ("enabled",             "bool",   "false", "Verify function prologue integrity and activate anti-taint I/O entanglement."),
-            ("inline_aarch64",      "bool",   "true",  "Scan AArch64 prologues for 0x14000001 (B .+4) and hook branch stubs."),
-            ("inline_x86",          "bool",   "true",  "Scan x86_64 prologues for E9 (JMP) and 48 B8 (MOV RAX) inline patches."),
-            ("inline_win",          "bool",   "true",  "Windows API inline hook detection."),
+            ("inline_aarch64",      "bool",   "true",  "Scan AArch64 prologues and CFG sites for B .+4, BRK, and LDR x16/x17 hook stubs."),
+            ("inline_x86",          "bool",   "true",  "Dual entry & scattered CFG audit for E9, EB, CC, 68, FF 25, and 48 B8 inline patches."),
+            ("inline_win",          "bool",   "true",  "Windows API inline hook detection (8B FF hotpatch, etc.)."),
             ("objc_runtime",        "bool",   "false", "Inspect Objective-C method dispatch tables."),
             ("antirebind",          "bool",   "false", "Detect and counter dynamic linker rebinding (fishhook / dyld)."),
             ("direct_syscall",      "bool",   "false", "Bypass libc hooks with direct kernel syscalls (svc #0 / syscall)."),
-            ("check_integrity",     "bool",   "true",  "Verify code segment cryptographic checksums to detect memory tampering."),
+            ("check_integrity",     "bool",   "true",  "Verify code segment cryptographic checksums and entangle with execution tokens (T_env / T_exp)."),
             ("precompiled_ir_path", "string", "\"\"",  "Path to external precompiled LLVM IR module containing verified defense stubs."),
         ]/>
     }
@@ -1003,20 +1019,20 @@ fn AntiHookSvg() -> impl IntoView {
 
             <text x="240" y="100" class="cfg-text" style="fill:var(--c-primary);font-size:20px;font-weight:700">"\u{2192}"</text>
 
-            <text x="270" y="18" class="cfg-text" style="fill:var(--c-text-3);font-size:9px;letter-spacing:.1em">"CHECK AT STARTUP"</text>
+            <text x="270" y="18" class="cfg-text" style="fill:var(--c-text-3);font-size:9px;letter-spacing:.1em">"ENTRY & SCATTERED AUDIT"</text>
             <rect x="270" y="24" width="110" height="36" rx="6" class="cfg-node"/>
-            <text x="325" y="38" text-anchor="middle" class="cfg-text">"load expected"</text>
-            <text x="325" y="50" text-anchor="middle" class="cfg-text-sm">"fn[0..N] bytes"</text>
+            <text x="325" y="38" text-anchor="middle" class="cfg-text">"audit live F[0..1]"</text>
+            <text x="325" y="50" text-anchor="middle" class="cfg-text-sm">"entry + CFG sites"</text>
             <path d="M325 60 V85" class="cfg-edge" marker-end="url(#arr-ah)"/>
             <rect x="270" y="85" width="110" height="36" rx="6" class="cfg-node"/>
-            <text x="325" y="99" text-anchor="middle" class="cfg-text">"compare live"</text>
-            <text x="325" y="111" text-anchor="middle" class="cfg-text-sm">"prologue bytes"</text>
+            <text x="325" y="99" text-anchor="middle" class="cfg-text">"multi-pattern cmp"</text>
+            <text x="325" y="111" text-anchor="middle" class="cfg-text-sm">"E9/EB/CC/68/FF25/48B8"</text>
             <path d="M325 121 L310 145" class="cfg-edge cfg-edge-true" marker-end="url(#arr-ah)"/>
             <path d="M325 121 L355 145" class="cfg-edge cfg-edge-fake" marker-end="url(#arr-ah)"/>
             <rect x="270" y="145" width="60" height="28" rx="5" class="cfg-node"/>
             <text x="300" y="164" text-anchor="middle" class="cfg-text">"clean"</text>
             <rect x="345" y="145" width="70" height="28" rx="5" class="cfg-node-fake"/>
-            <text x="380" y="164" text-anchor="middle" class="cfg-text">"hook detected"</text>
+            <text x="380" y="164" text-anchor="middle" class="cfg-text">"violent exit"</text>
         </svg>
     }
 }

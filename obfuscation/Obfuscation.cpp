@@ -786,20 +786,32 @@ static void runFeatureElimination(Module &M) {
       Flags->addOperand(N);
   }
 
-  // Rename all private/internal-linkage functions to unparseable hex strings.
-  // Even after symbol-table stripping, decompilers reconstruct names from
-  // DWARF or heuristics — replacing them before strip removes the fallback.
+  // Scramble functions: internalize linkonce_odr/weak_odr/linkonce/weak
+  // functions and rename all private/internal functions to unparseable hex
+  // strings. Program entry points (main, _start, _init, _fini) and llvm.* are
+  // preserved.
   for (Function &F : M) {
     if (F.isDeclaration())
       continue;
+    if (F.getName() == "main" || F.getName() == "_start" ||
+        F.getName() == "_init" || F.getName() == "_fini")
+      continue;
+    if (F.getName().starts_with("llvm."))
+      continue;
+
+    // Convert linkonce_odr / weak_odr / linkonce / weak linkage to internal
+    // linkage so they are not exported as WEAK symbols in the final ELF/Mach-O
+    // symbol table.
+    if (F.hasLinkOnceODRLinkage() || F.hasWeakODRLinkage() ||
+        F.hasLinkOnceAnyLinkage() || F.hasWeakAnyLinkage()) {
+      F.setComdat(nullptr);
+      F.setLinkage(GlobalValue::InternalLinkage);
+      F.setVisibility(GlobalValue::DefaultVisibility);
+    }
+
     if (!F.hasPrivateLinkage() && !F.hasInternalLinkage())
       continue;
-    // Don't rename our own sentinel/marker functions
-    StringRef nm = F.getName();
-    if (nm.starts_with("ensia_") || nm.starts_with("EnsiaBCF") ||
-        nm.starts_with("ADB") || nm.starts_with("InitADB") ||
-        nm.starts_with("EnsiaFW_"))
-      continue;
+
     std::string newName;
     raw_string_ostream OS(newName);
     OS << format("_f%08x%08x", cryptoutils->get_uint32_t(),
@@ -807,20 +819,67 @@ static void runFeatureElimination(Module &M) {
     F.setName(OS.str());
   }
 
-  // Scramble private GlobalVariable names that survived previous passes
+  // Scramble GlobalVariable names
   for (GlobalVariable &GV : M.globals()) {
-    if (!GV.hasPrivateLinkage() && !GV.hasInternalLinkage())
+    if (GV.isDeclaration())
       continue;
     StringRef nm = GV.getName();
-    // Preserve BCF sentinel and our injected GVs — they're already hex-named
-    if (nm.starts_with("bcf.") || nm.starts_with("LHSGV") ||
-        nm.starts_with("RHSGV") || nm.starts_with("g"))
+    if (nm.starts_with("llvm."))
       continue;
+
+    if (GV.hasLinkOnceODRLinkage() || GV.hasWeakODRLinkage() ||
+        GV.hasLinkOnceAnyLinkage() || GV.hasWeakAnyLinkage()) {
+      GV.setComdat(nullptr);
+      GV.setLinkage(GlobalValue::InternalLinkage);
+      GV.setVisibility(GlobalValue::DefaultVisibility);
+    }
+
+    if (!GV.hasPrivateLinkage() && !GV.hasInternalLinkage())
+      continue;
+
     std::string newName;
     raw_string_ostream OS(newName);
     OS << format("_v%08x%08x", cryptoutils->get_uint32_t(),
                  cryptoutils->get_uint32_t());
     GV.setName(OS.str());
+  }
+
+  // Scramble GlobalAlias names
+  for (GlobalAlias &GA : M.aliases()) {
+    if (GA.isDeclaration())
+      continue;
+    if (GA.hasLinkOnceODRLinkage() || GA.hasWeakODRLinkage() ||
+        GA.hasLinkOnceAnyLinkage() || GA.hasWeakAnyLinkage()) {
+      GA.setLinkage(GlobalValue::InternalLinkage);
+      GA.setVisibility(GlobalValue::DefaultVisibility);
+    }
+    if (!GA.hasPrivateLinkage() && !GA.hasInternalLinkage())
+      continue;
+    std::string newName;
+    raw_string_ostream OS(newName);
+    OS << format("_a%08x%08x", cryptoutils->get_uint32_t(),
+                 cryptoutils->get_uint32_t());
+    GA.setName(OS.str());
+  }
+
+  // Clear comdats from symbol table if no longer in use
+  bool anyComdatInUse = false;
+  for (Function &F : M) {
+    if (F.hasComdat()) {
+      anyComdatInUse = true;
+      break;
+    }
+  }
+  if (!anyComdatInUse) {
+    for (GlobalVariable &GV : M.globals()) {
+      if (GV.hasComdat()) {
+        anyComdatInUse = true;
+        break;
+      }
+    }
+  }
+  if (!anyComdatInUse) {
+    M.getComdatSymbolTable().clear();
   }
 }
 
@@ -1228,19 +1287,7 @@ struct Obfuscation : public ModulePass {
     if (ObfTrace)
       errs() << "[OLLVM-Next][9] IndirectBranch: done\n";
 
-    // ── 10. Feature Elimination ────────────────────────────────────────────
-    // Runs LAST — after all obfuscation passes have finished — so that:
-    //   • TOML policy module/function regexes can match original names in all
-    //     passes above (ConstantEncryption, IndirectBranch, FunctionWrapper).
-    //   • Renamed private functions (_f<hex>) and the "a" source filename don't
-    //     interfere with policy resolution in any pass.
-    if (ObfTrace)
-      errs() << "[OLLVM-Next][10] FeatureElimination\n";
-    runFeatureElimination(M);
-    if (ObfTrace)
-      errs() << "[OLLVM-Next][10] FeatureElimination: done\n";
-
-    // ── 11. Cleanup marker declarations ───────────────────────────────────
+    // ── 10. Cleanup marker declarations ───────────────────────────────────
     SmallVector<Function *, 8> toDelete;
     for (Function &F : M) {
       if (!F.isDeclaration() || !F.hasName())
@@ -1254,6 +1301,20 @@ struct Obfuscation : public ModulePass {
     }
     for (Function *F : toDelete)
       F->eraseFromParent();
+
+    // ── 11. Feature Elimination ────────────────────────────────────────────
+    // Runs after all obfuscation passes and marker cleanups have finished — so
+    // that:
+    //   • TOML policy module/function regexes can match original names in all
+    //     passes above (ConstantEncryption, IndirectBranch, FunctionWrapper).
+    //   • Renamed private functions (_f<hex>) and the "a" source filename don't
+    //     interfere with policy resolution in any pass.
+    //   • All remaining internal/ODR functions and globals are fully scrambled.
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][11] FeatureElimination\n";
+    runFeatureElimination(M);
+    if (ObfTrace)
+      errs() << "[OLLVM-Next][11] FeatureElimination: done\n";
 
     // ── 12. LTO Evasion ────────────────────────────────────────────────────
     // Mark all functions with optnone and noinline so that LTO's whole-program

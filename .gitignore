@@ -43,12 +43,14 @@
 build/
 Build/
 build-*/
+build_*/
 
 # CMake generated files
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Makefile
+/Makefile
+!ctf/Makefile
 install_manifest.txt
 compile_commands.json
 
@@ -127,5 +129,9 @@ independent_eval/results/*.tmp
 independent_eval/test_probe/*.bin
 independent_eval/test_probe/*_bin
 independent_eval/workloads/*.bin
+
+# CTF challenge binaries
+ctf/challenge_clean
+ctf/challenge_obf
 
 

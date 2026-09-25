@@ -59,7 +59,8 @@ static Value *buildHardwareTruePredicate(Module &M, IRBuilder<> &IRB) {
     FunctionType *AsmTy = FunctionType::get(I32Ty, {}, false);
     const char *asmCode =
         targetIsX86_64(M)
-            ? "pushq %rbx\n\tmovl $$1, %eax\n\tcpuid\n\tpopq %rbx"
+            ? "subq $$128, %rsp\n\tpushq %rbx\n\tmovl $$1, "
+              "%eax\n\tcpuid\n\tpopq %rbx\n\taddq $$128, %rsp"
             : "pushl %ebx\n\tmovl $$1, %eax\n\tcpuid\n\tpopl %ebx";
     const char *asmConstraints =
         targetIsX86_64(M) ? "={edx},~{rax},~{rcx},~{dirflag},~{fpsr},~{flags}"
@@ -122,7 +123,8 @@ static Value *buildEntropyChainPredicate(Module &M, IRBuilder<> &IRB,
     FunctionType *CpuidTy = FunctionType::get(I32Ty, {}, false);
     const char *asmCode =
         targetIsX86_64(M)
-            ? "pushq %rbx\n\tmovl $$1, %eax\n\tcpuid\n\tpopq %rbx"
+            ? "subq $$128, %rsp\n\tpushq %rbx\n\tmovl $$1, "
+              "%eax\n\tcpuid\n\tpopq %rbx\n\taddq $$128, %rsp"
             : "pushl %ebx\n\tmovl $$1, %eax\n\tcpuid\n\tpopl %ebx";
     const char *asmConstraints =
         targetIsX86_64(M) ? "={edx},~{rax},~{rcx},~{dirflag},~{fpsr},~{flags}"

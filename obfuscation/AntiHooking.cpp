@@ -267,20 +267,18 @@ struct AntiHook : public ModulePass {
           CheckInlineHookX86Temp =
               ec.anti_hook.inline_x86.value_or((bool)CheckInlineHookX86);
 
-        // AArch64 inline hook detection (existing — covers Darwin + Linux)
+        bool didInlineHook = false;
+        // AArch64 inline hook detection (covers Darwin + Linux)
         if (triple.isAArch64() && !triple.isOSWindows() &&
             CheckInlineHookTemp) {
           HandleInlineHookAArch64(&F);
+          didInlineHook = true;
         }
         // x86_64 inline hook detection (Darwin / Linux)
-        if ((triple.getArch() == Triple::x86_64 ||
-             triple.getArch() == Triple::x86_64) &&
-            !triple.isOSWindows() && CheckInlineHookX86Temp) {
+        if (triple.getArch() == Triple::x86_64 && !triple.isOSWindows() &&
+            CheckInlineHookX86Temp) {
           HandleInlineHookX86_64(&F);
-          // Scatter additional hook checks throughout the function body so a
-          // patcher cannot defeat detection by patching just the prologue
-          // check.
-          InjectScatteredHookChecks(&F);
+          didInlineHook = true;
         }
         // Windows inline hook detection (x86_64 and AArch64)
         if (!toObfuscateBoolOption(&F, "ah_inline_win",
@@ -288,11 +286,19 @@ struct AntiHook : public ModulePass {
           CheckInlineHookWinTemp =
               ec.anti_hook.inline_win.value_or((bool)CheckInlineHookWin);
         if (triple.isOSWindows() && CheckInlineHookWinTemp) {
-          if (triple.getArch() == Triple::x86_64 ||
-              triple.getArch() == Triple::x86_64)
+          if (triple.getArch() == Triple::x86_64) {
             HandleInlineHookWindows(&F);
-          else if (triple.isAArch64())
+            didInlineHook = true;
+          } else if (triple.isAArch64()) {
             HandleInlineHookWindowsAArch64(&F);
+            didInlineHook = true;
+          }
+        }
+        if (didInlineHook) {
+          // Scatter additional hook checks throughout the function body so a
+          // patcher cannot defeat detection by patching just the prologue
+          // check or jumping directly over entry guards.
+          InjectScatteredHookChecks(&F);
         }
 
         // Embedded Code Integrity Self-Check with Data-Flow Entanglement
@@ -398,12 +404,10 @@ struct AntiHook : public ModulePass {
     BasicBlock *C = A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
     BasicBlock *B =
         BasicBlock::Create(F->getContext(), "HookDetectedHandler", F);
-    BasicBlock *Detect = BasicBlock::Create(F->getContext(), "", F);
     BasicBlock *Detect2 = BasicBlock::Create(F->getContext(), "", F);
     A->getTerminator()->eraseFromParent();
-    BranchInst::Create(Detect, A);
 
-    IRBuilder<> IRBDetect(Detect);
+    IRBuilder<> IRBDetect(A);
     IRBuilder<> IRBDetect2(Detect2);
     IRBuilder<> IRBB(B);
 
@@ -455,14 +459,11 @@ struct AntiHook : public ModulePass {
     BasicBlock *C = A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
     BasicBlock *B =
         BasicBlock::Create(F->getContext(), "HookDetectedHandler.x86", F);
-    BasicBlock *Detect =
-        BasicBlock::Create(F->getContext(), "HookDetect.x86", F);
     BasicBlock *Detect2 =
         BasicBlock::Create(F->getContext(), "HookDetect2.x86", F);
     BasicBlock *Detect3 =
         BasicBlock::Create(F->getContext(), "HookDetect3.x86", F);
     A->getTerminator()->eraseFromParent();
-    BranchInst::Create(Detect, A);
 
     LLVMContext &Ctx = F->getContext();
     Type *Int8Ty = Type::getInt8Ty(Ctx);
@@ -471,7 +472,7 @@ struct AntiHook : public ModulePass {
 
     // ── Stage 1: byte[0] in {0xE9 (jmp rel32), 0xEB (jmp rel8), 0xCC (INT3),
     // 0x68 (PUSH imm32), 0xF1 (ICEBP)}
-    IRBuilder<> IRBDet1(Detect);
+    IRBuilder<> IRBDet1(A);
     Value *FPtr1 = IRBDet1.CreateBitCast(F, PtrTy);
     Value *Byte0 = IRBDet1.CreateLoad(Int8Ty, FPtr1, "ah.b0");
     Value *IsE9 = IRBDet1.CreateICmpEQ(
@@ -586,16 +587,13 @@ struct AntiHook : public ModulePass {
     BasicBlock *C = A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
     BasicBlock *B =
         BasicBlock::Create(F->getContext(), "WinHookHandler.x64", F);
-    BasicBlock *Det1 =
-        BasicBlock::Create(F->getContext(), "WinHookDetect1.x64", F);
     BasicBlock *Det2 =
         BasicBlock::Create(F->getContext(), "WinHookDetect2.x64", F);
     BasicBlock *Det3 =
         BasicBlock::Create(F->getContext(), "WinHookDetect3.x64", F);
     A->getTerminator()->eraseFromParent();
-    BranchInst::Create(Det1, A);
 
-    IRBuilder<> IRBDet1(Det1);
+    IRBuilder<> IRBDet1(A);
     IRBuilder<> IRBDet2(Det2);
     IRBuilder<> IRBDet3(Det3);
     IRBuilder<> IRBB(B);
@@ -671,14 +669,11 @@ struct AntiHook : public ModulePass {
     BasicBlock *C = A->splitBasicBlock(A->getFirstNonPHIOrDbgOrLifetime());
     BasicBlock *B =
         BasicBlock::Create(F->getContext(), "WinHookHandler.arm64", F);
-    BasicBlock *Det1 =
-        BasicBlock::Create(F->getContext(), "WinHookDetect1.arm64", F);
     BasicBlock *Det2 =
         BasicBlock::Create(F->getContext(), "WinHookDetect2.arm64", F);
     A->getTerminator()->eraseFromParent();
-    BranchInst::Create(Det1, A);
 
-    IRBuilder<> IRBDet1(Det1);
+    IRBuilder<> IRBDet1(A);
     IRBuilder<> IRBDet2(Det2);
     IRBuilder<> IRBB(B);
 
@@ -745,8 +740,8 @@ struct AntiHook : public ModulePass {
     CreateCallbackAndJumpBack(&IRBB, C);
   }
 
-  void CreateCallbackAndJumpBack(IRBuilder<> *IRBB, BasicBlock *C) {
-    Module *M = C->getModule();
+  void CreateCallbackAndJumpBack(IRBuilder<> *IRBB, BasicBlock *C = nullptr) {
+    Module *M = C ? C->getModule() : IRBB->GetInsertBlock()->getModule();
     Function *AHCallBack = M->getFunction("AHCallBack");
     if (AHCallBack) {
       IRBB->CreateCall(AHCallBack);
@@ -776,15 +771,12 @@ struct AntiHook : public ModulePass {
     BasicBlock *C = Entry->splitBasicBlock(
         Entry->getFirstNonPHIOrDbgOrLifetime(), "ah.integ.cont");
     BasicBlock *IntegFail = BasicBlock::Create(F->getContext(), "IntegFail", F);
-    BasicBlock *IntegDetect =
-        BasicBlock::Create(F->getContext(), "IntegDetect", F);
     Entry->getTerminator()->eraseFromParent();
-    BranchInst::Create(IntegDetect, Entry);
 
     LLVMContext &Ctx = F->getContext();
     Type *I64Ty = Type::getInt64Ty(Ctx);
     Type *PtrTy = getOpaquePtrTy(Ctx);
-    IRBuilder<> IRB(IntegDetect);
+    IRBuilder<> IRB(Entry);
 
     // Load first 16 bytes from F's runtime entry address (2 x 64-bit words) as
     // volatile loads
@@ -913,35 +905,56 @@ struct AntiHook : public ModulePass {
 
   // ── Scattered hook checks ────────────────────────────────────────────────
   //
-  // Picks up to 2 non-entry basic blocks throughout the function body and
-  // inserts a lightweight inline hook check at each.  This prevents an
-  // attacker from defeating detection by simply patching the function prologue
-  // check.
+  // Picks up to 3 non-entry, non-EH basic blocks throughout the function body
+  // and inserts in-flight inline hook checks. This catches trampolines that
+  // skip the entry prologue check, auditing F[0] and F[1] during function
+  // execution.
   //
   // Per scattered injection point:
   //   • Load prologue bytes of the current function's machine code.
-  //   • If a hook pattern is detected (jmp/br/brk):
-  //       → 3-layer hardened exit unique per site.
+  //   • If a hook pattern is detected (jmp/br/brk/indirect/movabs):
+  //       → Branch to a shared cold HookHandler.ah.scatter block per function
+  //         (eliminating register coalescing explosions in the LLVM backend).
   //   • Otherwise: fall through to the rest of the basic block.
   void InjectScatteredHookChecks(Function *F) {
     if (!triple.isAArch64() && triple.getArch() != Triple::x86_64)
       return;
 
-    // Collect candidate BBs: skip entry and any handler/detect BBs we created
+    // Collect candidate BBs: skip entry, EH pads, address-taken, and
+    // handler/detect BBs
     SmallVector<BasicBlock *, 16> cands;
     for (BasicBlock &BB : *F) {
       if (&BB == &F->getEntryBlock())
         continue;
+      if (BB.isEHPad() || BB.isLandingPad())
+        continue;
+      if (BB.hasAddressTaken())
+        continue;
       StringRef nm = BB.getName();
       if (nm.contains("HookDetect") || nm.contains("Handler") ||
-          nm.contains("scatter"))
+          nm.contains("scatter") || nm.contains("Integ") ||
+          nm.contains("lpad") || nm.contains("eh") || nm.contains("catch") ||
+          nm.contains("terminate"))
         continue;
-      // Need at least 2 instructions so splitBasicBlock leaves a non-empty top
-      auto it = BB.begin();
-      if (it == BB.end())
+      BasicBlock::iterator firstNonPHIIt = BB.getFirstNonPHIOrDbgOrLifetime();
+      if (firstNonPHIIt == BB.end())
         continue;
-      ++it;
-      if (it == BB.end())
+      Instruction *firstNonPHI = &*firstNonPHIIt;
+      if (isa<LandingPadInst>(firstNonPHI) || isa<CatchPadInst>(firstNonPHI) ||
+          isa<CleanupPadInst>(firstNonPHI))
+        continue;
+      Instruction *term = BB.getTerminator();
+      if (!term || isa<InvokeInst>(term) || isa<ResumeInst>(term) ||
+          isa<CatchSwitchInst>(term) || isa<CatchReturnInst>(term) ||
+          isa<CleanupReturnInst>(term))
+        continue;
+      // Need at least 2 real instructions before terminator
+      unsigned instCount = 0;
+      for (Instruction &I : BB) {
+        if (!isa<PHINode>(&I) && !I.isDebugOrPseudoInst())
+          ++instCount;
+      }
+      if (instCount < 3)
         continue;
       cands.push_back(&BB);
     }
@@ -952,34 +965,73 @@ struct AntiHook : public ModulePass {
     for (unsigned i = (unsigned)cands.size() - 1; i > 0; --i)
       std::swap(cands[i], cands[cryptoutils->get_range(i + 1)]);
 
-    unsigned numExtra = std::min(2u, (unsigned)cands.size());
+    unsigned numExtra = std::min(3u, (unsigned)cands.size());
     LLVMContext &Ctx = F->getContext();
     Type *Int8Ty = Type::getInt8Ty(Ctx);
     Type *Int32Ty = Type::getInt32Ty(Ctx);
     Type *Int64Ty = Type::getInt64Ty(Ctx);
     Type *PtrTy = getOpaquePtrTy(Ctx);
 
+    BasicBlock *SHandler = nullptr;
+
     for (unsigned ci = 0; ci < numExtra; ci++) {
       BasicBlock *Orig = cands[ci];
       BasicBlock *Bottom = Orig->splitBasicBlock(
           Orig->getFirstNonPHIOrDbgOrLifetime(), "scatter.ah.bot");
-      BasicBlock *SHandler =
-          BasicBlock::Create(Ctx, "HookHandler.ah.scatter", F);
+      if (!SHandler) {
+        SHandler = BasicBlock::Create(Ctx, "HookHandler.ah.scatter", F);
+        IRBuilder<> HB(SHandler);
+        CreateCallbackAndJumpBack(&HB, nullptr);
+      }
 
       Orig->getTerminator()->eraseFromParent();
       IRBuilder<> IRB(Orig);
       Value *IsHooked = nullptr;
 
       if (triple.getArch() == Triple::x86_64) {
-        // x86_64: check byte[0] for E9 (jmp rel32) or CC (INT3)
+        // x86_64 multi-pattern hook detection:
+        //  - 0xE9: JMP rel32 (Substrate / MS Detours classic 5-byte hook)
+        //  - 0xEB: JMP rel8 (short jump trampoline)
+        //  - 0xCC: INT3 (hot-patch / debugger hook trap)
+        //  - 0x68: PUSH imm32 (push-ret hook)
+        //  - 0xFF 0x25: JMP [RIP+disp32] (canonical Frida/PLT 64-bit indirect
+        //  jump)
+        //  - 0x48 0xB8: MOVABS RAX, imm64 (Frida / manual 64-bit jump)
         Value *FPtrI = IRB.CreatePtrToInt(F, Int64Ty);
         Value *B0 = IRB.CreateLoad(Int8Ty, IRB.CreateIntToPtr(FPtrI, PtrTy),
                                    "sc.ah.b0");
-        Value *IsE9 = IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, 0xE9u));
-        Value *IsCC = IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, 0xCCu));
-        IsHooked = IRB.CreateOr(IsE9, IsCC);
+        Value *IsE9 = IRB.CreateICmpEQ(
+            B0, ConstantInt::get(Int8Ty, X86_64_JMP_REL32), "sc.ah.e9");
+        Value *IsEB = IRB.CreateICmpEQ(
+            B0, ConstantInt::get(Int8Ty, X86_64_JMP_SHORT), "sc.ah.eb");
+        Value *IsCC = IRB.CreateICmpEQ(
+            B0, ConstantInt::get(Int8Ty, X86_64_INT3), "sc.ah.cc");
+        Value *Is68 =
+            IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, 0x68u), "sc.ah.push");
+
+        Value *FPtrI_1 = IRB.CreateAdd(FPtrI, ConstantInt::get(Int64Ty, 1));
+        Value *B1 = IRB.CreateLoad(Int8Ty, IRB.CreateIntToPtr(FPtrI_1, PtrTy),
+                                   "sc.ah.b1");
+        Value *IsFF =
+            IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, X86_64_JMP_INDIR));
+        Value *Is25 =
+            IRB.CreateICmpEQ(B1, ConstantInt::get(Int8Ty, X86_64_JMP_INDIR_B1));
+        Value *IsFF25 = IRB.CreateAnd(IsFF, Is25, "sc.ah.ff25");
+
+        Value *Is48 =
+            IRB.CreateICmpEQ(B0, ConstantInt::get(Int8Ty, X86_64_MOVABS_RAX));
+        Value *IsB8 = IRB.CreateICmpEQ(B1, ConstantInt::get(Int8Ty, 0xB8u));
+        Value *IsMovAbs = IRB.CreateAnd(Is48, IsB8, "sc.ah.movabs");
+
+        Value *H1 =
+            IRB.CreateOr(IRB.CreateOr(IsE9, IsEB), IRB.CreateOr(IsCC, Is68));
+        Value *H2 = IRB.CreateOr(IsFF25, IsMovAbs);
+        IsHooked = IRB.CreateOr(H1, H2, "sc.ah.hooked");
       } else if (triple.isAArch64()) {
-        // AArch64: check first 4 bytes for B or BRK
+        // AArch64 multi-pattern hook detection:
+        //  - B rel26 (canonical direct branch)
+        //  - BRK (software breakpoint)
+        //  - LDR x16/x17, [PC, #8] (Frida/Detours long-jump trampoline)
         Value *FPtr = IRB.CreateBitCast(F, PtrTy);
         Value *Instr0 = IRB.CreateLoad(Int32Ty, FPtr, "sc.ah.i0");
         Value *LS_B = IRB.CreateLShr(Instr0, ConstantInt::get(Int32Ty, 26));
@@ -988,16 +1040,19 @@ struct AntiHook : public ModulePass {
         Value *LS_BRK = IRB.CreateLShr(Instr0, ConstantInt::get(Int32Ty, 21));
         Value *IsBRK = IRB.CreateICmpEQ(
             LS_BRK, ConstantInt::get(Int32Ty, AARCH64_SIGNATURE_BRK));
-        IsHooked = IRB.CreateOr(IsB, IsBRK);
+        Value *IsLDR16 =
+            IRB.CreateICmpEQ(Instr0, ConstantInt::get(Int32Ty, 0x58000050u));
+        Value *IsLDR17 =
+            IRB.CreateICmpEQ(Instr0, ConstantInt::get(Int32Ty, 0x58000051u));
+        Value *H1 = IRB.CreateOr(IsB, IsBRK);
+        Value *H2 = IRB.CreateOr(IsLDR16, IsLDR17);
+        IsHooked = IRB.CreateOr(H1, H2, "sc.ah.hooked");
       }
 
       if (IsHooked) {
         IRB.CreateCondBr(IsHooked, SHandler, Bottom);
-        IRBuilder<> HB(SHandler);
-        CreateCallbackAndJumpBack(&HB, Bottom);
       } else {
         IRB.CreateBr(Bottom);
-        SHandler->eraseFromParent();
       }
     }
   }

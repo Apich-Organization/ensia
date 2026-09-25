@@ -138,39 +138,69 @@ bool valueEscapes(Instruction *Inst) {
 }
 
 void fixStack(Function *f) {
-  // Try to remove phi node and demote reg to stack
-  SmallVector<PHINode *, 8> tmpPhi;
-  SmallVector<Instruction *, 32> tmpReg;
-  BasicBlock *bbEntry = &*f->begin();
-  // Find first non-alloca instruction and create insertion point. This is
-  // safe if block is well-formed: it always have terminator, otherwise
-  // we'll get and assertion.
-  BasicBlock::iterator I = bbEntry->begin();
-  while (isa<AllocaInst>(I))
-    ++I;
-  Instruction *AllocaInsertionPoint = &*I;
-  do {
-    tmpPhi.clear();
-    tmpReg.clear();
-    for (BasicBlock &i : *f) {
-      for (Instruction &j : i) {
-        if (isa<PHINode>(&j)) {
-          PHINode *phi = cast<PHINode>(&j);
-          tmpPhi.emplace_back(phi);
-          continue;
-        }
-        if (!(isa<AllocaInst>(&j) && j.getParent() == bbEntry) &&
-            (valueEscapes(&j) || j.isUsedOutsideOfBlock(&i))) {
-          tmpReg.emplace_back(&j);
-          continue;
-        }
-      }
+  if (f->isDeclaration() || f->empty())
+    return;
+
+  BasicBlock *bbEntry = &f->getEntryBlock();
+
+  // Find the first non-alloca instruction in bbEntry
+  BasicBlock::iterator allocaInsertPt = bbEntry->begin();
+  while (allocaInsertPt != bbEntry->end() && isa<AllocaInst>(*allocaInsertPt))
+    ++allocaInsertPt;
+
+  // 1. Move any AllocaInst that is not in the entry block to bbEntry
+  SmallVector<AllocaInst *, 8> nonEntryAllocas;
+  for (BasicBlock &BB : *f) {
+    if (&BB == bbEntry)
+      continue;
+    for (Instruction &I : BB) {
+      if (AllocaInst *AI = dyn_cast<AllocaInst>(&I))
+        nonEntryAllocas.push_back(AI);
     }
-    for (Instruction *I : tmpReg)
-      DemoteRegToStack(*I, false, AllocaInsertionPoint->getIterator());
-    for (PHINode *P : tmpPhi)
-      DemotePHIToStack(P, AllocaInsertionPoint->getIterator());
-  } while (tmpReg.size() != 0 || tmpPhi.size() != 0);
+  }
+  for (AllocaInst *AI : nonEntryAllocas) {
+    if (allocaInsertPt != bbEntry->end())
+      AI->moveBefore(allocaInsertPt);
+    else
+      AI->moveBefore(bbEntry->getTerminator()->getIterator());
+  }
+
+  // Refresh insertion point after moving allocas
+  allocaInsertPt = bbEntry->begin();
+  while (allocaInsertPt != bbEntry->end() && isa<AllocaInst>(*allocaInsertPt))
+    ++allocaInsertPt;
+  if (allocaInsertPt == bbEntry->end())
+    allocaInsertPt = bbEntry->getTerminator()->getIterator();
+
+  // 2. Phase 1: Demote ALL PHI nodes first so no PHI nodes remain.
+  // When all PHI nodes are converted to allocas/stores/loads, no PHI edges
+  // can cause DemoteRegToStack to generate loads in predecessor blocks.
+  SmallVector<PHINode *, 16> phis;
+  for (BasicBlock &BB : *f) {
+    for (Instruction &I : BB) {
+      if (PHINode *P = dyn_cast<PHINode>(&I))
+        phis.push_back(P);
+    }
+  }
+  for (PHINode *P : phis) {
+    DemotePHIToStack(P, allocaInsertPt);
+  }
+
+  // 3. Phase 2: Demote all escaping non-alloca values.
+  // With all PHIs eliminated, DemoteRegToStack only inserts loads locally
+  // before the user instructions, so inserted loads never escape.
+  SmallVector<Instruction *, 32> escaping;
+  for (BasicBlock &BB : *f) {
+    for (Instruction &I : BB) {
+      if (isa<AllocaInst>(&I))
+        continue;
+      if (valueEscapes(&I) || I.isUsedOutsideOfBlock(&BB))
+        escaping.push_back(&I);
+    }
+  }
+  for (Instruction *I : escaping) {
+    DemoteRegToStack(*I, false, allocaInsertPt);
+  }
 }
 
 // Unlike O-LLVM which uses __attribute__ that is not supported by the ObjC
@@ -1133,7 +1163,7 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
         F->getParent()->getGlobalVariable("ensia_adb_ran", true);
     if (!adbRan) {
       adbRan = new GlobalVariable(*F->getParent(), Type::getInt8Ty(Ctx), false,
-                                  GlobalValue::ExternalLinkage,
+                                  GlobalValue::InternalLinkage,
                                   ConstantInt::get(Type::getInt8Ty(Ctx), 0),
                                   "ensia_adb_ran");
       adbRan->setVisibility(GlobalValue::HiddenVisibility);

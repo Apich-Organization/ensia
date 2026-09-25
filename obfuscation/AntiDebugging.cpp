@@ -519,7 +519,7 @@ struct AntiDebugging : public ModulePass {
             "ensia_adb_ran", /*AllowInternal=*/true);
         if (!adbRan) {
           adbRan = new GlobalVariable(*F->getParent(), Type::getInt8Ty(Ctx),
-                                      false, GlobalValue::ExternalLinkage,
+                                      false, GlobalValue::InternalLinkage,
                                       ConstantInt::get(Type::getInt8Ty(Ctx), 0),
                                       "ensia_adb_ran");
           adbRan->setVisibility(GlobalValue::HiddenVisibility);

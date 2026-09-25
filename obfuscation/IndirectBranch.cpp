@@ -110,16 +110,10 @@ struct IndirectBranch : public FunctionPass {
   }
 
   bool initialize(Module &M) {
-    // Replace nested PassBuilder/LowerSwitchPass with inline BST lowering.
-    // A nested FPM.run(F, FAM) inside an already-running new-PM pass deadlocks
-    // in LLVM 22.x (shared AnalysisManager mutex).  manuallyLowerSwitches()
-    // performs the same transformation without touching the pass
-    // infrastructure.
-
     SmallVector<Constant *, 32> BBs;
     unsigned long long i = 0;
     for (Function &F : M) {
-      if (F.getName().starts_with("__ensia_"))
+      if (F.getName().starts_with("__ensia_") || F.isDeclaration())
         continue;
       auto ec = GObfConfig.resolve(M.getSourceFileName(), F.getName());
       bool shouldObf = ec.indir_branch.enabled.value_or(flag);
@@ -128,15 +122,10 @@ struct IndirectBranch : public FunctionPass {
       else
         to_obf_funcs.insert(&F);
 
-      // Cache per-function options in maps so runOnFunction reads the right
-      // value per function instead of whatever the last iteration left in the
-      // shared file-level statics.
       bool useStackLocal = UseStack;
       if (!toObfuscateBoolOption(&F, "indibran_use_stack", &useStackLocal))
         useStackLocal = ec.indir_branch.use_stack.value_or((bool)UseStack);
       perFuncUseStack[&F] = useStackLocal;
-
-      manuallyLowerSwitches(&F);
 
       bool encJumpLocal = EncryptJumpTarget;
       if (!toObfuscateBoolOption(&F, "indibran_enc_jump_target", &encJumpLocal))
@@ -155,32 +144,21 @@ struct IndirectBranch : public FunctionPass {
       kk.xorK = cryptoutils->get_uint64_t();
       knuthKeys[&F] = kk;
       for (BasicBlock &BB : F) {
-        if (!BB.hasName())
-          BB.setName("ib");
-      }
-      DenseSet<BasicBlock *> neededTargets;
-      for (BasicBlock &BB : F) {
-        if (BranchInst *BI = dyn_cast<BranchInst>(BB.getTerminator())) {
-          if (BI->isUnconditional()) {
-            BasicBlock *target = BI->getSuccessor(0);
-            if (!target->isEntryBlock() &&
-                !target->getName().starts_with("sw.bst."))
-              neededTargets.insert(target);
-          }
-        }
-      }
-      for (BasicBlock *BB : neededTargets) {
-        indexmap[BB] = i++;
+        if (BB.isEntryBlock())
+          continue;
+        if (BB.getName().starts_with("sw.bst."))
+          continue;
+        indexmap[&BB] = i++;
         BBs.emplace_back(encJumpLocal ? ConstantExpr::getGetElementPtr(
                                             Type::getInt8Ty(M.getContext()),
                                             ConstantExpr::getBitCast(
-                                                BlockAddress::get(BB),
+                                                BlockAddress::get(&BB),
                                                 getOpaquePtrTy(M.getContext())),
                                             encmap[&F])
-                                      : BlockAddress::get(BB));
+                                      : BlockAddress::get(&BB));
       }
     }
-    if (to_obf_funcs.size()) {
+    if (to_obf_funcs.size() && !BBs.empty()) {
       ArrayType *AT =
           ArrayType::get(getOpaquePtrTy(M.getContext()), BBs.size());
       Constant *BlockAddressArray =
@@ -188,13 +166,14 @@ struct IndirectBranch : public FunctionPass {
       GlobalVariable *Table = new GlobalVariable(
           M, AT, false, GlobalValue::LinkageTypes::PrivateLinkage,
           BlockAddressArray, "IndirectBranchingGlobalTable");
-      appendToCompilerUsed(M, {Table});
+      usedGlobals.push_back(Table);
     }
     this->initialized = true;
     return true;
   }
+
   bool runOnFunction(Function &Func) override {
-    if (Func.getName().starts_with("__ensia_"))
+    if (Func.getName().starts_with("__ensia_") || Func.isDeclaration())
       return false;
     Module *M = Func.getParent();
     if (!this->initialized)
@@ -205,9 +184,6 @@ struct IndirectBranch : public FunctionPass {
     if (ObfVerbose)
       errs() << "Running IndirectBranch On " << Func.getName() << "\n";
 
-    // Read per-function options from the maps populated by initialize() instead
-    // of using the shared file-level statics (which hold whatever the last
-    // initialize() iteration wrote, i.e. the last function's settings).
     bool UseStackTempLocal =
         perFuncUseStack.count(&Func) ? perFuncUseStack[&Func] : (bool)UseStack;
     bool EncryptJumpTargetTempLocal = perFuncEncryptJump.count(&Func)
@@ -217,31 +193,28 @@ struct IndirectBranch : public FunctionPass {
     SmallVector<BranchInst *, 32> BIs;
     for (Instruction &Inst : instructions(Func))
       if (BranchInst *BI = dyn_cast<BranchInst>(&Inst)) {
-        // Skip the synthetic BST comparison blocks produced by
-        // manuallyLowerSwitches() in initialize().  Converting their branches
-        // creates one GlobalVariable per block (O(switch-cases) GVs per
-        // function) with zero additional obfuscation benefit, since the case
-        // BBs they dispatch to are already covered by IndirectBranch.
         if (BI->getParent()->getName().starts_with("sw.bst."))
           continue;
         BIs.emplace_back(BI);
       }
 
+    if (BIs.empty())
+      return false;
+
     Type *Int8Ty = Type::getInt8Ty(M->getContext());
     Type *Int32Ty = Type::getInt32Ty(M->getContext());
     Type *Int8PtrTy = getOpaquePtrTy(M->getContext());
-
     Value *zero = ConstantInt::get(Int32Ty, 0);
 
-    // Stack-allocate IRBEntry - the old `new IRBuilder<NoFolder>` was never
-    // deleted, leaking one object per runOnFunction() call.
-    IRBuilder<NoFolder> IRBEntryStorage(&Func.getEntryBlock().front());
-    IRBuilder<NoFolder> *IRBEntry = &IRBEntryStorage;
+    // Setup entry block allocations once per function to prevent stack leaks
+    IRBuilder<NoFolder> IRBEntry(&Func.getEntryBlock().front());
+    AllocaInst *LoadFromAI = nullptr;
+    AllocaInst *slotAI = nullptr;
+    if (UseStackTempLocal) {
+      LoadFromAI = IRBEntry.CreateAlloca(Int8PtrTy, nullptr, "indibr.tbl.ptr");
+      slotAI = IRBEntry.CreateAlloca(Int32Ty, nullptr, "indibr.slot.ai");
+    }
 
-    // Pre-create ONE enc-key GV per function (not one per branch) when jump
-    // target encryption is active.  The old code created a fresh GV for every
-    // branch, producing O(branches) GlobalVariables all encoding the same
-    // per-function key - the primary driver of the memory explosion.
     GlobalVariable *funcEnckeyGV = nullptr;
     ConstantInt *funcEncEncKey = nullptr;
     if (EncryptJumpTargetTempLocal && encmap.count(&Func)) {
@@ -256,12 +229,6 @@ struct IndirectBranch : public FunctionPass {
     }
 
     for (BranchInst *BI : BIs) {
-      if (UseStackTempLocal &&
-          IRBEntry->GetInsertPoint() !=
-              (BasicBlock::iterator)Func.getEntryBlock().front())
-        IRBEntry->SetInsertPoint(Func.getEntryBlock().getTerminator());
-      // Stack-allocate IRBBI - the old `new IRBuilder<NoFolder>` was never
-      // deleted, leaking one object per branch instruction.
       IRBuilder<NoFolder> IRBBIStorage(BI);
       IRBuilder<NoFolder> *IRBBI = &IRBBIStorage;
       SmallVector<BasicBlock *, 4> BBs;
@@ -273,6 +240,8 @@ struct IndirectBranch : public FunctionPass {
         if (falseBB->isEntryBlock() || trueBB->isEntryBlock())
           continue;
 
+        // Random 4-slot shuffling with decoy targets for maximum
+        // reverse-engineering difficulty
         slotFalse = cryptoutils->get_range(4);
         slotTrue = (slotFalse + 1 + cryptoutils->get_range(3)) % 4;
 
@@ -307,7 +276,6 @@ struct IndirectBranch : public FunctionPass {
         LoadFrom = new GlobalVariable(
             *M, AT, false, GlobalValue::LinkageTypes::PrivateLinkage,
             BlockAddressArray, "EnsiaConditionalLocalIndirectBranchingTable");
-        usedGlobals.push_back(LoadFrom);
       } else {
         if (!BI->getSuccessor(0)->isEntryBlock())
           BBs.emplace_back(BI->getSuccessor(0));
@@ -330,7 +298,6 @@ struct IndirectBranch : public FunctionPass {
           LoadFrom = new GlobalVariable(
               *M, AT, false, GlobalValue::LinkageTypes::PrivateLinkage,
               BlockAddressArray, "EnsiaConditionalLocalIndirectBranchingTable");
-          usedGlobals.push_back(LoadFrom);
         } else {
           LoadFrom = M->getGlobalVariable("IndirectBranchingGlobalTable", true);
         }
@@ -338,11 +305,10 @@ struct IndirectBranch : public FunctionPass {
       if (!LoadFrom)
         continue;
 
-      AllocaInst *LoadFromAI = nullptr;
       if (UseStackTempLocal) {
-        LoadFromAI = IRBEntry->CreateAlloca(LoadFrom->getType());
-        IRBEntry->CreateStore(LoadFrom, LoadFromAI);
+        IRBBI->CreateStore(LoadFrom, LoadFromAI);
       }
+
       Value *indexVal = nullptr;
       if (BI->isConditional()) {
         Value *condition = BI->getCondition();
@@ -364,9 +330,8 @@ struct IndirectBranch : public FunctionPass {
           slotVal = insertOpaqueBarrier(*IRBBI, slotVal);
         }
         if (UseStackTempLocal) {
-          AllocaInst *condAI = IRBEntry->CreateAlloca(Int32Ty);
-          IRBBI->CreateStore(slotVal, condAI);
-          indexVal = IRBBI->CreateLoad(Int32Ty, condAI);
+          IRBBI->CreateStore(slotVal, slotAI);
+          indexVal = IRBBI->CreateLoad(Int32Ty, slotAI);
         } else {
           indexVal = slotVal;
         }
@@ -388,16 +353,21 @@ struct IndirectBranch : public FunctionPass {
               ConstantInt::get(IndexEncKey->getType(),
                                IndexEncKey->getValue() ^ targetIdx),
               "IndirectBranchingIndex");
-          usedGlobals.push_back(indexgv);
-          Value *ld = (UseStackTempLocal ? IRBEntry : IRBBI)
-                          ->CreateLoad(indexgv->getValueType(), indexgv);
+          Value *ld = nullptr;
+          if (UseStackTempLocal) {
+            IRBBI->CreateStore(
+                ConstantInt::get(Int32Ty, IndexEncKey->getValue() ^ targetIdx),
+                slotAI);
+            ld = IRBBI->CreateLoad(Int32Ty, slotAI);
+          } else {
+            ld = IRBBI->CreateLoad(indexgv->getValueType(), indexgv);
+          }
           indexVal = IRBBI->CreateXor(ld, IndexEncKey);
         } else {
           Value *rawVal = ConstantInt::get(Int32Ty, targetIdx);
           if (UseStackTempLocal) {
-            AllocaInst *indexAI = IRBEntry->CreateAlloca(Int32Ty);
-            IRBEntry->CreateStore(rawVal, indexAI);
-            indexVal = IRBBI->CreateLoad(indexAI->getAllocatedType(), indexAI);
+            IRBBI->CreateStore(rawVal, slotAI);
+            indexVal = IRBBI->CreateLoad(Int32Ty, slotAI);
           } else {
             indexVal = rawVal;
           }
@@ -427,34 +397,21 @@ struct IndirectBranch : public FunctionPass {
         effectiveIndex = insertOpaqueBarrier(*IRBBI, effectiveIndex);
       }
 
+      Value *actualTablePtr = LoadFrom;
       if (UseStackTempLocal) {
-        LoadInst *LILoadFrom =
-            IRBBI->CreateLoad(LoadFrom->getType(), LoadFromAI);
-        Value *GEP = IRBBI->CreateGEP(LoadFrom->getValueType(), LILoadFrom,
-                                      {zero, effectiveIndex});
-        if (!EncryptJumpTargetTempLocal) {
-          LoadInst *ld = IRBBI->CreateLoad(Int8PtrTy, GEP,
-                                           "IndirectBranchingTargetAddress");
-          ld->setVolatile(true);
-          LI = ld;
-        } else {
-          LoadInst *ld = IRBBI->CreateLoad(Int8PtrTy, GEP);
-          ld->setVolatile(true);
-          gepptr = ld;
-        }
+        actualTablePtr = IRBBI->CreateLoad(Int8PtrTy, LoadFromAI);
+      }
+      Value *GEP = IRBBI->CreateGEP(LoadFrom->getValueType(), actualTablePtr,
+                                    {zero, effectiveIndex});
+      if (!EncryptJumpTargetTempLocal) {
+        LoadInst *ld =
+            IRBBI->CreateLoad(Int8PtrTy, GEP, "IndirectBranchingTargetAddress");
+        ld->setVolatile(true);
+        LI = ld;
       } else {
-        Value *GEP = IRBBI->CreateGEP(LoadFrom->getValueType(), LoadFrom,
-                                      {zero, effectiveIndex});
-        if (!EncryptJumpTargetTempLocal) {
-          LoadInst *ld = IRBBI->CreateLoad(Int8PtrTy, GEP,
-                                           "IndirectBranchingTargetAddress");
-          ld->setVolatile(true);
-          LI = ld;
-        } else {
-          LoadInst *ld = IRBBI->CreateLoad(Int8PtrTy, GEP);
-          ld->setVolatile(true);
-          gepptr = ld;
-        }
+        LoadInst *ld = IRBBI->CreateLoad(Int8PtrTy, GEP);
+        ld->setVolatile(true);
+        gepptr = ld;
       }
       if (EncryptJumpTargetTempLocal) {
         LoadInst *ldEnc =
