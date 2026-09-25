@@ -13,7 +13,7 @@ This software is a derivative work. It has evolved through several iterations of
 * **Project:** OLLVM-Next (Ensia)
 * **Maintainer:** Xinyu Yang (Apich Organization Development Team & Apich Organization Security Team) <Xinyu.Yang@apich.org>
 * **Repository:** Current Repository [https://github.com/Apich-Organization/ensia/](https://github.com/Apich-Organization/ensia/)
-* **Modifications:** Modernized the core Hikari logic to support the LLVM 22 toolchain and updated build systems; strengthens all obfuscation passes, adds new obfuscation passes, and others.
+* **Modifications:** Modernized the core Hikari logic to support the LLVM 21+ toolchain and updated build systems; strengthens all obfuscation passes, adds new obfuscation passes, and others.
 * **License:** AGPL-3.0
 
 ### 2. Immediate Parent (Father)
