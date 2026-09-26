@@ -119,130 +119,218 @@ cargo build --release
 Search order: `-mllvm -ensia-config=<path>` > `ENSIA_CONFIG=<path>` > `./ensia.toml`.
 
 ```toml
-[global]
-preset = "mid"            # "low" | "mid" (recommended) | "high" | "max" | "csm_vec"
-verbose = false           # Print transformation logs to stderr
-trace = false             # Emit step-by-step scheduler checkpoints
-demangle_names = true     # Demangle C++ / Rust function symbols in logs
+# ==============================================================================
+# ensia.toml — Ensia / OLLVM-Next Comprehensive Configuration Template
+# ==============================================================================
+# Search order:
+#   1. Clang argument:    -mllvm -ensia-config=/path/to/ensia.toml
+#   2. Environment var:   ENSIA_CONFIG=/path/to/ensia.toml
+#   3. Current directory: ./ensia.toml
+# ==============================================================================
 
-# ── 15 Configurable Passes (supports canonical names & short aliases) ──────────
+[global]
+# Base preset profile: "low" | "mid" (recommended) | "high" | "max" | "csm_vec" | "csm_only" | "vec_only"
+preset = "mid"
+
+# Deterministic PRNG seed (hex or integer string, optional).
+# When omitted or 0, a cryptographically secure random seed is generated per compile.
+# seed = "0xDEADBEEF"
+
+# Emit detailed pass transformation metrics to stderr during compilation
+verbose = false
+
+# Enable pass execution trace logging
+trace = false
+
+# Demangle C++ / Rust function names in log outputs
+demangle_names = true
+
+# ==============================================================================
+# PASS CONFIGURATIONS ([passes.<pass_name>])
+# Supports canonical names (e.g. string_encryption) and short aliases (e.g. str_enc)
+# ==============================================================================
+
+# ── Bogus Control Flow (BCF) ──────────────────────────────────────────────────
 [passes.bcf]
 enabled = true
-probability = 60          # Block selection probability (0–100)
-iterations = 1           # BCF loop iterations (1–5)
-complexity = 4           # Opaque predicate depth (1–10)
-entropy_chain = true     # Chain hardware predicates (CPUID, RDTSC/CNTPCT)
+probability = 60          # Percentage probability each basic block is selected (0–100)
+iterations = 1           # Number of BCF expansion passes per basic block (1–5)
+complexity = 4           # Opaque predicate algebraic complexity level (1–10)
+entropy_chain = true     # Chain hardware predicates (CPUID, RDTSC/CNTPCT) with runtime state
 junk_asm = true          # Inject polymorphic hardware inline-ASM barriers
-junk_asm_min = 2
-junk_asm_max = 6
+junk_asm_min = 2         # Minimum number of polymorphic barrier instructions per dead block
+junk_asm_max = 6         # Maximum number of polymorphic barrier instructions per dead block
+nested = false           # Nest opaque predicate conditions inside cloned branches
+create_func = false      # Extract dead branches into standalone cold functions
+only_junk_asm = false    # Only inject polymorphic barriers without altering CFG branches
 
-[passes.constant_encryption]  # alias: [passes.const_enc]
+# ── Instruction Substitution ──────────────────────────────────────────────────
+[passes.substitution]
 enabled = true
-iterations = 1
-share_count = 3          # Bivariate MBA additive split shares (2–8)
-feistel = true           # 4-round non-linear Feistel cipher network
-substitute_xor = true    # MBA expansion of recombination XORs
-force_value = ["^0x9E3779B9$", "^0xDEADBEEF$"]
-skip_value = ["^0x0$", "^0x1$"]
+probability = 60         # Probability each arithmetic/bitwise op is expanded (0–100)
+iterations = 1          # Number of recursive substitution expansions (1–3)
 
-[passes.string_encryption]    # alias: [passes.str_enc]
-enabled = true
-probability = 100
-anti_dump = true          # Volatile memory zeroization at function exits
-force_content = [".*key.*", ".*secret.*", ".*token.*"]
-skip_content = ["^%[0-9]*[a-zA-Z]$", "^PASS$", "^FAIL$"]
-
-[passes.substitution]         # alias: [passes.sub]
-enabled = true
-probability = 60
-iterations = 1
-
+# ── Mixed Boolean-Arithmetic (MBA) ───────────────────────────────────────────
 [passes.mba]
 enabled = true
-probability = 50
-layers = 2
-heuristic = true         # Zero-noise identity verification
+probability = 50         # Probability of applying MBA identities (0–100)
+layers = 2               # Recursive non-linear polynomial layers (1–3)
+heuristic = true         # Zero-noise identity verification against bit-vector solvers
 
-[passes.split_blocks]         # alias: [passes.split]
+# ── Basic Block Splitting ────────────────────────────────────────────────────
+[passes.split_blocks]
 enabled = true
-splits = 3               # Slice points per basic block
-stack_confusion = true   # Push/pop or str/ldr stack desynchronization
+splits = 3               # Number of slice points per eligible basic block (1–10)
+stack_confusion = true   # Inject push/pop (x86) or str/ldr (ARM64) stack-frame desynchronization
 
-[passes.chaos_state_machine]  # alias: [passes.csm]
+# ── String Encryption ────────────────────────────────────────────────────────
+[passes.string_encryption]
 enabled = true
-warmup = 128             # Q32 logistic map transient warmup iterations
-nested_dispatch = false  # Hierarchical 2-level cluster dispatch
-max_blocks = 5000
+probability = 100        # Probability of encrypting discovered global string literals (0–100)
+anti_dump = true          # Strip memory dump markers / wipe decrypted strings from memory
+# Always encrypt matching strings (regex patterns)
+force_content = [
+    ".*secret.*",
+    ".*token.*",
+    ".*key.*",
+    ".*password.*"
+]
+# Skip encrypting benign or format strings (regex patterns)
+skip_content = [
+    "^%[0-9]*[a-zA-Z]$",
+    "^PASS$",
+    "^FAIL$"
+]
 
-[passes.flattening]           # alias: [passes.cff]
-enabled = false          # Fallback CFF with branchless algebraic masking
-
-[passes.vector_obfuscation]   # alias: [passes.vec]
+# ── Constant Encryption ──────────────────────────────────────────────────────
+[passes.constant_encryption]
 enabled = true
-probability = 40
-width = 128              # 128 (SSE/NEON), 256 (AVX2), 512 (AVX-512)
-shuffle = true           # Random bijective shufflevector permutations
-lift_comparisons = true
+iterations = 1           # Encryption rounds (1–3)
+share_count = 3          # Bivariate MBA additive split shares (2–8)
+feistel = true           # Apply 4-round non-linear Feistel cipher network
+substitute_xor = true    # Obfuscate XOR recombination logic with algebraic MBA
+substitute_xor_prob = 40 # Probability of substituting recombination XORs (0–100)
+globalize = false        # Hoist constant share pools to encrypted global memory
+globalize_prob = 50      # Probability of globalizing share sets (0–100)
+# Force-encrypt specific critical constant literals (case-insensitive hex regex)
+force_value = [
+    "^0x9E3779B9$",      # Knuth golden ratio
+    "^0x5F3759DF$",      # Fast inverse square root
+    "^0xDEADBEEF$"
+]
+# Skip trivial constants (e.g. 0 and 1)
+skip_value = [
+    "^0x0$",
+    "^0x1$"
+]
 
-[passes.indirect_branch]      # alias: [passes.indir]
+# ── Chaos State Machine (CSM) ────────────────────────────────────────────────
+[passes.chaos_state_machine]
 enabled = true
-use_stack = true
-enc_jump_target = true   # Knuth multiplicative modular inverse hashing
+warmup = 128             # Iterations to discard from Q16 logistic map transient phase
+nested_dispatch = false  # Enable hierarchical 2-level nested dispatch clusters
+max_blocks = 5000        # Maximum CFG block limit before falling back to Classic CFF
 
-[passes.function_wrapper]     # alias: [passes.fw]
+# ── Classic Control Flow Flattening (CFF) ────────────────────────────────────
+[passes.flattening]
+enabled = false          # Fallback flattening (auto-active if CSM is disabled)
+
+# ── Vector Obfuscation (SIMD Lifting) ────────────────────────────────────────
+[passes.vector_obfuscation]
+enabled = true
+probability = 40         # Percentage of scalar instructions lifted to SIMD vectors (0–100)
+width = 128              # Vector register width in bits: 128 (SSE/NEON), 256 (AVX2), 512 (AVX-512)
+shuffle = true           # Apply pseudo-random bijective shufflevector permutations
+lift_comparisons = true  # Lift scalar ICmp comparisons into SIMD mask vectors
+
+# ── Indirect Branching ───────────────────────────────────────────────────────
+[passes.indirect_branch]
+enabled = true
+use_stack = true         # Allocate branch jump tables dynamically on the stack frame
+enc_jump_target = true   # Encrypt jump targets using Knuth multiplicative modular inverse
+
+# ── Function Wrapper ─────────────────────────────────────────────────────────
+[passes.function_wrapper]
 enabled = false
-probability = 50
-times = 1
+probability = 50         # Fraction of functions wrapped in proxy trampolines (0–100)
+times = 1                # Wrapper recursion depth (1–3)
 
-[passes.function_call_obfuscate] # alias: [passes.fco]
+# ── Function Call Obfuscation (FCO) ──────────────────────────────────────────
+[passes.function_call_obfuscate]
 enabled = false
-flag = 0
-symbol_config_path = ""  # Path to external symbol import JSON config
+flag = 0                 # Obfuscation filter mask
+symbol_config_path = ""  # Path to external symbol import whitelist/blacklist file
 
-[passes.anti_hooking]         # alias: [passes.anti_hook]
+# ── Anti-Hooking & Anti-Taint Engine ────────────────────────────────────────
+[passes.anti_hooking]
 enabled = true
-inline_x86 = true        # E9 / 48 B8 prologue integrity scans
-inline_aarch64 = true    # 0x14000001 (B .+4) inline hook scans
+inline_x86 = true        # Probe x86_64 prologues for E9 (JMP) / 48 B8 (MOV RAX) patches
+inline_aarch64 = true    # Probe AArch64 prologues for 0x14000001 (B .+4) inline hooks
 inline_win = true        # Windows API inline hook detection
-direct_syscall = true    # Direct kernel syscall bypass (svc #0 / syscall)
-antirebind = true        # Counter dynamic linker symbol rebinding
-check_integrity = true   # Embedded code segment cryptographic self-checks
-precompiled_ir_path = "" # Path to external precompiled LLVM IR defense stubs
+objc_runtime = false     # Inspect Objective-C method dispatch tables
+antirebind = true        # Counter dynamic linker symbol rebinding (fishhook / dyld)
+direct_syscall = true    # Execute direct kernel syscalls (svc #0 / syscall) bypassing libc
+check_integrity = true   # Verify code segment cryptographic hashes
+precompiled_ir_path = "" # Path to external precompiled LLVM IR module for anti-hooking
 
-[passes.anti_debugging]       # alias: [passes.anti_dbg]
+# ── Anti-Debugging ───────────────────────────────────────────────────────────
+[passes.anti_debugging]
 enabled = true
-probability = 80         # Hardware debug registers DR0-7, EFLAGS.TF single-step probes
-precompiled_ir_path = "" # Path to external precompiled LLVM IR defense stubs
+probability = 80         # Percentage of function entries receiving anti-debug probes (0–100)
+precompiled_ir_path = "" # Path to external precompiled LLVM IR module for anti-debugging
 
-[passes.anti_class_dump]      # alias: [passes.anti_acd]
-enabled = false          # Objective-C / Swift metadata scrambling (macOS / iOS)
-use_initialize = true
-rename_methodimp = true
-scramble_methods = true
-dummy_selectors = false
-dummy_count = 8
-encrypt_strings = true   # Dynamic stack string decryption
-anti_hook = true         # Objective-C runtime hook detection
-opaque_barriers = true   # Memory barriers on runtime pointers
+# ── Anti-Class Dump (ObjC / Swift) ───────────────────────────────────────────
+[passes.anti_class_dump]
+enabled = false          # Objective-C / Swift Mach-O metadata scrambling (macOS / iOS only)
+use_initialize = true    # Defer class initialization to runtime +initialize
+rename_methodimp = true  # Scramble method implementation names
+scramble_methods = true  # Permute selector order using Fisher-Yates shuffle
+dummy_selectors = false  # Inject phantom selector entries into class metadata
+dummy_count = 8          # Number of phantom dummy selectors to inject
+encrypt_strings = true   # Dynamically decrypt selector and class names at runtime
+anti_hook = true         # Detect Frida/Substrate hooks on class_replaceMethod and sel_registerName
+opaque_barriers = true   # Insert opaque memory barriers on runtime pointers
 
-# ── Granular per-module / per-function regex policy overrides ──────────────────
+# ==============================================================================
+# GRANULAR POLICY OVERRIDES ([[policy]])
+# Rules are evaluated in order; the first matching rule takes precedence.
+# Matches against source module path and function symbol name using ECMAScript regex.
+# ==============================================================================
+
+# Core Cryptographic Primitives: Maximum Hardening
 [[policy]]
-module_regex = ".*crypto.*"
-function_regex = ".*(encrypt|decrypt|sign|verify).*"
+module_regex = ".*(crypto|cipher|signature).*"
+function_regex = ".*(encrypt|decrypt|sign|verify|hash).*"
 preset = "high"
+passes.chaos_state_machine.enabled = true
 passes.chaos_state_machine.nested_dispatch = true
 passes.constant_encryption.feistel = true
 passes.constant_encryption.share_count = 4
 passes.mba.layers = 3
+passes.vector_obfuscation.width = 256
 passes.anti_debugging.probability = 100
 passes.anti_hooking.direct_syscall = true
 
+# License Verification & Integrity Checks: Violent Exit on Tamper
+[[policy]]
+module_regex = ".*(licensing|auth|integrity).*"
+function_regex = ".*(validate|check|license).*"
+preset = "high"
+passes.anti_debugging.enabled = true
+passes.anti_debugging.probability = 100
+passes.anti_hooking.enabled = true
+passes.anti_hooking.direct_syscall = true
+passes.string_encryption.probability = 100
+
+# Performance-Critical Loops / Hotspots: Minimal Overhead
 [[policy]]
 module_regex = ".*"
-function_regex = "^(main|fast_path_.*)$"
+function_regex = "^(main|fast_path_.*|inner_loop_.*)$"
 passes.bcf.enabled = false
 passes.chaos_state_machine.enabled = false
 passes.flattening.enabled = false
+passes.indirect_branch.enabled = false
+passes.function_wrapper.enabled = false
 ```
 
 ---
