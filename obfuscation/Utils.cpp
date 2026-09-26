@@ -1159,18 +1159,84 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
 
   if ((triple.isOSLinux() || triple.isAndroid()) &&
       triple.getArch() == Triple::x86_64) {
-    GlobalVariable *adbRan =
-        F->getParent()->getGlobalVariable("ensia_adb_ran", true);
-    if (!adbRan) {
-      adbRan = new GlobalVariable(*F->getParent(), Type::getInt8Ty(Ctx), false,
-                                  GlobalValue::InternalLinkage,
-                                  ConstantInt::get(Type::getInt8Ty(Ctx), 0),
-                                  "ensia_adb_ran");
-      adbRan->setVisibility(GlobalValue::HiddenVisibility);
-    }
-
     s += "xorq %r8, %r8\n\t";
-    // 1. RDTSC timing jitter around SYS_getpid
+    // 0a. Kernel-level anti-attach: prctl(PR_SET_DUMPABLE = 4, 0, 0, 0, 0)
+    s += "movq $$157, %rax\n\t"; // SYS_prctl
+    s += "movq $$4, %rdi\n\t";   // PR_SET_DUMPABLE
+    s += "xorq %rsi, %rsi\n\t";  // SUID_DUMP_DISABLE = 0
+    s += "xorq %rdx, %rdx\n\t";
+    s += "xorq %r10, %r10\n\t";
+    s += "syscall\n\t";
+
+    // 0b. Continuous TracerPid detection from /proc/self/status via direct
+    // syscalls Runs on EVERY invocation, completely independent of the
+    // once-flag.
+    s += "subq $$560, %rsp\n\t";
+    s += "movabsq $$0x65732f636f72702f, %rax\n\t"; // "/proc/se"
+    s += "movq %rax, (%rsp)\n\t";
+    s += "movabsq $$0x75746174732f666c, %rax\n\t"; // "lf/statu"
+    s += "movq %rax, 8(%rsp)\n\t";
+    s += "movw $$0x73, 16(%rsp)\n\t"; // 's', '\0'
+    s += "movq $$257, %rax\n\t";      // SYS_openat
+    s += "movq $$-100, %rdi\n\t";     // AT_FDCWD
+    s += "movq %rsp, %rsi\n\t";
+    s += "xorq %rdx, %rdx\n\t";
+    s += "xorq %r10, %r10\n\t";
+    s += "syscall\n\t";
+    s += "testq %rax, %rax\n\t";
+    s += "js 88f\n\t";
+    s += "movq %rax, %r9\n\t";  // r9 = fd
+    s += "xorq %rax, %rax\n\t"; // SYS_read
+    s += "movq %r9, %rdi\n\t";
+    s += "leaq 24(%rsp), %rsi\n\t";
+    s += "movq $$512, %rdx\n\t";
+    s += "syscall\n\t";
+    s += "movq %rax, %r11\n\t"; // r11 = bytes read
+    s += "movq $$3, %rax\n\t";  // SYS_close
+    s += "movq %r9, %rdi\n\t";
+    s += "syscall\n\t";
+    s += "cmpq $$16, %r11\n\t";
+    s += "jl 88f\n\t";
+    s += "leaq 24(%rsp), %rsi\n\t";
+    s += "subq $$12, %r11\n\t";
+    s += "xorq %rcx, %rcx\n\t";
+    s += "movabsq $$0x6950726563617254, %rax\n\t"; // "TracerPi"
+    s += "82:\n\t";
+    s += "cmpq %r11, %rcx\n\t";
+    s += "jge 88f\n\t";
+    s += "cmpq (%rsi, %rcx, 1), %rax\n\t";
+    s += "je 83f\n\t";
+    s += "incq %rcx\n\t";
+    s += "jmp 82b\n\t";
+    s += "83:\n\t";
+    s += "cmpw $$0x3a64, 8(%rsi, %rcx, 1)\n\t"; // 'd', ':'
+    s += "jne 87f\n\t";
+    s += "addq $$10, %rcx\n\t";
+    s += "84:\n\t";
+    s += "movzbq (%rsi, %rcx, 1), %rax\n\t";
+    s += "cmpb $$' ', %al\n\t";
+    s += "je 85f\n\t";
+    s += "cmpb $$'\\t', %al\n\t";
+    s += "jne 86f\n\t";
+    s += "85:\n\t";
+    s += "incq %rcx\n\t";
+    s += "jmp 84b\n\t";
+    s += "86:\n\t";
+    s += "cmpb $$'1', %al\n\t";
+    s += "jb 88f\n\t";
+    s += "cmpb $$'9', %al\n\t";
+    s += "ja 88f\n\t";
+    s += "movabsq $$0xDEAD0004, %r10\n\t";
+    s += "orq %r10, %r8\n\t";
+    s += "jmp 88f\n\t";
+    s += "87:\n\t";
+    s += "movabsq $$0x6950726563617254, %rax\n\t";
+    s += "incq %rcx\n\t";
+    s += "jmp 82b\n\t";
+    s += "88:\n\t";
+    s += "addq $$560, %rsp\n\t";
+
+    // 1. RDTSC timing jitter around SYS_getpid with reasonable threshold
     s += "rdtsc\n\t";
     s += "shlq $$32, %rdx\n\t";
     s += "orq %rax, %rdx\n\t";
@@ -1200,12 +1266,13 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
     s += "11:\n\t";
     s += "movq %r8, $0\n\t";
 
-    InlineAsm *IA =
-        InlineAsm::get(DbgFTy, s,
-                       "=r,~{rax},~{rcx},~{rdx},~{rsi},~{rdi},~{r8},~{r10},~{"
-                       "r11},~{r14},~{dirflag},~{fpsr},~{flags}",
-                       true, false, InlineAsm::AD_ATT);
-    CallInst *CI = CallInst::Create(DbgFTy, IA, {}, "adb.tok", InsertPt);
+    FunctionType *tokFTy = FunctionType::get(I64Ty, false);
+    InlineAsm *IA = InlineAsm::get(
+        tokFTy, s,
+        "=r,~{rax},~{rcx},~{rdx},~{rsi},~{rdi},~{r8},~{r9},~{r10},~{"
+        "r11},~{r14},~{dirflag},~{fpsr},~{flags},~{memory}",
+        true, false, InlineAsm::AD_ATT);
+    CallInst *CI = CallInst::Create(tokFTy, IA, {}, "adb.tok", InsertPt);
 
     IRBuilder<> IRB(InsertPt);
     Value *IsDbg =
@@ -1356,6 +1423,20 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
       s += "movk x9, #0xDEAD, lsl #16\n\t";
       s += "orr x11, x11, x9\n\t";
       s += "12:\n\t";
+    } else if (triple.isOSLinux() || triple.isAndroid()) {
+      // Linux AArch64 SYS_ptrace(PTRACE_TRACEME = 0, 0, 0, 0) -> syscall 117
+      s += "mov x8, #117\n\t";
+      s += "mov x0, #0\n\t";
+      s += "mov x1, #0\n\t";
+      s += "mov x2, #0\n\t";
+      s += "mov x3, #0\n\t";
+      s += "svc #0\n\t";
+      s += "cmp x0, #0\n\t";
+      s += "b.ge 12f\n\t";
+      s += "movz x9, #3\n\t";
+      s += "movk x9, #0xDEAD, lsl #16\n\t";
+      s += "orr x11, x11, x9\n\t";
+      s += "12:\n\t";
     }
     s += "mov $0, x11\n\t";
 
@@ -1451,6 +1532,16 @@ void entangleFunctionIO(Function *F, Value *DbgToken, Value *HookToken,
     argIdx++;
   }
 
+  // Store T_env and T_exp in entry alloca slots so they can be loaded cleanly
+  // anywhere
+  BasicBlock &FnEntry = F->getEntryBlock();
+  AllocaInst *TenvSlot = IRBuilder<>(&FnEntry, FnEntry.begin())
+                             .CreateAlloca(I64Ty, nullptr, "env.tok.slot");
+  AllocaInst *TexpSlot = IRBuilder<>(&FnEntry, FnEntry.begin())
+                             .CreateAlloca(I64Ty, nullptr, "env.exp.slot");
+  IRB.CreateStore(T_env, TenvSlot);
+  IRB.CreateStore(T_exp, TexpSlot);
+
   // Scheme 3, 2, 4: Entangle Return Values
   for (BasicBlock &BB : *F) {
     if (BB.empty() || !BB.back().isTerminator())
@@ -1465,20 +1556,22 @@ void entangleFunctionIO(Function *F, Value *DbgToken, Value *HookToken,
         unsigned bw = RetTy->getIntegerBitWidth();
         if (bw >= 8 && bw <= 64) {
           IRBuilder<> RetIRB(RI);
+          Value *LocalTenv = RetIRB.CreateLoad(I64Ty, TenvSlot, "env.tok.load");
+          Value *LocalTexp = RetIRB.CreateLoad(I64Ty, TexpSlot, "env.exp.load");
           uint64_t rotShift = 23;
           Value *RotEnv =
-              RetIRB.CreateOr(RetIRB.CreateShl(T_env, rotShift),
-                              RetIRB.CreateLShr(T_env, 64 - rotShift));
+              RetIRB.CreateOr(RetIRB.CreateShl(LocalTenv, rotShift),
+                              RetIRB.CreateLShr(LocalTenv, 64 - rotShift));
           Value *RotExp =
-              RetIRB.CreateOr(RetIRB.CreateShl(T_exp, rotShift),
-                              RetIRB.CreateLShr(T_exp, 64 - rotShift));
+              RetIRB.CreateOr(RetIRB.CreateShl(LocalTexp, rotShift),
+                              RetIRB.CreateLShr(LocalTexp, 64 - rotShift));
           Value *M_env = RetIRB.CreateTrunc(RotEnv, RetTy);
           Value *M_exp = RetIRB.CreateTrunc(RotExp, RetTy);
 
           Value *RetMasked = RetIRB.CreateXor(RetVal, M_exp, "ret.masked");
           Value *RetLaundered = insertTaintLaunder(RetIRB, RetMasked);
           RetLaundered = insertVectorTaintDiffusion(
-              RetIRB, RetLaundered, RetIRB.CreateTrunc(T_env, RetTy));
+              RetIRB, RetLaundered, RetIRB.CreateTrunc(LocalTenv, RetTy));
           Value *RetFinal = RetIRB.CreateXor(RetLaundered, M_env, "ret.final");
           RI->setOperand(0, RetFinal);
         }
@@ -1487,17 +1580,19 @@ void entangleFunctionIO(Function *F, Value *DbgToken, Value *HookToken,
   }
 
   // Fallback / No-SPOF protection: If function had no integer arguments,
-  // entangle the first eligible internal integer operation in the entry block
+  // entangle the first eligible internal integer operation strictly AFTER
+  // InsertPt in InsertPt's basic block (guaranteeing dominance)
   if (!hasEntangledArg) {
     Value *Delta = IRB.CreateXor(T_env, T_exp, "env.delta");
-    BasicBlock &Entry = F->getEntryBlock();
-    for (Instruction &Inst : Entry) {
-      if (&Inst == InsertPt || isa<AllocaInst>(&Inst) || isa<PHINode>(&Inst))
-        continue;
+    BasicBlock *CurBB = InsertPt->getParent();
+    BasicBlock::iterator InstIt(InsertPt);
+    ++InstIt;
+    for (; InstIt != CurBB->end(); ++InstIt) {
+      Instruction &Inst = *InstIt;
       if (Inst.isBinaryOp() && Inst.getType()->isIntegerTy()) {
         Type *ITy = Inst.getType();
         if (ITy->getIntegerBitWidth() <= 64) {
-          IRBuilder<> OpIRB(&Entry, ++Inst.getIterator());
+          IRBuilder<> OpIRB(CurBB, ++Inst.getIterator());
           Value *TruncDelta =
               OpIRB.CreateZExtOrTrunc(Delta, ITy, "env.trunc.delta");
           Value *LaunderedDelta = insertTaintLaunder(OpIRB, TruncDelta);

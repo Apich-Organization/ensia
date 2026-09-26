@@ -37,7 +37,7 @@ Traditional **VM-based obfuscators (Virtualizers)** encapsulate target logic wit
 | **ANTIHOOK** | `-enable-antihook` | `ANTIHOOK=1` | Dual-defense integrity architecture: Entry Prologue Guard (0xE9, 0xEB, 0xCC, 0x68, 0xFF 0x25, 0x48 0xB8) + Scattered In-Flight CFG Auditing, embedded code self-check with data-flow entanglement (`T_env` / `T_exp`), direct syscall bypass, and 3-tier anti-taint engine. |
 | **ACDOBF** | `-enable-acdobf` | `ACDOBF=1` | Objective-C & Swift metadata scrambling, Fisher-Yates method list shuffling, randomized selector hashing, and dummy selector injection. |
 | **FCO** | `-enable-fco` | `FCO=1` | Function Call Obfuscation: replaces direct calls with runtime `dlopen`/`dlsym` (POSIX) or `GetProcAddress` (Windows), completely eliminating external symbol imports from binary headers. |
-| **ADB** | `-enable-adb` | `ADB=1` | Zero-dependency debugger detection: `/proc/self/status` TracerPid, `PTRACE_TRACEME`, hardware debug registers (`DR0-DR7`), single-step trap flag (`EFLAGS.TF` with red-zone stack preservation), and immediate violent termination (`SYS_exit_group(137)` / inline hardware traps). |
+| **ADB** | `-enable-adb` | `ADB=1` | Zero-dependency debugger detection: direct raw syscall `/proc/self/status` TracerPid continuous auditing (immune to `catch syscall ptrace`), kernel anti-attachment via `prctl(PR_SET_DUMPABLE, 0)`, hardware debug registers (`DR0-DR7`), in-flight scattered checks (local `EFLAGS.TF` & local RDTSC jitter), and immediate violent termination (`SYS_exit_group(137)` / inline hardware traps). |
 | **STRCRY** | `-enable-strcry` | `STRCRY=1` | Dual-layer Vernam OTP + Rijndael GF(2^8) Galois Field cipher with unordered dynamic inlined decryption stubs and **Anti-Dump memory zeroization** at function return/resume. |
 | **CONSTENC**| `-enable-constenc`| `CONSTENC=1`| Two-phase constant encryption: Scheme A (Bivariate MBA k-share), Scheme B (4-round Feistel non-linear mixing), and Scheme C (Dynamic AntiDebug token `%adb.tok` entanglement with DominatorTree validation). |
 | **SUBOBF** | `-enable-subobf` | `SUBOBF=1` | Instruction Substitution: replaces basic arithmetic and bitwise operations with complex algebraic and rotate-identity trees. |
@@ -60,7 +60,7 @@ Ensia schedules passes to maximize cascading complexity. Each pass treats the ob
  1. AntiHooking & AntiClassDump     -> Dual-defense AntiHook (Entry Prologue Guard + Scattered In-Flight Auditing + Embedded Integrity Self-Check with Data-Flow Entanglement), direct syscalls, dynamic execution tokens (T_env), ObjC metadata scrambling
  2. FunctionWrapper                 -> Generates polymorphic proxy trampolines around entry points (argument XOR shuffling, frame depth mutation, return masking)
  3. FunctionCallObfuscate (FCO)     -> Eliminates direct imports via dlopen/dlsym runtime resolution inside callers and proxies
- 4. AntiDebugging                   -> Injects ptrace, hardware breakpoint (DR0-7), TF single-step probes, violent exit handler
+ 4. AntiDebugging                   -> Injects direct syscall /proc/self/status TracerPid parser, prctl anti-attach, hardware debug registers (DR0-7), distributed in-flight TF/RDTSC probes, arithmetic data-flow entanglement, violent exit handler
  5. StringEncryption                -> Encrypts global strings with GF(2^8) stubs & injects volatile exit zeroizers
  6. ConstantEncryption (Phase 1)    -> Encrypts original programmer literals before CFG transformations
  7. Per-Function Transformation Loop:

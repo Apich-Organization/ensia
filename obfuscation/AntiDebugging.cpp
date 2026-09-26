@@ -199,7 +199,14 @@ struct AntiDebugging : public ModulePass {
 
   bool runOnModule(Module &M) override {
     auto ec = GObfConfig.resolve(M.getSourceFileName(), "");
-    uint32_t effProb = ec.anti_dbg.probability.value_or((uint32_t)ProbRate);
+    uint32_t effProb = 100;
+    if (ec.anti_dbg.probability.has_value())
+      effProb = *ec.anti_dbg.probability;
+    else if (ProbRate.getNumOccurrences() > 0)
+      effProb = (uint32_t)ProbRate;
+    else if (!flag)
+      effProb = (uint32_t)ProbRate;
+
     if (effProb > 100) {
       errs() << "AntiDebugging application function percentage "
                 "-adb_prob=x must be 0 < x <= 100";
@@ -244,6 +251,7 @@ struct AntiDebugging : public ModulePass {
     BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "entry", CtorFn);
     IRBuilder<> CIRB(CtorBB);
     ReturnInst *RetInst = CIRB.CreateRetVoid();
+    InjectMainDebugChecks(CtorFn, RetInst);
     getOrCreateDynamicDebugToken(CtorFn, RetInst, triple);
     appendToGlobalCtors(M, CtorFn, 0);
   }
@@ -278,6 +286,8 @@ struct AntiDebugging : public ModulePass {
       ++EntryIt;
     Instruction *EntryInsertPt = &*EntryIt;
 
+    InjectMainDebugChecks(&F, EntryInsertPt);
+
     Value *DbgToken = getOrCreateDynamicDebugToken(&F, EntryInsertPt, triple);
 
     // 2. Anti-Taint Bidirectional IO Entanglement (Schemes 1, 2, 3, 4)
@@ -297,23 +307,37 @@ struct AntiDebugging : public ModulePass {
     if (sinkGV) {
       EntangleIRB.CreateStore(DbgScaled, sinkGV, /*isVolatile=*/true);
     }
-    for (Instruction &Inst : *EntryBlock) {
-      if (&Inst == EntryInsertPt || isa<AllocaInst>(&Inst) ||
-          isa<PHINode>(&Inst))
-        continue;
-      if (Inst.isBinaryOp() && Inst.getType()->isIntegerTy()) {
-        Type *ITy = Inst.getType();
-        if (ITy->getIntegerBitWidth() <= 64) {
-          IRBuilder<> InstIRB(EntryBlock, ++Inst.getIterator());
-          Value *TruncDbg =
-              InstIRB.CreateZExtOrTrunc(DbgScaled, ITy, "adb.entangle.delta");
-          Value *Entangled =
-              InstIRB.CreateXor(&Inst, TruncDbg, "adb.entangled");
-          Inst.replaceAllUsesWith(Entangled);
-          cast<User>(Entangled)->setOperand(0, &Inst);
-          break;
+    AllocaInst *DbgScaledSlot =
+        IRBuilder<>(&F.getEntryBlock(), F.getEntryBlock().begin())
+            .CreateAlloca(I64Ty, nullptr, "adb.scaled.slot");
+    EntangleIRB.CreateStore(DbgScaled, DbgScaledSlot);
+
+    unsigned entangleCount = 0;
+    for (BasicBlock &BB : F) {
+      for (Instruction &Inst : BB) {
+        if (&Inst == EntryInsertPt || isa<AllocaInst>(&Inst) ||
+            isa<PHINode>(&Inst))
+          continue;
+        if (Inst.isBinaryOp() && Inst.getType()->isIntegerTy()) {
+          Type *ITy = Inst.getType();
+          if (ITy->getIntegerBitWidth() <= 64) {
+            IRBuilder<> InstIRB(&BB, ++Inst.getIterator());
+            Value *LocalDbg =
+                InstIRB.CreateLoad(I64Ty, DbgScaledSlot, "adb.scaled.local");
+            Value *TruncDbg =
+                InstIRB.CreateZExtOrTrunc(LocalDbg, ITy, "adb.entangle.delta");
+            Value *Entangled =
+                InstIRB.CreateXor(&Inst, TruncDbg, "adb.entangled");
+            Inst.replaceAllUsesWith(Entangled);
+            cast<User>(Entangled)->setOperand(0, &Inst);
+            entangleCount++;
+            if (entangleCount >= 2)
+              break;
+          }
         }
       }
+      if (entangleCount >= 2)
+        break;
     }
 
     // 4. Scattered debug checks throughout function body
@@ -334,7 +358,7 @@ struct AntiDebugging : public ModulePass {
     return true;
   }
 
-  void InjectMainDebugChecks(Function *F, Instruction *lastTerm) {
+  void InjectMainDebugChecks(Function *F, Instruction *InsertPt) {
     auto shuffleBlocks = [](SmallVectorImpl<std::string> &v) {
       unsigned n = v.size();
       for (unsigned i = n - 1; i > 0; --i) {
@@ -372,7 +396,7 @@ struct AntiDebugging : public ModulePass {
             "~{x0},~{x12},~{x13},~{x14},~{x15},~{x16},~{cc},~{memory}", true,
             false);
         CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
-                         lastTerm);
+                         InsertPt);
       }
 
       std::string adbasm;
@@ -404,7 +428,7 @@ struct AntiDebugging : public ModulePass {
           VoidFTy, adbasm,
           "~{x0},~{x1},~{x2},~{x3},~{x9},~{x16},~{cc},~{memory}", true, false);
       CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
-                       lastTerm);
+                       InsertPt);
 
       // ── Darwin x86_64 ─────────────────────────────────────────────────────
     } else if (triple.isOSDarwin() && triple.getArch() == Triple::x86_64) {
@@ -448,7 +472,7 @@ struct AntiDebugging : public ModulePass {
                                          "r15},~{dirflag},~{fpsr},~{flags}",
                                          true, false, InlineAsm::AD_ATT);
         CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
-                         lastTerm);
+                         InsertPt);
       }
 
       uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
@@ -472,7 +496,7 @@ struct AntiDebugging : public ModulePass {
           "~{rax},~{rdi},~{rsi},~{rdx},~{rcx},~{dirflag},~{fpsr},~{flags}",
           true, false, InlineAsm::AD_ATT);
       CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
-                       lastTerm);
+                       InsertPt);
 
       // ── Linux / Android x86_64 ────────────────────────────────────────────
     } else if ((triple.isOSLinux() || triple.isAndroid()) &&
@@ -504,37 +528,80 @@ struct AntiDebugging : public ModulePass {
         vm += "jbe 4f\n\t";
         vm += makeLinAbort();
         vm += "4:\n\t";
-        vm += "movq $$157, %rax\n\t";
-        vm += "movq $$3, %rdi\n\t";
-        vm += "xorq %rsi, %rsi\n\t";
+        // Kernel-level anti-attach: prctl(PR_SET_DUMPABLE = 4, 0, 0, 0, 0)
+        vm += "movq $$157, %rax\n\t"; // SYS_prctl
+        vm += "movq $$4, %rdi\n\t";   // PR_SET_DUMPABLE = 4
+        vm += "xorq %rsi, %rsi\n\t";  // SUID_DUMP_DISABLE = 0
         vm += "xorq %rdx, %rdx\n\t";
         vm += "xorq %r10, %r10\n\t";
         vm += "syscall\n\t";
-        vm += "cmpq $$2, %rax\n\t";
-        vm += "jne 5f\n\t";
-        vm += makeLinAbort();
-        vm += "5:\n\t";
-        // Linux x86_64 ptrace PTRACE_TRACEME check guarded by static once-flag
-        GlobalVariable *adbRan = F->getParent()->getGlobalVariable(
-            "ensia_adb_ran", /*AllowInternal=*/true);
-        if (!adbRan) {
-          adbRan = new GlobalVariable(*F->getParent(), Type::getInt8Ty(Ctx),
-                                      false, GlobalValue::InternalLinkage,
-                                      ConstantInt::get(Type::getInt8Ty(Ctx), 0),
-                                      "ensia_adb_ran");
-          adbRan->setVisibility(GlobalValue::HiddenVisibility);
-        }
-        vm += "cmpb $$0, ($0)\n\t";
-        vm += "jne 7f\n\t";
-        vm += "movb $$1, ($0)\n\t";
-        vm += "movq $$101, %rax\n\t"; // ptrace PTRACE_TRACEME check
-        vm += "xorq %rdi, %rdi\n\t";
-        vm += "xorq %rsi, %rsi\n\t";
+
+        // Continuous TracerPid detection from /proc/self/status via direct
+        // syscalls
+        vm += "subq $$560, %rsp\n\t";
+        vm += "movabsq $$0x65732f636f72702f, %rax\n\t"; // "/proc/se"
+        vm += "movq %rax, (%rsp)\n\t";
+        vm += "movabsq $$0x75746174732f666c, %rax\n\t"; // "lf/statu"
+        vm += "movq %rax, 8(%rsp)\n\t";
+        vm += "movw $$0x73, 16(%rsp)\n\t"; // 's', '\0'
+        vm += "movq $$257, %rax\n\t";      // SYS_openat
+        vm += "movq $$-100, %rdi\n\t";     // AT_FDCWD
+        vm += "movq %rsp, %rsi\n\t";
+        vm += "xorq %rdx, %rdx\n\t";
+        vm += "xorq %r10, %r10\n\t";
         vm += "syscall\n\t";
-        vm += "cmpq $$0, %rax\n\t";
-        vm += "js 6f\n\t";
+        vm += "testq %rax, %rax\n\t";
+        vm += "js 5f\n\t";
+        vm += "movq %rax, %rdi\n\t"; // fd in rdi
+        vm += "xorq %rax, %rax\n\t"; // SYS_read
+        vm += "leaq 24(%rsp), %rsi\n\t";
+        vm += "movq $$512, %rdx\n\t";
+        vm += "syscall\n\t";
+        vm += "movq %rax, %r10\n\t"; // bytes read in r10
+        vm += "movq $$3, %rax\n\t";  // SYS_close
+        vm += "syscall\n\t";
+        vm += "cmpq $$16, %r10\n\t";
+        vm += "jl 5f\n\t";
+        vm += "leaq 24(%rsp), %rsi\n\t";
+        vm += "subq $$12, %r10\n\t";
+        vm += "xorq %rcx, %rcx\n\t";
+        vm += "movabsq $$0x6950726563617254, %rax\n\t"; // "TracerPi"
+        vm += "82:\n\t";
+        vm += "cmpq %r10, %rcx\n\t";
+        vm += "jge 5f\n\t";
+        vm += "cmpq (%rsi, %rcx, 1), %rax\n\t";
+        vm += "je 83f\n\t";
+        vm += "incq %rcx\n\t";
+        vm += "jmp 82b\n\t";
+        vm += "83:\n\t";
+        vm += "cmpw $$0x3a64, 8(%rsi, %rcx, 1)\n\t"; // 'd', ':'
+        vm += "jne 87f\n\t";
+        vm += "addq $$10, %rcx\n\t";
+        vm += "84:\n\t";
+        vm += "movzbq (%rsi, %rcx, 1), %rax\n\t";
+        vm += "cmpb $$' ', %al\n\t";
+        vm += "je 85f\n\t";
+        vm += "cmpb $$'\\t', %al\n\t";
+        vm += "jne 86f\n\t";
+        vm += "85:\n\t";
+        vm += "incq %rcx\n\t";
+        vm += "jmp 84b\n\t";
+        vm += "86:\n\t";
+        vm += "cmpb $$'1', %al\n\t";
+        vm += "jb 5f\n\t";
+        vm += "cmpb $$'9', %al\n\t";
+        vm += "ja 5f\n\t";
+        vm += "addq $$560, %rsp\n\t";
+        vm += "jmp 6f\n\t"; // Trigger violent abort!
+        vm += "87:\n\t";
+        vm += "movabsq $$0x6950726563617254, %rax\n\t";
+        vm += "incq %rcx\n\t";
+        vm += "jmp 82b\n\t";
+        vm += "5:\n\t";
+        vm += "addq $$560, %rsp\n\t";
         vm += "jmp 7f\n\t";
         vm += "6:\n\t";
+        vm += "ud2\n\t";
         // Dynamically compute randomized corrupt target address to prevent
         // static binary patching
         uint64_t rndTarget =
@@ -544,14 +611,13 @@ struct AntiDebugging : public ModulePass {
         vm += "movabsq $$0x" + utohexstr(rndTarget) + ", %rax\n\t";
         vm += "jmpq *%rax\n\t";
         vm += "7:\n\t";
-        FunctionType *vmFTy = FunctionType::get(
-            Type::getVoidTy(Ctx), {PointerType::get(Ctx, 0)}, false);
+        FunctionType *vmFTy = FunctionType::get(Type::getVoidTy(Ctx), false);
         InlineAsm *vmIA = InlineAsm::get(
             vmFTy, vm,
-            "r,~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r12},~{"
-            "r14},~{r15},~{dirflag},~{fpsr},~{flags}",
+            "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r8},~{r9},~{r10},~{r11},~{"
+            "r12},~{r14},~{r15},~{dirflag},~{fpsr},~{flags},~{memory}",
             true, false, InlineAsm::AD_ATT);
-        CallInst::Create(vmFTy, vmIA, {adbRan}, "", lastTerm);
+        CallInst::Create(vmFTy, vmIA, ArrayRef<Value *>{}, "", InsertPt);
       }
 
       uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
@@ -583,7 +649,7 @@ struct AntiDebugging : public ModulePass {
                          "r14},~{r15},~{dirflag},~{fpsr},~{flags}",
                          true, false, InlineAsm::AD_ATT);
       CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
-                       lastTerm);
+                       InsertPt);
 
       // ── Linux / Android AArch64 ───────────────────────────────────────────
     } else if ((triple.isOSLinux() || triple.isAndroid()) &&
@@ -613,7 +679,7 @@ struct AntiDebugging : public ModulePass {
             "~{cc},~{memory}",
             true, false);
         CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
-                         lastTerm);
+                         InsertPt);
       }
 
       uint32_t noiseImm = cryptoutils->get_range(1, 0x100);
@@ -643,7 +709,7 @@ struct AntiDebugging : public ModulePass {
           "x14},~{x15},~{cc},~{memory}",
           true, false);
       CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
-                       lastTerm);
+                       InsertPt);
 
       // ── Windows x86_64 ────────────────────────────────────────────────────
     } else if (triple.isOSWindows() && triple.getArch() == Triple::x86_64) {
@@ -717,21 +783,41 @@ struct AntiDebugging : public ModulePass {
           "~{rax},~{rcx},~{rdx},~{r14},~{r15},~{dirflag},~{fpsr},~{flags}",
           true, false, InlineAsm::AD_ATT);
       CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
-                       lastTerm);
+                       InsertPt);
     }
   }
 
   void InjectScatteredDebugChecks(Function *F, Instruction *lastTerm) {
+    if (!triple.isAArch64() && triple.getArch() != Triple::x86_64)
+      return;
+
     SmallVector<BasicBlock *, 16> scatCands;
     for (BasicBlock &BB : *F) {
       if (&BB == &F->getEntryBlock())
         continue;
       if (&BB == lastTerm->getParent())
         continue;
-      if (!BB.getTerminator())
+      if (BB.isEHPad() || BB.isLandingPad())
+        continue;
+      if (BB.hasAddressTaken())
         continue;
       StringRef nm = BB.getName();
-      if (nm.contains("scatter") || nm.contains("Handler"))
+      if (nm.contains("scatter") || nm.contains("Handler") ||
+          nm.contains("lpad") || nm.contains("eh") || nm.contains("catch") ||
+          nm.contains("terminate"))
+        continue;
+      BasicBlock::iterator firstNonPHIIt = BB.getFirstNonPHIOrDbgOrLifetime();
+      if (firstNonPHIIt == BB.end())
+        continue;
+      Instruction *term = BB.getTerminator();
+      if (!term || isa<InvokeInst>(term) || isa<ResumeInst>(term))
+        continue;
+      unsigned instCount = 0;
+      for (Instruction &I : BB) {
+        if (!isa<PHINode>(&I) && !I.isDebugOrPseudoInst())
+          ++instCount;
+      }
+      if (instCount < 2)
         continue;
       scatCands.push_back(&BB);
     }
@@ -743,78 +829,97 @@ struct AntiDebugging : public ModulePass {
 
     unsigned nScat = std::min(3u, (unsigned)scatCands.size());
     LLVMContext &Ctx = F->getContext();
-    FunctionType *VoidFTy = FunctionType::get(Type::getVoidTy(Ctx), false);
+    Type *I64Ty = Type::getInt64Ty(Ctx);
 
     for (unsigned si = 0; si < nScat; si++) {
-      Instruction *sterm = scatCands[si]->getTerminator();
-      std::string sasm;
-      std::string constraints;
+      BasicBlock *Orig = scatCands[si];
+      BasicBlock::iterator splitIt = Orig->getFirstNonPHIOrDbgOrLifetime();
+      if (splitIt == Orig->end())
+        continue;
+      BasicBlock *Bottom = Orig->splitBasicBlock(splitIt, "scatter.adb.bot");
+      BasicBlock *SDbgHandler =
+          BasicBlock::Create(Ctx, "DbgHandler.adb.scatter", F);
+      IRBuilder<> HB(SDbgHandler);
+      insertViolentExit(HB, triple);
+
+      Orig->getTerminator()->eraseFromParent();
+      IRBuilder<> IRB(Orig);
+      Value *IsDbg = nullptr;
 
       if (triple.getArch() == Triple::x86_64) {
         if (si % 2 == 0) {
-          uint64_t noiseA = (uint64_t)cryptoutils->get_uint32_t() | 1;
-          uint64_t noiseB = (uint64_t)cryptoutils->get_uint32_t() | 1;
-          sasm += "rdtsc\n\t";
-          sasm += "shlq $$32, %rdx\n\t";
-          sasm += "orq %rax, %rdx\n\t";
-          sasm += "movq %rdx, %r11\n\t";
-          sasm += "movq $$" + std::to_string(noiseA) + ", %rax\n\t";
-          sasm += "movq $$" + std::to_string(noiseB) + ", %rcx\n\t";
-          sasm += "imulq %rcx, %rax\n\t";
-          sasm += "addq %rcx, %rax\n\t";
-          sasm += "xorq %rax, %rcx\n\t";
-          sasm += "imulq %rcx, %rax\n\t";
-          sasm += "rdtsc\n\t";
-          sasm += "shlq $$32, %rdx\n\t";
-          sasm += "orq %rax, %rdx\n\t";
-          sasm += "subq %r11, %rdx\n\t";
-          sasm += "js 1f\n\t";
-          sasm += "cmpq $$0x20000000, %rdx\n\t";
-          sasm += "jb 1f\n\t";
-          sasm += GetPlatformAbort(triple);
-          sasm += "1:\n\t";
+          // Distributed check 1: Local RDTSC timing jitter
+          FunctionType *JitFTy = FunctionType::get(I64Ty, false);
+          std::string jasm;
+          jasm += "rdtsc\n\t";
+          jasm += "shlq $$32, %rdx\n\t";
+          jasm += "orq %rax, %rdx\n\t";
+          jasm += "movq %rdx, %rsi\n\t";
+          jasm += "movq $$39, %rax\n\t"; // SYS_getpid
+          jasm += "syscall\n\t";
+          jasm += "rdtsc\n\t";
+          jasm += "shlq $$32, %rdx\n\t";
+          jasm += "orq %rax, %rdx\n\t";
+          jasm += "subq %rsi, %rdx\n\t";
+          jasm += "movq %rdx, $0";
+          InlineAsm *JIA = InlineAsm::get(JitFTy, jasm,
+                                          "=r,~{rax},~{rcx},~{rdx},~{rsi},~{"
+                                          "r11},~{dirflag},~{fpsr},~{flags}",
+                                          false, false, InlineAsm::AD_ATT);
+          CallInst *JCall = IRB.CreateCall(JIA);
+          IsDbg = IRB.CreateICmpUGT(
+              JCall, ConstantInt::get(I64Ty, 0x20000000ULL), "adb.scat.jit");
         } else {
-          // Scattered Trap Flag (single-step debugger detection)
-          sasm += "subq $$128, %rsp\n\t";
-          sasm += "pushfq\n\t";
-          sasm += "popq %rax\n\t";
-          sasm += "addq $$128, %rsp\n\t";
-          sasm += "testq $$0x100, %rax\n\t";
-          sasm += "jz 2f\n\t";
-          sasm += GetPlatformAbort(triple);
-          sasm += "2:\n\t";
-          if (triple.isOSWindows()) {
-            sasm += "movq %gs:96, %rax\n\t";
-            sasm += "cmpb $$0, 2(%rax)\n\t";
-            sasm += "jz 3f\n\t";
-            sasm += GetPlatformAbort(triple);
-            sasm += "3:\n\t";
-          }
+          // Distributed check 2: In-flight Trap Flag (detects single-step
+          // debugging)
+          FunctionType *TFFTy = FunctionType::get(I64Ty, false);
+          InlineAsm *TFIA = InlineAsm::get(TFFTy,
+                                           "subq $$128, %rsp\n\tpushfq\n\tpopq "
+                                           "$0\n\taddq $$128, %rsp\n\tandq "
+                                           "$$0x100, $0",
+                                           "=r,~{dirflag},~{fpsr},~{flags}",
+                                           false, false, InlineAsm::AD_ATT);
+          CallInst *TFCall = IRB.CreateCall(TFIA);
+          IsDbg = IRB.CreateICmpNE(TFCall, ConstantInt::get(I64Ty, 0),
+                                   "adb.scat.tf");
         }
-        constraints = "~{rax},~{rcx},~{rdx},~{rdi},~{rsi},~{r10},~{r11},~{r14},"
-                      "~{r15},~{dirflag},~{fpsr},~{flags}";
       } else if (triple.isAArch64()) {
-        sasm += "mrs x11, cntvct_el0\n\t";
-        for (int i = 0; i < 8; i++)
-          sasm += "nop\n\t";
-        sasm += "mrs x12, cntvct_el0\n\t";
-        sasm += "sub x12, x12, x11\n\t";
-        sasm += "mov x13, #0x20000\n\t";
-        sasm += "cmp x12, x13\n\t";
-        sasm += "b.lo 1f\n\t";
-        sasm += GetPlatformAbort(triple);
-        sasm += "1:\n\t";
-        constraints = "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x11},~{x12},~{x13}"
-                      ",~{x14},~{x15},~{x16},~{cc},~{memory}";
+        if (si % 2 == 0) {
+          FunctionType *CntFTy = FunctionType::get(I64Ty, false);
+          std::string casm;
+          casm += "mrs x11, cntvct_el0\n\t";
+          casm += "mov x8, #117\n\t";
+          casm += "mov x0, #0\n\t";
+          casm += "mov x1, #0\n\t";
+          casm += "mov x2, #0\n\t";
+          casm += "mov x3, #0\n\t";
+          casm += "svc #0\n\t";
+          casm += "mrs x12, cntvct_el0\n\t";
+          casm += "sub $0, x12, x11";
+          InlineAsm *CIA = InlineAsm::get(
+              CntFTy, casm,
+              "=r,~{x0},~{x1},~{x2},~{x3},~{x8},~{x11},~{x12},~{cc}", false,
+              false);
+          CallInst *CCall = IRB.CreateCall(CIA);
+          IsDbg = IRB.CreateICmpUGT(CCall, ConstantInt::get(I64Ty, 0x40000ULL),
+                                    "adb.scat.cnt");
+        } else {
+          FunctionType *CntFTy = FunctionType::get(I64Ty, false);
+          std::string casm;
+          casm += "mrs x9, cntvct_el0\n\tnop\n\tnop\n\tnop\n\tnop\n\t";
+          casm += "mrs x10, cntvct_el0\n\tsub $0, x10, x9";
+          InlineAsm *CIA = InlineAsm::get(CntFTy, casm, "=r,~{x9},~{x10},~{cc}",
+                                          false, false);
+          CallInst *CCall = IRB.CreateCall(CIA);
+          IsDbg = IRB.CreateICmpUGT(CCall, ConstantInt::get(I64Ty, 0x20000ULL),
+                                    "adb.scat.cnt");
+        }
       }
 
-      if (!sasm.empty()) {
-        InlineAsm *sIA = InlineAsm::get(VoidFTy, sasm, constraints, true, false,
-                                        triple.getArch() == Triple::x86_64
-                                            ? InlineAsm::AD_ATT
-                                            : InlineAsm::AD_ATT);
-        CallInst::Create(sIA->getFunctionType(), sIA, ArrayRef<Value *>{}, "",
-                         sterm);
+      if (IsDbg) {
+        IRB.CreateCondBr(IsDbg, SDbgHandler, Bottom);
+      } else {
+        IRB.CreateBr(Bottom);
       }
     }
   }

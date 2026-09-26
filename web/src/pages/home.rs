@@ -242,7 +242,7 @@ pub fn HomePage() -> impl IntoView {
                 <PipelineStep n="3" label="FunctionCallObfuscate (module)"
                     detail="Replaces direct call instructions with runtime dlopen/dlsym indirection inside caller bodies and proxy wrappers, eliminating static import references and stripping cross-module call graphs." />
                 <PipelineStep n="4" label="AntiDebugging (module)"
-                    detail="Multi-vector hardware & kernel probes: ptrace, hardware debug registers (DR0-DR7), EFLAGS.TF single-step traps with AMD64 Red Zone preservation, and unrecoverable violent exit." />
+                    detail="Direct kernel syscall /proc/self/status TracerPid parser, prctl(PR_SET_DUMPABLE, 0) anti-attach, hardware debug registers (DR0-DR7), distributed in-flight EFLAGS.TF & RDTSC jitter probes, arithmetic data-flow entanglement, and unrecoverable violent exit." />
                 <PipelineStep n="5" label="StringEncryption (module)"
                     detail="Dual-layer cipher: Vernam OTP + GF(2^8) Rijndael polynomial multiplication; on-demand decrypt stubs with automatic volatile zeroization at function exit (Anti-Dump)." />
                 <PipelineStep n="6" label="ConstantEncryption Phase 1 (module)"

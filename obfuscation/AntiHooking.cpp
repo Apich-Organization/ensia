@@ -827,6 +827,11 @@ struct AntiHook : public ModulePass {
       IRB.CreateStore(DeltaScaled, sinkGV, /*isVolatile=*/true);
     }
 
+    AllocaInst *DeltaScaledSlot =
+        IRBuilder<>(&F->getEntryBlock(), F->getEntryBlock().begin())
+            .CreateAlloca(I64Ty, nullptr, "ah.deltascaled.slot");
+    IRB.CreateStore(DeltaScaled, DeltaScaledSlot);
+
     // Hardware fault branch
     Value *IsTampered =
         IRB.CreateICmpNE(Delta, ConstantInt::get(I64Ty, 0), "ah.tampered");
@@ -849,8 +854,10 @@ struct AntiHook : public ModulePass {
         Type *ITy = Inst.getType();
         if (ITy->getIntegerBitWidth() <= 64) {
           IRBuilder<> CIRB(C, ++Inst.getIterator());
+          Value *LocalDelta =
+              CIRB.CreateLoad(I64Ty, DeltaScaledSlot, "ah.deltascaled.load");
           Value *TruncDelta =
-              CIRB.CreateZExtOrTrunc(DeltaScaled, ITy, "ah.entangle.delta");
+              CIRB.CreateZExtOrTrunc(LocalDelta, ITy, "ah.entangle.delta");
           Value *Entangled = CIRB.CreateXor(&Inst, TruncDelta, "ah.entangled");
           Inst.replaceAllUsesWith(Entangled);
           cast<User>(Entangled)->setOperand(0, &Inst);

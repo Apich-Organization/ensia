@@ -677,7 +677,7 @@ fn AntiDebugSection() -> impl IntoView {
             <p class="algo-section-title">"Platform-specific probes & violent exit handlers"</p>
             <p class="text-sm">
                 <strong>"Linux / Android: "</strong>
-                "Direct kernel syscalls for ptrace(PTRACE_TRACEME), /proc/self/status TracerPid polling, and prctl(PR_SET_DUMPABLE, 0). Probes hardware debug registers (DR0-DR7). Inspects the single-step Trap Flag (EFLAGS.TF) with System V AMD64 Red Zone preservation (subq $128, %rsp ... addq $128, %rsp) and Attribute::NoRedZone to prevent stack pointer clobbering. On detection, triggers immediate violent exit (SYS_exit_group(137) or hardware traps ud2 / brk #0xDEAD) to prevent debugger or hook interception."
+                "Direct raw kernel syscalls (SYS_openat 257, SYS_read 0, SYS_close 3) for continuous /proc/self/status TracerPid auditing without ptrace dependency (immune to debugger catch syscall ptrace), kernel-level anti-attachment via SYS_prctl (PR_SET_DUMPABLE = 4, 0) blocking non-root PTRACE_ATTACH and core dump dumping, priority 0 global constructor watchdog (__adb_init_watchdog), and distributed in-flight basic-block checks (local single-step EFLAGS.TF with red-zone preservation and local RDTSC jitter). On detection, triggers immediate violent exit (SYS_exit_group(137) or hardware traps ud2 / brk #0xDEAD) and entangles execution tokens into arithmetic data flow."
             </p>
             <p class="text-sm mt-sm">
                 <strong>"Windows (x86_64 / AArch64): "</strong>
