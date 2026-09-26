@@ -4,8 +4,8 @@
 
 | Branch | Support Status |
 | :--- | :--- |
-| 0.1.x | Active Support |
-| < 0.1.0 | End of Life (Unsupported) |
+| 0.2.x | Active Support |
+| < 0.2.0 | End of Life (Unsupported) |
 
 ---
 
