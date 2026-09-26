@@ -24,7 +24,7 @@ pub fn HomePage() -> impl IntoView {
             <div class="hero-badges">
                 <a
                     href="https://doi.org/10.5281/zenodo.20149843"
-                    target="_blank" rel="noopener"
+                    target="_blank" rel="noopener noreferrer"
                     class="badge-link"
                     title="Cite Ensia via Zenodo DOI"
                 >
@@ -33,7 +33,7 @@ pub fn HomePage() -> impl IntoView {
                 </a>
                 <a
                     href="https://github.com/Apich-Organization/ensia/releases"
-                    target="_blank" rel="noopener"
+                    target="_blank" rel="noopener noreferrer"
                     class="badge-link"
                     title="Latest releases"
                 >
@@ -49,7 +49,7 @@ pub fn HomePage() -> impl IntoView {
             <div class="hero-actions">
                 <a
                     href="https://github.com/Apich-Organization/ensia"
-                    target="_blank" rel="noopener"
+                    target="_blank" rel="noopener noreferrer"
                     class="btn btn-primary"
                 >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -66,12 +66,12 @@ pub fn HomePage() -> impl IntoView {
                 </a>
                 <a
                     href="https://github.com/Apich-Organization/ensia/releases"
-                    target="_blank" rel="noopener"
+                    target="_blank" rel="noopener noreferrer"
                     class="btn btn-ghost"
                 >
                     "\u{1F4E6} Releases"
                 </a>
-                <a href="https://discord.gg/D5e2czMTT9" target="_blank" rel="noopener" class="btn btn-ghost">
+                <a href="https://discord.gg/D5e2czMTT9" target="_blank" rel="noopener noreferrer" class="btn btn-ghost">
                     "Discord"
                 </a>
                 <button
@@ -300,10 +300,10 @@ pub fn HomePage() -> impl IntoView {
                 <p>
                     "Use must comply with the AGPL-3.0 license. See "
                     <a href="https://github.com/Apich-Organization/ensia/blob/main/ETHICS.md"
-                       target="_blank" rel="noopener">"ETHICS.md"</a>
+                       target="_blank" rel="noopener noreferrer">"ETHICS.md"</a>
                     " and "
                     <a href="https://github.com/Apich-Organization/ensia/blob/main/LEGAL.md"
-                       target="_blank" rel="noopener">"LEGAL.md"</a>
+                       target="_blank" rel="noopener noreferrer">"LEGAL.md"</a>
                     " for full details."
                 </p>
             </div>
@@ -337,7 +337,7 @@ pub fn HomePage() -> impl IntoView {
                         <a href="mailto:Xinyu.Yang@apich.org">"Xinyu.Yang@apich.org"</a>
                         " or privately to a maintainer. Full CoC at "
                         <a href="https://github.com/Apich-Organization/ensia/blob/main/CODE_OF_CONDUCT.md"
-                           target="_blank" rel="noopener">"CODE_OF_CONDUCT.md"</a>
+                           target="_blank" rel="noopener noreferrer">"CODE_OF_CONDUCT.md"</a>
                         "."
                     </p>
                 </div>
@@ -355,7 +355,7 @@ pub fn HomePage() -> impl IntoView {
                         "Email "
                         <a href="mailto:security@apich.org">"security@apich.org"</a>
                         " or visit "
-                        <a href="https://security.apich.org" target="_blank" rel="noopener">
+                        <a href="https://security.apich.org" target="_blank" rel="noopener noreferrer">
                             "security.apich.org"
                         </a>
                         " for PGP key and instructions. Include a minimal reproduction
@@ -397,7 +397,7 @@ pub fn HomePage() -> impl IntoView {
                     <div class="flex gap-sm mt-md flex-wrap">
                         <a
                             href="https://doi.org/10.5281/zenodo.20149843"
-                            target="_blank" rel="noopener"
+                            target="_blank" rel="noopener noreferrer"
                             class="btn btn-ghost btn-sm"
                         >"DOI: 10.5281/zenodo.20149843 \u{2197}"</a>
                     </div>
@@ -418,7 +418,7 @@ pub fn HomePage() -> impl IntoView {
                     </p>
                     <p class="mt-sm">
                         "Community (Discord): "
-                        <a href="https://discord.gg/D5e2czMTT9" target="_blank" rel="noopener">
+                        <a href="https://discord.gg/D5e2czMTT9" target="_blank" rel="noopener noreferrer">
                             "discord.gg/D5e2czMTT9"
                         </a>
                     </p>
@@ -429,7 +429,7 @@ pub fn HomePage() -> impl IntoView {
                     </p>
                     <a
                         href="https://github.com/Apich-Organization/ensia/releases"
-                        target="_blank" rel="noopener"
+                        target="_blank" rel="noopener noreferrer"
                         class="btn btn-ghost btn-sm mt-sm"
                     >"\u{1F4E6} github.com/Apich-Organization/ensia/releases \u{2197}"</a>
                 </div>
@@ -448,20 +448,20 @@ pub fn HomePage() -> impl IntoView {
                 </p>
                 <p class="mt-sm">
                     "Ensia continues the lineage of "
-                    <a href="https://github.com/HikariObfuscator/Hikari/" target="_blank" rel="noopener">
+                    <a href="https://github.com/HikariObfuscator/Hikari/" target="_blank" rel="noopener noreferrer">
                         "Hikari"
                     </a>
                     " \u{2192} "
-                    <a href="https://github.com/NeHyci/Hikari-LLVM15/" target="_blank" rel="noopener">
+                    <a href="https://github.com/NeHyci/Hikari-LLVM15/" target="_blank" rel="noopener noreferrer">
                         "Hikari-LLVM15"
                     </a>
                     " \u{2192} "
-                    <a href="https://github.com/PPKunOfficial/Hikari-LLVM19/" target="_blank" rel="noopener">
+                    <a href="https://github.com/PPKunOfficial/Hikari-LLVM19/" target="_blank" rel="noopener noreferrer">
                         "Hikari-LLVM19"
                     </a>
                     " \u{2192} Ensia. Full attribution in "
                     <a href="https://github.com/Apich-Organization/ensia/blob/main/LEGAL.md"
-                       target="_blank" rel="noopener">"LEGAL.md"</a>
+                       target="_blank" rel="noopener noreferrer">"LEGAL.md"</a>
                     "."
                 </p>
                 <p class="mt-sm text-sm text-muted">
