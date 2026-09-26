@@ -502,7 +502,7 @@ struct AntiDebugging : public ModulePass {
     } else if ((triple.isOSLinux() || triple.isAndroid()) &&
                triple.getArch() == Triple::x86_64) {
       auto makeLinAbort = [&]() -> std::string {
-        return getViolentExitAsm(triple);
+        return getViolentExitAsm(triple, 101);
       };
 
       {
@@ -840,7 +840,7 @@ struct AntiDebugging : public ModulePass {
       BasicBlock *SDbgHandler =
           BasicBlock::Create(Ctx, "DbgHandler.adb.scatter", F);
       IRBuilder<> HB(SDbgHandler);
-      insertViolentExit(HB, triple);
+      insertViolentExit(HB, triple, 102);
 
       Orig->getTerminator()->eraseFromParent();
       IRBuilder<> IRB(Orig);

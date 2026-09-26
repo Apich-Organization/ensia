@@ -726,7 +726,7 @@ Value *insertOpaqueBarrier(IRBuilder<> &IRB, Value *V) {
   return insertOpaqueBarrierImpl(IRB, V);
 }
 
-std::string getViolentExitAsm(const Triple &triple) {
+std::string getViolentExitAsm(const Triple &triple, int exitCode) {
   uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
   uint64_t nonCanon =
       ((uint64_t)(cryptoutils->get_uint32_t()) & 0x00007FFFFFFFFFFFull) |
@@ -780,9 +780,9 @@ std::string getViolentExitAsm(const Triple &triple) {
       s += "movq $$9, %rsi\n\t";
       s += "syscall\n\t";
 
-      // Layer 2: Direct BSD SYS_exit(137) -> syscall 1 (0x2000001)
+      // Layer 2: Direct BSD SYS_exit(exitCode) -> syscall 1 (0x2000001)
       s += "movq $$0x2000001, %rax\n\t";
-      s += "movq $$137, %rdi\n\t";
+      s += "movq $$" + std::to_string(exitCode) + ", %rdi\n\t";
       s += "syscall\n\t";
 
       // Layer 3: Hardware Division by Zero (#DE)
@@ -808,9 +808,9 @@ std::string getViolentExitAsm(const Triple &triple) {
       s += "xorq %r10, %r10\n\t";
       s += "syscall\n\t";
 
-      // Layer 2: Direct raw syscall SYS_exit_group(137) (syscall 231)
+      // Layer 2: Direct raw syscall SYS_exit_group(exitCode) (syscall 231)
       s += "movq $$231, %rax\n\t";
-      s += "movq $$137, %rdi\n\t";
+      s += "movq $$" + std::to_string(exitCode) + ", %rdi\n\t";
       s += "syscall\n\t";
 
       // Layer 3: Hardware Division by Zero (#DE)
@@ -877,8 +877,8 @@ std::string getViolentExitAsm(const Triple &triple) {
 
     } else if (triple.isOSDarwin()) {
       // macOS / iOS AArch64:
-      // Layer 1: Direct BSD SYS_exit(137): x0=137, x16=1, svc #0x80
-      s += "mov x0, #137\n\t";
+      // Layer 1: Direct BSD SYS_exit(exitCode): x0=exitCode, x16=1, svc #0x80
+      s += "mov x0, #" + std::to_string(exitCode) + "\n\t";
       s += "mov x16, #1\n\t";
       s += "svc #0x80\n\t";
 
@@ -904,9 +904,9 @@ std::string getViolentExitAsm(const Triple &triple) {
       s += "mov x4, #0\n\t";
       s += "svc #0\n\t";
 
-      // Layer 2: Direct syscall SYS_exit_group(137) (syscall 94)
+      // Layer 2: Direct syscall SYS_exit_group(exitCode) (syscall 94)
       s += "mov x8, #94\n\t";
-      s += "mov x0, #137\n\t";
+      s += "mov x0, #" + std::to_string(exitCode) + "\n\t";
       s += "svc #0\n\t";
 
       // Layer 3: Synchronous Data Abort
@@ -955,11 +955,11 @@ std::string getViolentExitAsm(const Triple &triple) {
   return s;
 }
 
-void insertViolentExit(IRBuilder<> &IRB, const Triple &triple) {
+void insertViolentExit(IRBuilder<> &IRB, const Triple &triple, int exitCode) {
   LLVMContext &Ctx = IRB.getContext();
   FunctionType *VoidFTy = FunctionType::get(Type::getVoidTy(Ctx), false);
   if (triple.getArch() == Triple::x86_64) {
-    std::string asmStr = getViolentExitAsm(triple);
+    std::string asmStr = getViolentExitAsm(triple, exitCode);
     InlineAsm *IA = InlineAsm::get(
         VoidFTy, asmStr,
         "~{rax},~{rcx},~{rdx},~{rsi},~{rdi},~{r8},~{r9},~{r10},~{r11},~{r14},~{"
@@ -968,7 +968,7 @@ void insertViolentExit(IRBuilder<> &IRB, const Triple &triple) {
     IRB.CreateCall(IA);
     IRB.CreateUnreachable();
   } else if (triple.isAArch64()) {
-    std::string asmStr = getViolentExitAsm(triple);
+    std::string asmStr = getViolentExitAsm(triple, exitCode);
     InlineAsm *IA = InlineAsm::get(
         VoidFTy, asmStr,
         "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x14},~{x15},~{x16},~{"
@@ -1280,7 +1280,7 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
     Instruction *ThenTerm =
         SplitBlockAndInsertIfThen(IsDbg, InsertPt, /*unreachable=*/true);
     IRBuilder<> ExitIRB(ThenTerm);
-    insertViolentExit(ExitIRB, triple);
+    insertViolentExit(ExitIRB, triple, 106);
     ThenTerm->eraseFromParent();
     return CI;
   }

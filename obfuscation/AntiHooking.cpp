@@ -740,13 +740,14 @@ struct AntiHook : public ModulePass {
     CreateCallbackAndJumpBack(&IRBB, C);
   }
 
-  void CreateCallbackAndJumpBack(IRBuilder<> *IRBB, BasicBlock *C = nullptr) {
+  void CreateCallbackAndJumpBack(IRBuilder<> *IRBB, BasicBlock *C = nullptr,
+                                 int exitCode = 103) {
     Module *M = C ? C->getModule() : IRBB->GetInsertBlock()->getModule();
     Function *AHCallBack = M->getFunction("AHCallBack");
     if (AHCallBack) {
       IRBB->CreateCall(AHCallBack);
     }
-    insertViolentExit(*IRBB, triple);
+    insertViolentExit(*IRBB, triple, exitCode);
   }
 
   // ── Embedded Code Integrity Self-Check with Anti-Patching Data-Flow
@@ -839,7 +840,7 @@ struct AntiHook : public ModulePass {
 
     // Fail handler block
     IRBuilder<> FailIRB(IntegFail);
-    insertViolentExit(FailIRB, triple);
+    insertViolentExit(FailIRB, triple, 104);
 
     // Dynamic Debug Measurement at prologue
     Instruction *ContPt = &*C->getFirstNonPHIOrDbgOrLifetime();
@@ -988,7 +989,7 @@ struct AntiHook : public ModulePass {
       if (!SHandler) {
         SHandler = BasicBlock::Create(Ctx, "HookHandler.ah.scatter", F);
         IRBuilder<> HB(SHandler);
-        CreateCallbackAndJumpBack(&HB, nullptr);
+        CreateCallbackAndJumpBack(&HB, nullptr, 105);
       }
 
       Orig->getTerminator()->eraseFromParent();
