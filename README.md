@@ -371,6 +371,60 @@ bash test/run_obf_tests.sh
 
 ---
 
+## Official Crackme Competition
+
+A CTF-style crackme using this obfuscator is available in the ./ctf folder. You can compile it yourself, as the source code is fully open-source, or you can simply download the test binary from our releases page.
+
+Since we do not provide the crack/solution, anyone who successfully solves this challenge with clear, documented steps will win a reward and earn a permanent spot on our security team homepage!
+
+```markdown
+# Challenge Guide: Ensia Secure Cryptographic Enclave
+
+* **Target Binary**: `./challenge`
+* **Total Score**: 1000 pts
+* **Runtime Environment**: Linux x86_64
+
+---
+
+## Mission Objectives & Score Distribution
+
+This challenge consists of 4 tightly coupled cryptographic verification stages. Reverse engineer the program logic to recover the key input for each stage sequentially, and finally decrypt the flag in memory:
+
+| Stage | Objective | Input Format Specification | Score |
+| --- | --- | --- | --- |
+| **Stage 1** | Activation Key | `XXXX-XXXX-XXXX-XXXX` (16 uppercase/lowercase/numeric characters) | **150 pts** |
+| **Stage 2** | Calibration Coordinates | Four 32-bit unsigned integers (space-separated, e.g., `a b c d`) | **200 pts** |
+| **Stage 3** | Feistel Passphrase | 16-byte ASCII string | **200 pts** |
+| **Stage 4** | Sealing Token | 8-character hexadecimal string | **150 pts** |
+| **Final** | Core Enclave Unlocked Flag | Complete `ensia{...}` string | **300 pts** |
+| **Total** |  |  | **1000 pts** |
+
+---
+
+## Verification & Submission Workflow
+
+1. **Execute the Program**:
+```bash
+./challenge
+
+```
+
+2. **Success Criteria**:
+* The 4 stages utilize non-linear state-coupled vectors. An incorrect input in any stage will cause an avalanche shift in the subsequent keystream and memory zeroization.
+* Upon successful completion of all inputs, the program outputs:
+```text
+[+] Enclave Unlocked! Verification Complete.
+[+] Flag: ensia{...}
+
+```
+
+3. **Scoring Rules**:
+* The competition platform supports independent scoring based on the raw keys recovered for Stage 1 through Stage 4.
+* Successfully submitting the decrypted `ensia{...}` output grants the completion score.
+```
+
+---
+
 ## **Licensing & Attribution**
 
 This project is licensed under the **AGPL-3.0**. It includes code and concepts continuing the lineage of Hikari and LLVM. See [LEGAL.md](./LEGAL.md) for full details on project history and original authors.
