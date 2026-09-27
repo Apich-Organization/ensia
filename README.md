@@ -377,8 +377,7 @@ A CTF-style crackme using this obfuscator is available in the ./ctf folder. You 
 
 Since we do not provide the crack/solution, anyone who successfully solves this challenge with clear, documented steps will win a reward and earn a permanent spot on our security team homepage!
 
-```markdown
-# Challenge Guide: Ensia Secure Cryptographic Enclave
+## Challenge Guide: Ensia Secure Cryptographic Enclave
 
 * **Target Binary**: `./challenge`
 * **Total Score**: 1000 pts
@@ -386,7 +385,7 @@ Since we do not provide the crack/solution, anyone who successfully solves this 
 
 ---
 
-## Mission Objectives & Score Distribution
+### Mission Objectives & Score Distribution
 
 This challenge consists of 4 tightly coupled cryptographic verification stages. Reverse engineer the program logic to recover the key input for each stage sequentially, and finally decrypt the flag in memory:
 
@@ -401,7 +400,7 @@ This challenge consists of 4 tightly coupled cryptographic verification stages. 
 
 ---
 
-## Verification & Submission Workflow
+### Verification & Submission Workflow
 
 1. **Execute the Program**:
 ```bash
@@ -421,7 +420,6 @@ This challenge consists of 4 tightly coupled cryptographic verification stages. 
 3. **Scoring Rules**:
 * The competition platform supports independent scoring based on the raw keys recovered for Stage 1 through Stage 4.
 * Successfully submitting the decrypted `ensia{...}` output grants the completion score.
-```
 
 ---
 
@@ -429,10 +427,14 @@ This challenge consists of 4 tightly coupled cryptographic verification stages. 
 
 This project is licensed under the **AGPL-3.0**. It includes code and concepts continuing the lineage of Hikari and LLVM. See [LEGAL.md](./LEGAL.md) for full details on project history and original authors.
 
+---
+
 ## **Sponsorship & Funding Policy**
 
 We welcome sponsorships supporting open-source compiler security research. Please review our [Sponsorship Policy](./sponsor.md) for details on fund allocation, contribution options via Open Collective, and corporate tiers.
 - **Open Collective:** [https://opencollective.com/apich-organization](https://opencollective.com/apich-organization)
+
+---
 
 ## **Code of Conduct & Security**
 
