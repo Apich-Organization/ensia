@@ -15,6 +15,16 @@ Ensia supports cross-platform code protection across **Linux, Windows (MSVC, cla
 
 ---
 
+## Support Tiers
+
+| Tier | Operating Systems | Architectures | Support Status |
+| --- | --- | --- | --- |
+| **Tier 0** | Linux, Windows | x86_64, AArch64 | Full support & Release blocker |
+| **Tier 1** | macOS, FreeBSD | x86_64, AArch64 | Full support & Non-release blocker |
+| **Tier 2** | OpenBSD, iOS, Android, and others | RISC-V, i386 and others | Partial support & Issue response only |
+
+---
+
 ## **Core Philosophy: Eliminating Single Points of Failure (SPOF)**
 
 Traditional **VM-based obfuscators (Virtualizers)** encapsulate target logic within a custom interpreter loop. While difficult to inspect by hand, they introduce a catastrophic **Single Point of Failure (SPOF)**: once an analyst devirtualizes the bytecode opcode dispatch table or extracts the central interpreter handler loop, all protected routines collapse at once.
@@ -375,15 +385,15 @@ bash test/run_obf_tests.sh
 
 A CTF-style crackme using this obfuscator is available in the ./ctf folder. You can compile it yourself, as the source code is fully open-source, or you can simply download the test binary from our releases page.
 
-Since we do not provide the crack/solution, anyone who successfully solves this challenge with clear, documented steps will win a reward and earn a permanent spot on our security team homepage!
+Since we do not provide the crack/solution, anyone who successfully solves this challenge with clear, documented steps will win a reward and earn a permanent spot on our security team homepage! If you successfully solve this Crackme, please submit your solution to [security@apich.org](mailto:security@apich.org) for verification and rewards.
+
+---
 
 ## Challenge Guide: Ensia Secure Cryptographic Enclave
 
 * **Target Binary**: `./challenge`
 * **Total Score**: 1000 pts
 * **Runtime Environment**: Linux x86_64
-
----
 
 ### Mission Objectives & Score Distribution
 
@@ -397,8 +407,6 @@ This challenge consists of 4 tightly coupled cryptographic verification stages. 
 | **Stage 4** | Sealing Token | 8-character hexadecimal string | **150 pts** |
 | **Final** | Core Enclave Unlocked Flag | Complete `ensia{...}` string | **300 pts** |
 | **Total** |  |  | **1000 pts** |
-
----
 
 ### Verification & Submission Workflow
 
