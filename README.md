@@ -5,6 +5,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20149843.svg)](https://doi.org/10.5281/zenodo.20149843)
 [![Discord Server](https://img.shields.io/discord/1459399539403522074.svg?label=Discord&logo=discord&color=blue)](https://discord.gg/D5e2czMTT9)
+[![Zulip Chat](https://img.shields.io/badge/chat-on%20Zulip-5e7ce2?logo=zulip&logoColor=white)](https://apich.zulipchat.com/)
 [![Scc Count Badge Code](https://sloc.xyz/github/Apich-Organization/dtact/?category=code)](https://github.com/Apich-Organization/dtact/)
 
 **⚠️ ETHICAL USE WARNING:** This is a high-strength industrial compiler obfuscation tool. Please read our [Ethics & Disclaimer Notice](./ETHICS.md) before use.
