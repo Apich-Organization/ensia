@@ -21,7 +21,7 @@ Ensia supports cross-platform code protection across **Linux, Windows (MSVC, cla
 | --- | --- | --- | --- |
 | **Tier 0** | Linux, Windows | x86_64, AArch64 | Full support & Release blocker |
 | **Tier 1** | macOS, FreeBSD | x86_64, AArch64 | Full support & Non-release blocker |
-| **Tier 2** | OpenBSD, iOS, Android, and others | RISC-V, i386 and others | Partial support & Issue response only |
+| **Tier 2** | OpenBSD, iOS, Android, and others | RISC-V, i386, and others | Partial support & Issue response only |
 
 ---
 
