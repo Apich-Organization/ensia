@@ -44,6 +44,12 @@
 #define AARCH64_SIGNATURE_BR 0b1101011000011111000000
 #define AARCH64_SIGNATURE_BRK 0b11010100001
 
+// Number of iterations of the serialized burn loop used to advance the virtual
+// counter by a deterministic number of core cycles before the second
+// CNTVCT_EL0 read.  256 dependent ADDs cost roughly 400-512 cycles (~0.2us on
+// a 2.4GHz core), which is >>1 tick even with a 54MHz CNTFRQ_EL0.
+#define AARCH64_BURN_ITERS 256
+
 using namespace llvm;
 
 static cl::opt<std::string> PreCompiledIRPath(
@@ -379,8 +385,18 @@ struct AntiDebugging : public ModulePass {
 
         std::string vm;
         vm += "mrs x12, cntvct_el0\n\t";
-        for (int i = 0; i < 16; i++)
-          vm += "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t";
+        // Serialized burn loop instead of a sled of independent NOPs: Apple
+        // Silicon retires independent NOPs at 4-6 IPC, so the old 128-NOP sled
+        // could finish inside a single CNTVCT_EL0 tick (24MHz on Apple
+        // Silicon) and make the "counter did not advance" branch kill a clean
+        // process.  A dependent ADD chain cannot be co-issued, so the window
+        // is deterministic.
+        vm += "mov x14, #0\n\t";
+        vm += "mov x15, #" + std::to_string(AARCH64_BURN_ITERS) + "\n\t";
+        vm += "3:\n\t";
+        vm += "add x14, x14, #1\n\t";
+        vm += "subs x15, x15, #1\n\t";
+        vm += "b.ne 3b\n\t";
         vm += "mrs x13, cntvct_el0\n\t";
         vm += "sub x12, x13, x12\n\t";
         vm += "cbnz x12, 1f\n\t";
@@ -659,54 +675,71 @@ struct AntiDebugging : public ModulePass {
       };
 
       {
+        // Probe 1: virtual counter sanity.
+        //
+        // The measurement window is a *serialized* dependency chain instead of
+        // a sled of independent NOPs: wide-issue cores (Cortex-A76 and later)
+        // retire independent NOPs at 4-6 IPC, so the old 128-NOP sled could
+        // complete in under a single CNTVCT_EL0 tick when CNTFRQ_EL0 is low
+        // (54MHz on BCM2711/BCM2712).  The "counter did not advance" branch
+        // then fired on perfectly clean processes.  A dependent ADD chain
+        // cannot be co-issued, which makes the elapsed-tick count deterministic
+        // and comfortably >=1 tick on every counter frequency.
         std::string vm;
         vm += "mrs x12, cntvct_el0\n\t";
-        for (int i = 0; i < 16; i++)
-          vm += "nop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\tnop\n\t";
+        vm += "mov x14, #0\n\t";
+        vm += "mov x15, #" + std::to_string(AARCH64_BURN_ITERS) + "\n\t";
+        vm += "3:\n\t";
+        vm += "add x14, x14, #1\n\t";
+        vm += "subs x15, x15, #1\n\t";
+        vm += "b.ne 3b\n\t";
         vm += "mrs x13, cntvct_el0\n\t";
         vm += "sub x14, x13, x12\n\t";
-        vm += "cbnz x14, 1f\n\t";
-        vm += makeAA64Abort();
-        vm += "1:\n\t";
-        vm += "mov x15, #0xA000\n\t";
+        vm += "cbz x14, 1f\n\t"; // frozen / emulated counter
+        vm += aa64TickBudget("x15", "x9", 10, 0xA000); // ~1ms of wall clock
         vm += "cmp x14, x15\n\t";
         vm += "b.lo 2f\n\t";
+        vm += "1:\n\t";
         vm += makeAA64Abort();
         vm += "2:\n\t";
         InlineAsm *vmIA = InlineAsm::get(
             VoidFTy, vm,
-            "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x12},~{x13},~{x14},~{x15},"
-            "~{cc},~{memory}",
+            "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x12},~{x13},~{x14},~{"
+            "x15},~{x16},~{cc},~{memory}",
             true, false);
         CallInst::Create(vmIA->getFunctionType(), vmIA, ArrayRef<Value *>{}, "",
                          InsertPt);
       }
 
       uint32_t noiseImm = cryptoutils->get_range(1, 0x100);
-      uint64_t tsThresh = 0x40000ULL;
       std::string adbasm;
       adbasm += "mrs x11, cntvct_el0\n\t";
       adbasm += "add x9, x11, #" + std::to_string(noiseImm) + "\n\t";
       adbasm += "sub x9, x9, #" + std::to_string(noiseImm) + "\n\t";
-      adbasm += "mov x8, #117\n\t";
-      adbasm += "mov x0, #0\n\t";
-      adbasm += "mov x1, #0\n\t";
-      adbasm += "mov x2, #0\n\t";
-      adbasm += "mov x3, #0\n\t";
+      // Probe 2: kernel-entry latency (single-step / breakpoint detection).
+      //
+      // __NR_getpid (172) is used instead of __NR_ptrace/PTRACE_TRACEME (117):
+      // TRACEME is not idempotent.  The first call succeeds and sets
+      // PT_PTRACED on the whole process, every later call returns -EPERM, and
+      // the previous `cbz x0` fallback then treated our own earlier probe as a
+      // live tracer and killed the process.  TRACEME also makes the process
+      // stop with SIGTRAP on the next execve().  getpid crosses the same
+      // user/kernel boundary with no side effects, so the latency measurement
+      // stays valid when this block is emitted at every function entry.
+      adbasm += "mov x8, #172\n\t";
       adbasm += "svc #0\n\t";
       adbasm += "mrs x10, cntvct_el0\n\t";
       adbasm += "sub x10, x10, x11\n\t";
-      adbasm += "mov x12, #" + std::to_string(tsThresh & 0xFFFF) + "\n\t";
+      adbasm += aa64TickBudget("x12", "x13", 8, 0x40000); // ~4ms of wall clock
       adbasm += "cmp x10, x12\n\t";
-      adbasm += "b.hi 1f\n\t";
-      adbasm += "cbz x0, 2f\n\t";
+      adbasm += "b.ls 2f\n\t";
       adbasm += "1:\n\t";
       adbasm += makeAA64Abort();
       adbasm += "2:\n\t";
       InlineAsm *IA = InlineAsm::get(
           VoidFTy, adbasm,
           "~{x0},~{x1},~{x2},~{x3},~{x4},~{x8},~{x9},~{x10},~{x11},~{x12},~{"
-          "x14},~{x15},~{cc},~{memory}",
+          "x13},~{x14},~{x15},~{x16},~{cc},~{memory}",
           true, false);
       CallInst::Create(IA->getFunctionType(), IA, ArrayRef<Value *>{}, "",
                        InsertPt);
@@ -888,18 +921,17 @@ struct AntiDebugging : public ModulePass {
           FunctionType *CntFTy = FunctionType::get(I64Ty, false);
           std::string casm;
           casm += "mrs x11, cntvct_el0\n\t";
-          casm += "mov x8, #117\n\t";
-          casm += "mov x0, #0\n\t";
-          casm += "mov x1, #0\n\t";
-          casm += "mov x2, #0\n\t";
-          casm += "mov x3, #0\n\t";
+          // __NR_getpid (172): same kernel-entry latency as the old
+          // PTRACE_TRACEME probe, without the PT_PTRACED side effect (the
+          // scattered probe runs mid-function, possibly several times).
+          casm += "mov x8, #172\n\t";
           casm += "svc #0\n\t";
           casm += "mrs x12, cntvct_el0\n\t";
           casm += "sub $0, x12, x11";
           InlineAsm *CIA = InlineAsm::get(
               CntFTy, casm,
-              "=r,~{x0},~{x1},~{x2},~{x3},~{x8},~{x11},~{x12},~{cc}", false,
-              false);
+              "=r,~{x0},~{x1},~{x2},~{x3},~{x8},~{x11},~{x12},~{cc}",
+              /*hasSideEffects=*/true, false);
           CallInst *CCall = IRB.CreateCall(CIA);
           IsDbg = IRB.CreateICmpUGT(CCall, ConstantInt::get(I64Ty, 0x40000ULL),
                                     "adb.scat.cnt");
@@ -909,7 +941,7 @@ struct AntiDebugging : public ModulePass {
           casm += "mrs x9, cntvct_el0\n\tnop\n\tnop\n\tnop\n\tnop\n\t";
           casm += "mrs x10, cntvct_el0\n\tsub $0, x10, x9";
           InlineAsm *CIA = InlineAsm::get(CntFTy, casm, "=r,~{x9},~{x10},~{cc}",
-                                          false, false);
+                                          /*hasSideEffects=*/true, false);
           CallInst *CCall = IRB.CreateCall(CIA);
           IsDbg = IRB.CreateICmpUGT(CCall, ConstantInt::get(I64Ty, 0x20000ULL),
                                     "adb.scat.cnt");

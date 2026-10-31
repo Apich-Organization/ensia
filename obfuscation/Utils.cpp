@@ -726,6 +726,116 @@ Value *insertOpaqueBarrier(IRBuilder<> &IRB, Value *V) {
   return insertOpaqueBarrierImpl(IRB, V);
 }
 
+std::string aa64MovImm(const char *Reg, uint64_t Val) {
+  std::string S;
+  S += "movz " + std::string(Reg) + ", #" + std::to_string(Val & 0xFFFFu) +
+       "\n\t";
+  for (unsigned Shift = 16; Shift < 64; Shift += 16) {
+    uint64_t Chunk = (Val >> Shift) & 0xFFFFu;
+    if (Chunk)
+      S += "movk " + std::string(Reg) + ", #" + std::to_string(Chunk) +
+           ", lsl #" + std::to_string(Shift) + "\n\t";
+  }
+  return S;
+}
+
+std::string aa64TickBudget(const char *Reg, const char *Scratch, unsigned Shift,
+                           uint64_t Fallback) {
+  std::string S;
+  S += "mrs " + std::string(Scratch) + ", cntfrq_el0\n\t";
+  S += "lsr " + std::string(Reg) + ", " + std::string(Scratch) + ", #" +
+       std::to_string(Shift) + "\n\t";
+  S += "cbnz " + std::string(Reg) + ", 4f\n\t";
+  S += aa64MovImm(Reg, Fallback);
+  S += "4:\n\t";
+  return S;
+}
+
+// Reads /proc/self/status and reports whether TracerPid is non-zero.
+// This is the idempotent replacement for PTRACE_TRACEME: TRACEME only reports
+// the real state on its first call (it then sets PT_PTRACED, so every later
+// call returns -EPERM) and it makes the process stop with SIGTRAP on the next
+// execve().  The probe is read-only, so it can be emitted at every function
+// entry, and it fails safe: any open/read/parse anomaly reports "not traced".
+std::string aa64TracerPidProbe() {
+  std::string s;
+  // x15 = 0 by default (no tracer)
+  s += "mov x15, #0\n\t";
+  s += "sub sp, sp, #640\n\t";
+  // "/proc/self/status\0" at [sp]
+  s += aa64MovImm("x9", 0x65732f636f72702fULL); // "/proc/se"
+  s += "str x9, [sp]\n\t";
+  s += aa64MovImm("x9", 0x75746174732f666cULL); // "lf/statu"
+  s += "str x9, [sp, #8]\n\t";
+  s += "mov w9, #0x73\n\t"; // "s", '\0'
+  s += "strb w9, [sp, #16]\n\t";
+  s += "strb wzr, [sp, #17]\n\t";
+  // openat(AT_FDCWD, path, O_RDONLY)
+  s += "mov x8, #56\n\t"; // __NR_openat
+  s += "mov x0, #-100\n\t";
+  s += "mov x1, sp\n\t";
+  s += "mov x2, #0\n\t";
+  s += "mov x3, #0\n\t";
+  s += "svc #0\n\t";
+  s += "cmp x0, #0\n\t";
+  s += "b.lt 15f\n\t";
+  s += "mov x12, x0\n\t"; // fd
+  s += "mov x8, #63\n\t"; // __NR_read
+  s += "mov x0, x12\n\t";
+  s += "add x1, sp, #32\n\t";
+  s += "mov x2, #512\n\t";
+  s += "svc #0\n\t";
+  s += "mov x10, x0\n\t"; // bytes read
+  s += "mov x8, #57\n\t"; // __NR_close
+  s += "mov x0, x12\n\t";
+  s += "svc #0\n\t";
+  s += "cmp x10, #16\n\t";
+  s += "b.lt 15f\n\t";
+  // Scan for "TracerPi" + "d:"
+  s += "add x1, sp, #32\n\t";
+  s += "sub x10, x10, #12\n\t";
+  s += "mov x12, #0\n\t";
+  s += aa64MovImm("x14", 0x6950726563617254ULL); // "TracerPi"
+  s += "16:\n\t";
+  s += "cmp x12, x10\n\t";
+  s += "b.ge 15f\n\t";
+  s += "ldr x13, [x1, x12]\n\t";
+  s += "cmp x13, x14\n\t";
+  s += "b.eq 17f\n\t";
+  s += "add x12, x12, #1\n\t";
+  s += "b 16b\n\t";
+  s += "17:\n\t";
+  s += "add x13, x1, x12\n\t";
+  s += "ldrh w16, [x13, #8]\n\t";
+  s += "mov w9, #0x3a64\n\t"; // 'd', ':'
+  s += "cmp w16, w9\n\t";
+  s += "b.ne 18f\n\t";
+  s += "add x13, x13, #10\n\t"; // skip "TracerPid:"
+  s += "19:\n\t";
+  s += "ldrb w9, [x13]\n\t";
+  s += "cmp w9, #0x20\n\t"; // ' '
+  s += "b.eq 20f\n\t";
+  s += "cmp w9, #0x09\n\t"; // '\t'
+  s += "b.ne 21f\n\t";
+  s += "20:\n\t";
+  s += "add x13, x13, #1\n\t";
+  s += "b 19b\n\t";
+  s += "21:\n\t";
+  s += "cmp w9, #0x31\n\t";
+  s += "b.lo 15f\n\t"; // '0' -> no tracer
+  s += "cmp w9, #0x39\n\t";
+  s += "b.hi 15f\n\t";
+  s += "b 22f\n\t"; // a real pid -> traced
+  s += "18:\n\t";
+  s += "add x12, x12, #1\n\t";
+  s += "b 16b\n\t";
+  s += "22:\n\t";
+  s += "mov x15, #1\n\t";
+  s += "15:\n\t";
+  s += "add sp, sp, #640\n\t";
+  return s;
+}
+
 std::string getViolentExitAsm(const Triple &triple, int exitCode) {
   uint64_t noiseK = cryptoutils->get_uint32_t() & 0xFFFF;
   uint64_t nonCanon =
@@ -1399,7 +1509,11 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
     s += "nop\n\tnop\n\tnop\n\tnop\n\t";
     s += "mrs x13, cntvct_el0\n\t";
     s += "sub x14, x13, x12\n\t";
-    s += "mov x10, #0x40000\n\t";
+    if (triple.isOSLinux() || triple.isAndroid())
+      // ~4ms wall clock, independent of the platform counter frequency
+      s += aa64TickBudget("x10", "x9", 8, 0x40000);
+    else
+      s += "mov x10, #0x40000\n\t";
     s += "cmp x14, x10\n\t";
     s += "b.lo 10f\n\t";
     s += "movz x9, #1\n\t";
@@ -1424,15 +1538,16 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
       s += "orr x11, x11, x9\n\t";
       s += "12:\n\t";
     } else if (triple.isOSLinux() || triple.isAndroid()) {
-      // Linux AArch64 SYS_ptrace(PTRACE_TRACEME = 0, 0, 0, 0) -> syscall 117
-      s += "mov x8, #117\n\t";
-      s += "mov x0, #0\n\t";
-      s += "mov x1, #0\n\t";
-      s += "mov x2, #0\n\t";
-      s += "mov x3, #0\n\t";
-      s += "svc #0\n\t";
-      s += "cmp x0, #0\n\t";
-      s += "b.ge 12f\n\t";
+      // Tracer detection through /proc/self/status TracerPid.
+      //
+      // PTRACE_TRACEME must not be used here: this token is emitted at *every*
+      // function entry, and TRACEME only reports the true state on its first
+      // call.  It then sets PT_PTRACED on the process, so every later call
+      // returns -EPERM - which the old `b.ge` test read as "debugger present"
+      // and turned into a violent exit on the second function entry of an
+      // otherwise clean run.
+      s += aa64TracerPidProbe(); // leaves 1 in x15 when a tracer is attached
+      s += "cbz x15, 12f\n\t";
       s += "movz x9, #3\n\t";
       s += "movk x9, #0xDEAD, lsl #16\n\t";
       s += "orr x11, x11, x9\n\t";
@@ -1443,7 +1558,7 @@ Value *getOrCreateDynamicDebugToken(Function *F, Instruction *InsertPt,
     InlineAsm *IA =
         InlineAsm::get(DbgFTy, s,
                        "=r,~{x0},~{x1},~{x2},~{x3},~{x8},~{x9},~{x10},~{x11},~{"
-                       "x12},~{x13},~{x14},~{x16},~{cc},~{memory}",
+                       "x12},~{x13},~{x14},~{x15},~{x16},~{cc},~{memory}",
                        true, false);
     CallInst *CI = CallInst::Create(DbgFTy, IA, {}, "adb.tok", InsertPt);
 

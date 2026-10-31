@@ -84,6 +84,19 @@ std::string getPolymorphicBarrierAsm(const Triple &triple);
 void insertViolentExit(IRBuilder<> &IRB, const Triple &triple,
                        int exitCode = 137);
 
+// ── AArch64 inline-asm emission helpers ─────────────────────────────────────
+// `mov xN, #imm` only encodes a 16-bit immediate (optionally shifted by 16),
+// so wider constants must be materialised with movz/movk instead of being
+// truncated to their low half.
+std::string aa64MovImm(const char *Reg, uint64_t Val);
+// Emit "Reg = CNTFRQ_EL0 >> Shift" (a wall-clock budget of 1/2^Shift seconds),
+// falling back to Fallback when CNTFRQ_EL0 reads as 0.
+std::string aa64TickBudget(const char *Reg, const char *Scratch, unsigned Shift,
+                           uint64_t Fallback);
+// Emit a side-effect-free TracerPid probe for Linux/Android AArch64 that leaves
+// 1 in x15 when /proc/self/status reports a non-zero TracerPid, 0 otherwise.
+std::string aa64TracerPidProbe();
+
 // ── Anti-Taint & Data-Flow Entanglement Primitives ──────────────────────────
 GlobalVariable *getOrCreateLaunderLUT(Module *M);
 Value *insertTaintLaunder(IRBuilder<> &IRB, Value *Val);
