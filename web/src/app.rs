@@ -21,8 +21,25 @@ pub enum Page {
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_name = triggerKatex, catch)]
-    fn trigger_katex() -> Result<(), wasm_bindgen::JsValue>;
+    #[wasm_bindgen(js_name = renderMathInElement, catch)]
+    fn render_math_in_element(
+        el: &web_sys::Element,
+        options: &wasm_bindgen::JsValue,
+    ) -> Result<(), wasm_bindgen::JsValue>;
+}
+
+pub fn trigger_katex() {
+    if let Ok(opts) = js_sys::JSON::parse(
+        r#"{"delimiters":[{"left":"$$","right":"$$","display":true},{"left":"$","right":"$","display":false}],"throwOnError":false}"#,
+    ) {
+        if let Some(window) = web_sys::window() {
+            if let Some(document) = window.document() {
+                if let Some(body) = document.body() {
+                    let _ = render_math_in_element(&body.into(), &opts);
+                }
+            }
+        }
+    }
 }
 
 fn page_from_hash() -> Page {
