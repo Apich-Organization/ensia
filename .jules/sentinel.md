@@ -1,0 +1,4 @@
+## 2024-11-11 - Harden CSP and Migrate JS to Rust
+**Vulnerability:** Inline scripts (`unsafe-inline`) and `wasm-unsafe-eval` were allowed in the CSP, making the application more susceptible to XSS.
+**Learning:** Migrating functions like `triggerKatex`, `downloadText` and `copyText` into Rust helps harden the CSP by removing the need for `unsafe-inline`. We discovered `navigator.clipboard()` doesn't return `Option` in this `web-sys` version, avoiding the compilation failure that initially broke the build. Also, `wasm-unsafe-eval` is required for Leptos/WASM to instantiate on many browsers so it should NOT be removed without strict regression checks.
+**Prevention:** Always verify if `wasm-unsafe-eval` is strictly required before stripping it from CSP in WebAssembly projects. In Leptos/web-sys, verify `Option` types carefully since older or specific DOM bindings might differ.
