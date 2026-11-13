@@ -1,0 +1,4 @@
+## 2026-11-05 - Safely Binding External APIs in WASM
+**Vulnerability:** Potential XSS via inline `<script>` usage and WebAssembly Panics (Denial of Service) when JS functions are removed or missing.
+**Learning:** Defensive JavaScript checks (`if (window.func)`) used to prevent errors when calling external CDN-loaded scripts can't be naively replaced with direct FFI bindings. If the external function is not yet loaded, WASM will panic. By using `#[wasm_bindgen(catch)]` and returning `Result<(), JsValue>`, we can handle missing functions safely in Rust, eliminating the need for defensive JS wrappers and allowing for stricter CSP (fewer inline scripts).
+**Prevention:** Always use `catch` when importing functions that may not exist at runtime, and eliminate inline scripts acting solely as defensive wrappers.

@@ -1,16 +1,42 @@
 use crate::models::config::*;
 use gloo_timers::future::TimeoutFuture;
 use leptos::{html, prelude::*};
-use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = window, catch)]
-    fn copyText(text: &str) -> Result<js_sys::Promise, JsValue>;
+use wasm_bindgen::JsCast;
 
-    #[wasm_bindgen(js_namespace = window, catch)]
-    fn downloadText(filename: &str, text: &str) -> Result<(), JsValue>;
+async fn copy_text(text: &str) -> bool {
+    if let Some(window) = web_sys::window() {
+        let clipboard = window.navigator().clipboard();
+        let promise = clipboard.write_text(text);
+        return wasm_bindgen_futures::JsFuture::from(promise).await.is_ok();
+    }
+    false
+}
+
+fn download_text(filename: &str, text: &str) {
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            let array = js_sys::Array::new();
+            array.push(&wasm_bindgen::JsValue::from_str(text));
+            let options = web_sys::BlobPropertyBag::new();
+            options.set_type("text/plain");
+            if let Ok(blob) =
+                web_sys::Blob::new_with_str_sequence_and_options(&array.into(), &options)
+            {
+                if let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) {
+                    if let Ok(el) = document.create_element("a") {
+                        if let Some(a) = el.dyn_ref::<web_sys::HtmlAnchorElement>() {
+                            a.set_href(&url);
+                            a.set_download(filename);
+                            a.click();
+                            let _ = web_sys::Url::revoke_object_url(&url);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -120,9 +146,9 @@ pub fn ConfigPage() -> impl IntoView {
     let do_copy = {
         move |_| {
             let text = toml_text.get();
-            let _ = copyText(&text);
-            copied.set(true);
             spawn_local(async move {
+                let _ = copy_text(&text).await;
+                copied.set(true);
                 TimeoutFuture::new(2000).await;
                 copied.set(false);
             });
@@ -132,7 +158,7 @@ pub fn ConfigPage() -> impl IntoView {
     let do_download = {
         move |_| {
             let text = toml_text.get();
-            let _ = downloadText("ensia.toml", &text);
+            download_text("ensia.toml", &text);
         }
     };
 

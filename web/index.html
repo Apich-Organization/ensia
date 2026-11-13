@@ -16,8 +16,7 @@
     crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
     integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk"
-    crossorigin="anonymous"
-    onload="document.addEventListener('katex-ready', renderKatex)"></script>
+    crossorigin="anonymous"></script>
 
   <!-- Trunk asset pipeline -->
   <link data-trunk rel="css" href="style.css" />
@@ -29,27 +28,6 @@
   <link rel="icon" type="image/svg+xml" href="logo.svg" />
 
   <script>
-    window.renderKatex = function () {
-      if (window.renderMathInElement) {
-        renderMathInElement(document.body, {
-          delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '$', right: '$',   display: false },
-          ],
-          throwOnError: false,
-        });
-      }
-    };
-
-    // Called from WASM after each page navigation
-    window.triggerKatex = function () {
-      if (window.renderMathInElement) {
-        renderKatex();
-      } else {
-        // KaTeX not ready yet; it will auto-render on 'katex-ready'
-      }
-    };
-
     window.copyText = async function (text) {
       try { await navigator.clipboard.writeText(text); return true; }
       catch (_) { return false; }

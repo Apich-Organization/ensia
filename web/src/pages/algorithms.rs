@@ -1,5 +1,4 @@
 use leptos::{html, prelude::*};
-use wasm_bindgen::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 enum Algo {
@@ -1163,11 +1162,7 @@ fn SplitBlocksSvg() -> impl IntoView {
 
 // ── KaTeX math block ──────────────────────────────────────────────────────
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_name = triggerKatex, catch)]
-    fn trigger_katex() -> Result<(), wasm_bindgen::JsValue>;
-}
+use crate::app::trigger_katex;
 
 #[component]
 fn MathBlock(formula: &'static str) -> impl IntoView {

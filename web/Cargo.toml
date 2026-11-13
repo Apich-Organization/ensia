@@ -18,6 +18,10 @@ web-sys = { version = "0.3", features = [
     "History",
     "Storage",
     "Clipboard",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
+    "HtmlAnchorElement",
     "Navigator",
 ] }
 js-sys = "0.3"
