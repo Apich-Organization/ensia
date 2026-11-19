@@ -511,9 +511,9 @@ dependencies = [
 
 [[package]]
 name = "gloo-storage"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e82ce7d41c6d821640a43726f6ff33c924795cc151b62e5a84d0c988c151c980"
+checksum = "e3b37ab45f56a81fcddd15c80727dc95bdacae7efbb9221598c26604a405158e"
 dependencies = [
  "gloo-utils 0.3.0",
  "js-sys",
