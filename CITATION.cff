@@ -18,7 +18,7 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.20149843
 repository-code: 'https://github.com/Apich-Organization/ensia'
-url: 'https://ensia.apich.org'
+url: 'https://apich.org/projects/ensia/'
 repository-artifact: 'https://github.com/Apich-Organization/ensia/releases'
 abstract: >-
   This work introduces Ensia (OLLVM-Next), an experimental

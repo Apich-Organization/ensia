@@ -11,7 +11,7 @@
 
 ## Reporting a Vulnerability
 
-Please do not report a vulnerability via Github issues. Any vulnerability shall be reported by emailing to **security@apich.org** or via our official website security reporting section (under construction).
+Please do not report a vulnerability via Github issues. Any vulnerability shall be reported by emailing to **security@apich.org** or through the reporting section at **https://apich.org/security/**, which also publishes our PGP key.
 
 We commit to addressing all responsibly disclosed vulnerabilities within 7 days of receipt.
 

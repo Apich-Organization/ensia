@@ -386,7 +386,7 @@ bash test/run_obf_tests.sh
 
 A CTF-style crackme using this obfuscator is available in the ./ctf folder. You can compile it yourself, as the source code is fully open-source, or you can simply download the test binary from our releases page.
 
-Since we do not provide the crack/solution, anyone who successfully solves this challenge with clear, documented steps will win a reward and earn a permanent spot on our security team homepage! If you successfully solve this Crackme, please submit your solution to [security@apich.org](mailto:security@apich.org) for verification and rewards.
+Since we do not provide the crack/solution, anyone who successfully solves this challenge with clear, documented steps will win a reward and earn a permanent spot on the [security team page](https://apich.org/security/)! If you successfully solve this Crackme, please submit your solution to [security@apich.org](mailto:security@apich.org) for verification and rewards.
 
 ---
 
