@@ -13,7 +13,7 @@ permissions:
 jobs:
   build-and-test:
     name: Build LLVM Plugin & Pass Validation
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
